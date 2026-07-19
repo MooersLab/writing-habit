@@ -1,5 +1,5 @@
 # writing-habit
-
+![Version](https://img.shields.io/static/v1?label=writing-habit&message=0.0.0&color=brightcolor)
 [![Python versions](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://pypi.org/project/writing-schedule/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
