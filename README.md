@@ -1,5 +1,9 @@
 # writing-habit
 
+[![Python versions](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://pypi.org/project/writing-schedule/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+
 Track and compare planned versus actual academic writing effort. A companion to
 [writing-schedule](https://github.com/MooersLab/writing-schedule-py).
 
