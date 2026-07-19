@@ -95,4 +95,8 @@ MIT
 
 ## Status
 
-Still under rapid development. Not in PyPi yet.
+Still under rapid development. Not in PyPI yet. I suggest coming back later.
+
+## Funding
+
+
