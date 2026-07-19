@@ -88,3 +88,7 @@ an N-of-1 instrument. It records self-reported effort, not verified focus.
 ## License
 
 MIT
+
+## Status
+
+Still under rapid development. Not in PyPi yet.
