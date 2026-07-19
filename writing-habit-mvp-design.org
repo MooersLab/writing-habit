@@ -1,0 +1,138 @@
+#+TITLE: A lean MVP layout and shared schema for the writing-habit toolkit
+#+AUTHOR: Blaine Mooers
+#+DATE: \today
+#+OPTIONS: toc:nil H:3 num:t
+#+STARTUP: noindent overview
+#+LaTeX_CLASS: article
+#+LaTeX_CLASS_OPTIONS: [11pt]
+#+LaTeX_HEADER: \usepackage[margin=0.5in]{geometry}
+#+LaTeX_HEADER: \usepackage{parskip}
+#+LaTeX_HEADER: \usepackage{titling}
+#+LaTeX_HEADER: \setlength{\droptitle}{-3.5em}
+#+LaTeX_HEADER: \pretitle{\begin{center}\large\bfseries}
+#+LaTeX_HEADER: \posttitle{\par\end{center}\vskip 0.4em}
+#+LaTeX_HEADER: \preauthor{\begin{center}\normalsize}
+#+LaTeX_HEADER: \postauthor{\par\end{center}}
+#+LaTeX_HEADER: \predate{\begin{center}\small}
+#+LaTeX_HEADER: \postdate{\par\end{center}}
+#+LaTeX_HEADER: \usepackage{titlesec}
+#+LaTeX_HEADER: \titleformat{\section}[runin]{\normalfont\large\bfseries}{\thesection.}{0.5em}{}
+#+LaTeX_HEADER: \titlespacing*{\section}{0pt}{1.5ex plus .3ex minus .2ex}{0.8em}
+#+LaTeX_HEADER: \titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.6em}{}
+#+LaTeX_HEADER: \titlespacing*{\subsection}{0pt}{1.2ex plus .2ex}{0.5em}
+#+LaTeX_HEADER: \usepackage{booktabs}
+#+LaTeX_HEADER: \usepackage{array}
+#+LaTeX_HEADER: \usepackage{ragged2e}
+#+LaTeX_HEADER: \usepackage{tabularx}
+#+LaTeX_HEADER: \newcommand{\maxtablewidth}{7in}
+#+LaTeX_HEADER: \newcolumntype{L}{>{\RaggedRight\arraybackslash}X}
+#+LaTeX_HEADER: \newcolumntype{C}{>{\Centering\arraybackslash}X}
+#+LaTeX_HEADER: \newcolumntype{R}{>{\RaggedLeft\arraybackslash}X}
+#+LaTeX_HEADER: \usepackage{makeidx}
+#+LaTeX_HEADER: \makeindex
+
+* Design principles
+#+INDEX: design principles
+#+INDEX: modular toolkit
+
+Five principles keep the MVP small and keep the reuse story that a software paper is rewarded for. The SQLite database is the single contract between the modules, so any module can be replaced as long as it reads and writes that schema. The core depends only on the Python standard library, so the one-command install of the scheduler survives. Every interchange runs through an open format, namely org and ICS and CSV and SQLite, so a user is never locked in. The three activities of planning, tracking, and comparing stay separated, so a user can substitute other software at any stage. The whole package targets one person studying their own habit, which is the N-of-1 scope you want and no wider.
+
+The schema is delivered as the companion file =schema.sql=, and it is already tested against SQLite 3.45. The tracking template is delivered as =tracking-template.csv=.
+
+* The shared data model
+#+INDEX: SQLite schema
+
+The database has two reference tables and three fact tables, plus four comparison views that the compare module reads. The Monday of the week and the block duration are computed for you as generated columns, so an importer never has to calculate them.
+
+#+CAPTION: Tables in the shared schema and the module that owns each one.
+#+ATTR_LATEX: :booktabs t :center t :environment tabularx :width \maxtablewidth :align LLL
+| Table        | Purpose                                                                        | Written by                 |
+|--------------+--------------------------------------------------------------------------------+----------------------------|
+| category     | The three activities, generative, editing, and support, from Rule 2            | seeded once at initdb       |
+| project      | The portfolio, one row per legend code, with a safe or speculative risk class  | plan import, or by hand     |
+| plan_block   | Planned blocks, one row per block per day, with a generated planned_min         | schedule module            |
+| session      | Actual sessions, with a duration and an optional start and stop time            | track module               |
+| import_log   | Provenance of every import, for reproducibility                                | every importer             |
+
+The compare module never recomputes totals in ad hoc code. It reads four views. =v_week_project= gives planned and actual minutes and an adherence ratio per week and project. =v_week_category= gives the planned and actual split across the three activities. =v_week_barbell= gives the planned and actual split across the safe and speculative classes, which is the Rule 6 drift. =v_day_actual= gives actual minutes per day with a worked flag, from which the module counts the streak.
+
+One behavior to keep in mind. A session may be recorded without a category, for example a quick duration entered by hand. Such a session is counted in the project view and the barbell view because its project is known, but it is left out of the category view because its activity is unknown. Encourage a category on every session when the split across activities matters.
+
+* Repository layout
+#+INDEX: repository layout
+
+One installable package with three subcommands is the lean choice because it keeps a single install and a single test suite while the modules stay internally separate. Splitting into three packages is a later step once the interfaces settle. A new umbrella package that depends on the existing writing-schedule is cleaner than folding everything into the scheduler because it lets the scheduler keep its own release cadence.
+
+#+begin_example
+writing-habit/
+  pyproject.toml            # core deps: none beyond the standard library
+                            # extras: [ics] icalendar ; [plot] matplotlib ; [sheets] gspread
+  schema.sql                # the shared schema (delivered)
+  src/writing_habit/
+    __init__.py
+    db.py                   # open a connection, PRAGMA foreign_keys=ON, apply schema.sql
+    models.py               # small dataclasses: Project, Category, PlanBlock, Session
+    plan_import.py          # read a weekly org table (reuse the writing-schedule parser) -> plan_block, project, category
+    track/
+      __init__.py
+      csv_actuals.py        # read the CSV template -> session   (standard library only)
+      ics_actuals.py        # read an actuals ICS -> session      (extra: icalendar)
+      manual.py             # one-line quick add of a session
+      template.csv          # the tracking template (delivered)
+    compare/
+      __init__.py
+      queries.py            # thin wrappers over the four views
+      report.py             # a text or org summary, and one optional plot (extra: matplotlib)
+    cli.py                  # argparse subcommands: initdb, plan, track, compare
+  tests/
+    fixtures/               # a frozen week of plan and actuals for parity tests
+    test_schema.py          # the checks already run against schema.sql
+    test_plan_import.py
+    test_track.py
+    test_compare.py
+  docs/
+#+end_example
+
+* Command-line interface for the MVP
+#+INDEX: command-line interface
+
+Five subcommands cover the whole loop. Each takes a =--db= path so a user can keep more than one database.
+
+#+CAPTION: The MVP command set and what each command does.
+#+ATTR_LATEX: :booktabs t :center t :environment tabularx :width \maxtablewidth :align LL
+| Command                                                              | Effect                                                                            |
+|---------------------------------------------------------------------+-----------------------------------------------------------------------------------|
+| =writing-habit initdb --db habit.db=                                | Create the schema and seed the three activities                                   |
+| =writing-habit plan import my-week.org --week 2026-01-19 --db habit.db= | Parse the weekly org table and fill project, category, and plan_block             |
+| =writing-habit track import actuals.csv --format csv --db habit.db= | Load actual sessions from the CSV template, or from an ICS with =--format ics=     |
+| =writing-habit track add --day 2026-01-19 --project A --minutes 75 --category generative --db habit.db= | Add one session by hand                             |
+| =writing-habit compare --week 2026-01-19 --db habit.db [--plot out.png]= | Print planned versus actual by project, by activity, and by barbell class, plus the streak, and optionally write one plot |
+
+* Data conventions
+#+INDEX: data conventions
+
+** The tracking CSV template
+The columns are date, start, end, minutes, project_code, category, and note. Enter either a start and end time or a minutes value. When both a start and an end are present, the importer computes the minutes and stores the times. When only minutes are present, which is the paper-then-transcribe path, the importer stores the duration and leaves the times empty. The project_code must match a legend code, and the category must be generative, editing, or support, or left blank.
+
+** The actuals ICS convention
+Record actual work in a separate calendar so that planned and actual never collide. Put the legend code in the event summary in brackets, for example =[A] DNPH1 docking=, and put the activity in the event categories field, for example =generative=. The DTSTART and DTEND give the real minutes. The importer reads each VEVENT into one session and stores the event UID in source_ref, so a re-import updates rather than duplicates.
+
+** Spreadsheets and the dependency line
+Excel and Google Sheets both export CSV, so the CSV path is the universal bridge and it needs no third-party library. Keep a live Google Sheets reader as an optional extra, never as a core dependency, so the one-command install of the core is protected. This is the single most important choice for keeping the toolkit light.
+
+* What the compare step tells a writer
+#+INDEX: comparison outputs
+
+The four views turn the plan-performance gap into numbers a writer can act on. The adherence ratio per project shows where intention and effort diverged. The activity split shows whether the week drifted away from generative writing toward easier editing or support. The barbell view shows whether the speculative slot was starved, which is the drift Rule 6 warns about. The streak shows the run of days with any writing at all, which is the visible signal Rule 10 asks a writer to keep. None of these requires a group or a study because each is a private measurement for self-improvement.
+
+* Punch list for the first release
+#+INDEX: punch list
+
+- [ ] Create the umbrella package that depends on the existing writing-schedule, and add =db.py= that applies =schema.sql= with foreign keys on.
+- [ ] Implement =plan_import.py= by reusing the writing-schedule table parser so the plan and the schedule never diverge.
+- [ ] Implement =csv_actuals.py= against the delivered template, with the minutes-or-times rule.
+- [ ] Implement the four view wrappers in =queries.py= and a plain text summary in =report.py=, and defer the plot behind the plot extra.
+- [ ] Add =ics_actuals.py= behind the ics extra, using the bracketed-code and categories convention.
+- [ ] Freeze one week of plan and actuals as a fixture and assert the adherence, category, barbell, and streak numbers.
+- [ ] Record what was deferred, such as live Google Sheets sync and row-to-row matching of a session to a specific planned block.
+- [ ] Tag a release and archive it at Zenodo because the software paper and its PubMed indexing both depend on a citable version.

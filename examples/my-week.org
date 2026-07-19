@@ -1,0 +1,17 @@
+#+TITLE: My Writing Week
+
+| Time <l>    | M  | Tu | W  | Th | F  | Sa |
+|-------------+----+----+----+----+----+----|
+| Generative: |    |    |    |    |    |    |
+| 04:00-05:30 | A  | B  | A  | B  | W  |    |
+| 05:45-07:15 | A  | B  | A  | B  | W  | A  |
+| Rewriting:  |    |    |    |    |    |    |
+| 09:15-10:45 | B  | A  | B  | A  | TT | A  |
+| Supporting: |    |    |    |    |    |    |
+| 13:15-14:45 | EM | EM | EM | EM | EM |    |
+|-------------+----+----+----+----+----+----|
+| A: DNPH1 docking :safe:      |  |  |  |  |  |
+| B: DUSP1 radiation :safe:    |  |  |  |  |  |
+| W: 2026words :speculative:   |  |  |  |  |  |
+| TT: teaching :support:       |  |  |  |  |  |
+| EM: email :support:          |  |  |  |  |  |

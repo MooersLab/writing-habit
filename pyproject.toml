@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "writing-habit"
+version = "0.1.0"
+description = "Track and compare planned versus actual academic writing effort, a companion to writing-schedule."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Blaine H. M. Mooers"}]
+keywords = ["writing", "habit", "scheduling", "time tracking", "N-of-1"]
+dependencies = []
+
+[project.optional-dependencies]
+# plan import calls the real writing-schedule parser. Until it is on PyPI,
+# install it from its checkout: pip install -e <path>/writing-schedule-py/writing_schedule
+plan = ["writing-schedule"]
+ics = ["icalendar>=5"]
+plot = ["matplotlib>=3.5"]
+sheets = ["gspread>=5"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+writing-habit = "writing_habit.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+writing_habit = ["schema.sql"]
