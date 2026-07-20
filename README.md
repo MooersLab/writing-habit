@@ -1,8 +1,6 @@
 # writing-habit
 ![Version](https://img.shields.io/static/v1?label=writing-habit&message=0.0.0&color=brightcolor)
-[![Python versions](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://pypi.org/project/writing-schedule/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
 
 Track and compare planned versus actual academic writing effort. A companion to
 [writing-schedule](https://github.com/MooersLab/writing-schedule-py).
@@ -50,6 +48,24 @@ Add a session by hand at the end of the day:
 ```
 writing-habit track add --day 2026-01-19 --project A --minutes 75 --category generative --db habit.db
 ```
+
+## Naming and decoding schedule files
+
+Weekly tables can be named by a compact code that encodes the whole week, for
+example `4gAAeAsA-gWW.org`. Lowercase letters are activities (`g` generative,
+`e` editing, `s` support), uppercase letters are projects (one letter is one
+block), and a digit at the start of a group is the count of consecutive days.
+The full specification is in `docs/table-file-naming-rules.org`.
+
+Decode a code, and optionally check its project letters against a table legend:
+
+```
+writing-habit name 4gAAeAsA-gWW
+writing-habit name 4gAAeAsA-gWW --table my-week.org
+```
+
+With no `--table`, the command looks for `<code>.org` in the current directory.
+This command needs no database and no third-party package.
 
 ## Tracking formats
 
@@ -103,6 +119,3 @@ Still under rapid development. Not in PyPI yet. I suggest coming back later.
 - NIH: R01 AI088011
 - NIH: P30 CA225520 (PI: R. Mannel)
 - NIH: P20 GM103640 and P30 GM145423 (PI: A. West)
-
-
-
