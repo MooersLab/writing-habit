@@ -1,0 +1,158 @@
+#+TITLE: Naming rules for weekly writing-schedule table files
+#+AUTHOR: Blaine Mooers
+#+DATE: \today
+#+OPTIONS: toc:nil H:3 num:t
+#+STARTUP: noindent overview
+#+LaTeX_CLASS: article
+#+LaTeX_CLASS_OPTIONS: [11pt]
+#+LaTeX_HEADER: \usepackage[margin=0.5in]{geometry}
+#+LaTeX_HEADER: \usepackage{parskip}
+#+LaTeX_HEADER: \usepackage{titling}
+#+LaTeX_HEADER: \setlength{\droptitle}{-3.5em}
+#+LaTeX_HEADER: \pretitle{\begin{center}\large\bfseries}
+#+LaTeX_HEADER: \posttitle{\par\end{center}\vskip 0.4em}
+#+LaTeX_HEADER: \preauthor{\begin{center}\normalsize}
+#+LaTeX_HEADER: \postauthor{\par\end{center}}
+#+LaTeX_HEADER: \predate{\begin{center}\small}
+#+LaTeX_HEADER: \postdate{\par\end{center}}
+#+LaTeX_HEADER: \usepackage{titlesec}
+#+LaTeX_HEADER: \titleformat{\section}[runin]{\normalfont\large\bfseries}{\thesection.}{0.5em}{}
+#+LaTeX_HEADER: \titlespacing*{\section}{0pt}{1.5ex plus .3ex minus .2ex}{0.8em}
+#+LaTeX_HEADER: \titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.6em}{}
+#+LaTeX_HEADER: \titlespacing*{\subsection}{0pt}{1.2ex plus .2ex}{0.5em}
+#+LaTeX_HEADER: \usepackage{booktabs}
+#+LaTeX_HEADER: \usepackage{array}
+#+LaTeX_HEADER: \usepackage{ragged2e}
+#+LaTeX_HEADER: \usepackage{tabularx}
+#+LaTeX_HEADER: \newcommand{\maxtablewidth}{7in}
+#+LaTeX_HEADER: \newcolumntype{L}{>{\RaggedRight\arraybackslash}X}
+#+LaTeX_HEADER: \newcolumntype{C}{>{\Centering\arraybackslash}X}
+#+LaTeX_HEADER: \newcolumntype{R}{>{\RaggedLeft\arraybackslash}X}
+#+LaTeX_HEADER: \usepackage{makeidx}
+#+LaTeX_HEADER: \makeindex
+
+* What the name encodes
+#+INDEX: schedule code
+#+INDEX: file naming
+
+The filename of a weekly table encodes the entire week of writing blocks in a single compact string, so a folder of schedules is self-documenting and sorts sensibly. A name reads left to right as a run of day-groups. Each day-group states how many consecutive days share a pattern and what that daily pattern is. The days fill the week starting at Monday, so the reader never has to guess which day a group lands on.
+
+The scheme is unambiguous without any separators inside a day because it uses three character classes that never overlap. Lowercase letters name activities, uppercase letters name projects, and digits give a day count. A hyphen marks the boundary where the daily pattern changes.
+
+* The alphabet
+#+INDEX: alphabet
+
+#+CAPTION: The complete symbol set. Nothing else is allowed inside a schedule code.
+#+ATTR_LATEX: :booktabs t :center t :environment tabularx :width \maxtablewidth :align LL
+| Symbol                     | Meaning                                                                                 |
+|----------------------------+-----------------------------------------------------------------------------------------|
+| =g=, =e=, =s= (lowercase)  | Activity of the block: generative, editing, support. One activity letter opens a run.   |
+| =A= to =Z= (uppercase)     | Project code. One uppercase letter is one block on that project. Repeat the letter for more blocks. |
+| a digit at the group start | Number of consecutive days the day-pattern repeats. A leading 1 is omitted.             |
+| =o=                        | An open day, a catch-up or slack day that carries no blocks.                            |
+| =-= (hyphen)               | Boundary between day-groups, which is a change in the daily pattern.                     |
+
+* How to read a name
+#+INDEX: reading rules
+
+Split the code on hyphens into day groups, then read the groups in order onto the week, starting on Monday. A day-group is an optional leading count followed by a day-pattern. The count is the number of consecutive days that share the pattern; it defaults to 1 when the pattern is absent. The day-pattern is a sequence of activity runs. Each run opens with an activity letter and is followed by one uppercase project letter per block. A run continues until the next activity letter begins. List the blocks of a day in the order they occur across the day, which by convention runs from generative in the early morning through editing to support later.
+
+An open day is written as the single letter =o=. Days beyond the last group are open by default, so a week that ends early does not need a trailing =o=. Only an open day that sits between working days needs to be written out.
+
+* Worked examples
+#+INDEX: worked examples
+
+The two names below are the ones you proposed, decoded by the rules. The third and fourth show an interior open day and two projects within a single activity run.
+
+#+CAPTION: Schedule codes decoded to a week of blocks.
+#+ATTR_LATEX: :booktabs t :center t :environment tabularx :width \maxtablewidth :align LL
+| Code                 | Week it names                                                                                          |
+|----------------------+--------------------------------------------------------------------------------------------------------|
+| =4gAAeAsA-gWW=       | Monday to Thursday, two generative blocks on A, one editing block on A, one support block on A. Friday, two generative blocks on the speculative project W, with the rest of Friday open. |
+| =3gA-eA-gW=          | Monday to Wednesday, one generative block on A. Thursday, one editing block on A. Friday, one generative block on W. |
+| =2gAAeA-o-2gW=       | Monday and Tuesday, two generative blocks on A and one editing block on A. Wednesday open. Thursday and Friday, one generative block on W. |
+| =gABeB=              | Monday only, one generative block on A, one generative block on B, then one editing block on B.        |
+
+* Canonical form so a week has exactly one name
+#+INDEX: canonical form
+
+A file name is only useful when the same week always produces the same name. Six rules fix a single canonical spelling.
+
+- Fill days from Monday, and give the count of a day-group as the number of identical consecutive days.
+- Group every maximal run of identical days rather than repeating a pattern, so write =3gA= and never =gA-gA-gA=.
+- Omit a count of one, so write =gWW= and never =1gWW=.
+- Omit trailing open days because they are implied, and write an interior open day as =o=.
+- Order the blocks within a day by time of day, generative first by convention, then editing, then support.
+- Keep activities lowercase and projects uppercase, and use a digit only as the day count at the start of a group.
+
+* Project codes with more than one letter
+#+INDEX: project alias
+
+The code assumes a project is a single uppercase letter because a run such as =gAA= depends on each letter being a single block. Several of your legend codes have two letters, for example =EM= for email and =TT= for teaching, and a code that mixed lengths would be ambiguous. Give every multi-letter project a single-letter alias for the file name, and keep the full code in the table legend, for example =E= for email and =T= for teaching. A week has at most a handful of projects, so single letters are ample, and the legend inside the table remains the place of record. Reserve digits for counts, so a project alias never contains a digit.
+
+* Constraints and validation
+#+INDEX: validation
+
+A valid name satisfies a few checks. The day counts sum to at most six for a Monday-through-Saturday week, or seven if Sunday is included. Every uppercase letter has a matching entry in the table legend. Every project token is a single letter. A run never places a project block before an activity letter. Digits appear only at the start of a day-group.
+
+The blocks encode only scheduled work, so free time is simply the absence of blocks. A day with a light plan, such as a Friday with two morning blocks and an open afternoon, needs no special mark because the two blocks are all that is written and the rest of the day is understood to be open.
+
+* One point to confirm in your second example
+#+INDEX: open interpretation
+
+Your first example is consecutive because =4= covers Monday through Thursday. Your second example described the first group as Monday, Wednesday, and Friday, yet a count of three consecutive days lands on Monday through Wednesday under these rules, and the editing and speculative days then take Thursday and Friday. If you meant a true Monday, Wednesday, Friday pattern that skips Tuesday and Thursday, write it with open days, for example =gA-o-gA-o-gA=, and place the other work on the open days instead. I built the rules on the consecutive reading because it matches your first example and needs no extra convention, and the =o= token covers the non-consecutive case when you want it.
+
+* Optional decoder
+#+INDEX: decoder
+
+The rules are small enough to decode by eye, and this reference parser makes them executable if you want a validator or a preview inside the toolkit. It returns one entry per day.
+
+#+begin_src python
+import re
+DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+ACT  = {"g": "generative", "e": "editing", "s": "support"}
+
+def parse(code):
+    days = []
+    for grp in code.split("-"):
+        m = re.fullmatch(r"(\d*)([a-zA-Z]+)", grp)
+        if not m:
+            raise ValueError(f"bad group {grp!r}")
+        n = int(m.group(1) or 1)
+        pat = m.group(2)
+        if pat == "o":
+            blocks = []
+        else:
+            blocks, act = [], None
+            for ch in pat:
+                if ch in ACT:
+                    act = ch
+                elif ch.isupper():
+                    if act is None:
+                        raise ValueError(f"block before activity in {grp!r}")
+                    blocks.append((ACT[act], ch))
+                else:
+                    raise ValueError(f"bad character {ch!r} in {grp!r}")
+        days += [blocks] * n
+    if len(days) > 7:
+        raise ValueError("more than seven days")
+    return [(DAYS[i], b) for i, b in enumerate(days)]
+#+end_src
+
+* File name and grammar
+#+INDEX: filename format
+#+INDEX: grammar
+
+Attach the code to the org extension. For a reusable template, the code alone is the name, for example =4gAAeAsA-gWW.org=. For the plan of one specific week, prefix the Monday date in ISO form and an underscore so the files sort by date, for example =2026-01-19_4gAAeAsA-gWW.org=. The characters used are letters, digits, hyphens, underscores, and the dot in the extension, all of which are safe on every file system.
+
+The grammar in one place:
+
+#+begin_example
+schedule = daygroup { "-" daygroup }
+daygroup = [ count ] pattern
+count    = digit { digit }            ; consecutive days, >= 1, a leading 1 is omitted
+pattern  = "o" | run { run }          ; "o" is a fully open day
+run      = activity project { project }
+activity = "g" | "e" | "s"            ; generative, editing, support
+project  = "A" .. "Z"                 ; single-letter code, one letter is one block
+#+end_example

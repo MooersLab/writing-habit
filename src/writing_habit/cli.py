@@ -5,14 +5,17 @@
     writing-habit track     import actuals.csv --format csv        --db habit.db
     writing-habit track     add --day 2026-01-19 --project A --minutes 75 --category generative --db habit.db
     writing-habit compare   --week 2026-01-19 --db habit.db [--plot out.png]
+    writing-habit name      4gAAeAsA-gWW [--table my-week.org]
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from . import __version__, db
+from . import name as namecmd
 from .compare import report
 from .plan_import import import_org
 from .track import csv_actuals, manual
@@ -58,11 +61,68 @@ def build_parser() -> argparse.ArgumentParser:
     p_cmp.add_argument("--plot", help="also write a bar chart to this path")
     _add_db(p_cmp)
 
+    p_name = sub.add_parser(
+        "name", help="decode a schedule file-name code and check it against a table legend"
+    )
+    p_name.add_argument("code", help="schedule code, for example 4gAAeAsA-gWW")
+    p_name.add_argument(
+        "--table",
+        help="weekly org table whose legend the project letters are checked against; "
+        "defaults to <code>.org in the current directory when present",
+    )
+
     return parser
+
+
+def _run_name(args) -> int:
+    try:
+        decoded = namecmd.decode(args.code)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"Schedule {args.code}")
+    print(namecmd.format_week(decoded))
+
+    total, act, proj = namecmd.summary(decoded)
+    order = [namecmd.ACT[k] for k in ("g", "e", "s")]
+    by_act = ", ".join(f"{act.get(a, 0)} {a}" for a in order)
+    by_proj = ", ".join(f"{p} ({proj[p]})" for p in sorted(proj))
+    print(f"\n{total} blocks over {len(decoded)} days: {by_act}")
+    if by_proj:
+        print(f"projects used: {by_proj}")
+
+    table = args.table
+    if table is None:
+        guess = Path(f"{args.code}.org")
+        if guess.exists():
+            table = str(guess)
+    if table is None:
+        return 0
+
+    legend = namecmd.read_legend(table)
+    rows, problems = namecmd.check_against_legend(decoded, legend)
+    print(f"\nLegend check against {table}:")
+    for letter, code, desc, risk, status in rows:
+        rk = f" [{risk}]" if risk else ""
+        detail = f"{code}  {desc}{rk}".rstrip()
+        print(f"  {letter} -> {detail:<40} {status}")
+    if problems:
+        print(
+            f"\n{len(problems)} project letter(s) not resolved to a legend entry: "
+            + ", ".join(problems),
+            file=sys.stderr,
+        )
+        return 1
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.command == "name":       # needs no database
+        return _run_name(args)
+
     con = db.connect(args.db)
 
     if args.command == "initdb":
