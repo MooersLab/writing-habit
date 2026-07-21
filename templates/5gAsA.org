@@ -1,0 +1,11 @@
+#+TITLE: Starter schedule, generative plus a support block each day
+# Adds a support block for reading, notes, and references. Generative at 9 AM, support at 1 PM, both on your main project.
+
+| Time <l>    | M  | Tu | W  | Th | F  |
+|-------------+----+----+----+----+----|
+| Generative: |    |    |    |    |    |
+| 09:00-09:30 | A  | A  | A  | A  | A  |
+| Supporting: |    |    |    |    |    |
+| 13:00-13:30 | A  | A  | A  | A  | A  |
+|-------------+----+----+----+----+----|
+| A: main paper :safe: |  |  |  |  |  |

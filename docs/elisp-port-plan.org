@@ -1,0 +1,148 @@
+#+TITLE: Plan for writing-habit.el, an Emacs Lisp port of the Python writing-habit package
+#+AUTHOR: Blaine Mooers
+#+OPTIONS: toc:nil num:nil author:nil
+#+STARTUP: noindent overview
+#+LaTeX_HEADER: \usepackage[margin=0.5in]{geometry}
+#+LaTeX_HEADER: \usepackage{booktabs}
+
+* Orientation
+
+The Python writing-habit package is the younger sibling of writing-schedule, which itself began as a port of writing-schedule.el. So the Emacs Lisp version closes a loop. writing-schedule.el already lives in the Emacs world and already parses the weekly org tables, so writing-habit.el can lean on it for the plan stage and add only the track, compare, and name stages. The aim of this plan is one package, writing-habit.el, that reads and writes the same SQLite database as the Python package, reuses the same schema.sql and the same schedule-code naming spec, and exposes each stage both as an interactive Emacs command and as a batch entry point.
+
+* Why an Elisp port earns its keep
+
+There are two reasons. First, most of the intended audience already drafts inside Emacs with org-mode, so a tool that records effort without leaving the editor removes the friction that kills self-tracking. Second, Emacs already measures writing time through org-clock, so the track stage can harvest real clocked minutes instead of asking the writer to retype them into a CSV. The Python version records self-reported effort. The Elisp version can record clocked effort, which is a stronger measurement, and that is the single largest reason to build it.
+
+* Architecture that mirrors the Python package
+
+** Data layer (writing-habit-db.el)
+#+INDEX: SQLite backend
+#+INDEX: schema contract
+
+Emacs 29.1 ships a built-in SQLite interface (~sqlite-open~, ~sqlite-execute~, ~sqlite-select~, ~sqlite-transaction~, ~sqlite-available-p~) whenever Emacs was compiled with SQLite support. That interface is the first choice because it adds no external dependency. For writers on Emacs 28 or an Emacs built without SQLite, an optional emacsql backend is the fallback. A thin wrapper, ~writing-habit-db-connect~, hides that choice behind one function so the rest of the package never calls the backend directly.
+
+The schema is not reimplemented. ~writing-habit-db-init~ reads the same schema.sql that the Python package uses and executes it. Because the generated columns and the ~week_start~ expression live inside schema.sql rather than in code, both ports stay identical by construction. The wrapper turns on ~PRAGMA foreign_keys = ON~ for every connection, matching ~db.connect~ in Python. The public functions match their Python counterparts one for one: ~writing-habit-db-connect~, ~writing-habit-db-init~, ~writing-habit-get-category-id~, ~writing-habit-get-or-create-project~, ~writing-habit-log-import~, and a ~writing-habit-minutes-between~ helper.
+
+** Plan import (writing-habit-plan.el)
+#+INDEX: writing-schedule.el reuse
+#+INDEX: risk tag stripping
+
+This is the stage that reuses writing-schedule.el. Rather than re-parse the org table, ~writing-habit-plan-import~ calls the table parser already inside writing-schedule.el, then walks the parsed structure the same way plan_import.py does. It maps the Generative, Rewriting, and Supporting sections onto the generative, editing, and support categories. It strips a trailing ~:safe:~ or ~(safe)~ risk tag from each legend description before storing it. It splits the risk class out into the project row. The section-to-category map and the risk regex are the same two small tables the Python module carries, transcribed to Elisp.
+
+If writing-schedule.el already exposes its parser as a public function, writing-habit.el simply requires it. If the parser is internal today, one small upstream change that promotes ~parse-table~ to public is cleaner than copying it, because a copy would drift out of step.
+
+** Tracking (writing-habit-track.el)
+#+INDEX: org-clock harvest
+
+There are three capture paths, in the order they should be built. Manual entry comes first. ~writing-habit-track-add~ prompts for day, project, minutes, and category, then inserts one session row, mirroring ~track add~. CSV comes second. ~writing-habit-track-import-csv~ reads the same tracking-template.csv columns, so a spreadsheet exported from anywhere still loads. ICS comes third. icalendar.el is built into Emacs and parses an ICS calendar without a new dependency, so ~writing-habit-track-import-ics~ can read the same bracketed-legend event summaries the Python importer expects.
+
+Then comes the native path that the Python version cannot offer. ~writing-habit-track-harvest-clock~ reads org-clock data. It can pull from the running clock history, from ~CLOCK:~ drawer lines in the writer's org files, or from an org-clock-report region, and turn each clocked interval into a session row. Mapping a clocked heading to a project code and a category is the one open design question here. The cleanest rule reuses the same bracketed-legend convention as the ICS path, so a heading tagged ~[A]~ or carrying a ~:generative:~ org tag maps without guesswork.
+
+** Comparison and reports (writing-habit-compare.el and writing-habit-report.el)
+#+INDEX: barbell view
+#+INDEX: report buffer
+
+~writing-habit-compare.el~ runs the same four SQL views (~v_week_project~, ~v_week_category~, ~v_week_barbell~, ~v_day_actual~) and computes the current streak, exactly as queries.py does. Because the views live in schema.sql, the query layer stays thin.
+
+~writing-habit-report.el~ renders the result. Where the Python report writes text to stdout and an optional matplotlib PNG, the Elisp report writes an org buffer. That buffer holds real org tables, so the writer can fold it, export it, or paste it into a log with no conversion. An optional plot can reuse gnuplot through org-plot, or fall back to a simple ASCII bar, which keeps the core free of dependencies. The report buffer is the natural analogue of ~render_week~.
+
+** Name decoder and validator (writing-habit-name.el)
+#+INDEX: schedule-code decoder
+#+INDEX: legend check
+
+This is a direct port of name.py, and it is the best first module to write because it needs neither a database nor an external dependency. ~writing-habit-name-decode~ returns the week as an alist of day to a list of (activity . project) cells. ~writing-habit-name-summary~ returns the totals. ~writing-habit-name-read-legend~ parses the |CODE: desc :risk:| rows from a table file, and ~writing-habit-name-check-against-legend~ returns the same exact, alias, ambiguous, and unknown statuses. The interactive command ~writing-habit-name~ reads a code from the minibuffer, or from the file name of the current buffer, then prints the decoded week and the legend check in a help buffer. This module is built and tested (see the Status section).
+
+** User interface
+#+INDEX: transient menu
+#+INDEX: batch entry point
+
+Each stage is an interactive command, so the whole package is usable through ~M-x~ with no shell. A transient menu (~writing-habit~, built on transient.el, the library behind Magit's menus) gathers the commands under one keystroke for discoverability. A batch entry point, callable as ~emacs --batch -l writing-habit -f writing-habit-batch~, gives the same command-line surface the Python argparse CLI has, so the package can still run from a Makefile or a scheduled job.
+
+* Package layout
+
+#+CAPTION: Mapping from the Python modules to the Emacs Lisp files.
+#+ATTR_LATEX: :booktabs t :center t
+| Python module      | Emacs Lisp file          | Role                                          |
+|--------------------+--------------------------+-----------------------------------------------|
+| db.py              | writing-habit-db.el      | connect, init, project and category rows      |
+| plan_import.py     | writing-habit-plan.el    | parse the org table through writing-schedule  |
+| track/             | writing-habit-track.el   | manual, CSV, ICS, and org-clock capture       |
+| compare/queries.py | writing-habit-compare.el | run the four views and the streak             |
+| compare/report.py  | writing-habit-report.el  | render an org report buffer                    |
+| name.py            | writing-habit-name.el    | decode a code and check it against a legend   |
+| dashboard.py       | writing-habit-dashboard.el | render the self-contained HTML dashboard    |
+| cli.py             | writing-habit.el         | interactive commands, transient menu, batch   |
+
+The shared data files (schema.sql and docs/table-file-naming-rules.org) are not copied. Both ports read the copies that already live in the repository, so there is one source of truth for each. In this repository the Elisp files live under elisp/, with their ERT tests under elisp/test/.
+
+* Interoperability contract
+
+The two ports are not merely similar, they are interchangeable on one database file. Three artifacts are shared verbatim: schema.sql, the schedule-code naming spec in docs/table-file-naming-rules.org, and the risk-tag vocabulary of safe, speculative, and support. A session row written by Python reads identically in Emacs, and the reverse holds too, because neither port owns the schema. This is the property to protect in every later change. When the schema moves, it moves inside schema.sql, and both ports pick it up together.
+
+* Build order
+
+Each phase is shippable on its own.
+
+Phase 1 is writing-habit-name.el with ERT tests. It has no dependencies, it delivers value at once, and it proves the naming spec a second time in Elisp. This phase is done.
+
+Phase 2 is writing-habit-db.el plus the schema load plus ~initdb~, guarded by ~sqlite-available-p~. This phase is done.
+
+Phase 3 is plan-import against writing-schedule.el. This phase is done.
+
+Phase 4 is track, built in the order manual, CSV, org-clock harvest, ICS. All four are done.
+
+Phase 5 is compare plus the report buffer. This phase is done.
+
+Phase 6 is the transient menu, the batch entry point, the autoloads, the package headers, and MELPA-readiness. This phase is done.
+
+* Testing plan
+
+ERT is the Emacs analogue of pytest. A batch runner, ~emacs -batch -L elisp -l ert -l elisp/test/writing-habit-name-tests.el -f ert-run-tests-batch-and-exit~, runs in continuous integration the way pytest does now. The name tests port one to one from test_name.py, including the round-trip case and the legend-check case. The database tests build a temporary database in a temp file, load schema.sql, and assert the same view results that test_schema.py checks. One cross-port test is worth adding because it guards the interoperability contract directly: write a row with the Python package, read it with the Elisp package, and assert the two agree.
+
+* Risks and mitigations
+
+Built-in SQLite is present only when Emacs was compiled with it. The fix is to call ~sqlite-available-p~ at load and, when it returns nil, either load the emacsql fallback or report a clear message rather than failing deep inside a query. Generated columns need SQLite 3.31 or newer. Emacs links the system libsqlite3, so a current operating system is fine, but the init path should check once and say so plainly. Reusing writing-schedule.el creates a version dependency. The fix is to require a minimum writing-schedule version and, if its parser is internal today, to promote one function to public upstream rather than copy it. Keeping two ports in step is a standing cost. The fix is structural: the shared schema.sql and the shared naming spec carry the contract, so most later changes touch data files that both ports already read, not two parallel code paths.
+
+* Status
+
+All six phases are scaffolded and running under Emacs 29.3.
+
+Phase 1 is elisp/writing-habit-name.el, a port of name.py, with elisp/test/writing-habit-name-tests.el porting tests/test_name.py. A differential check confirms the two ports produce byte-identical decode, summary, and legend results across a range of codes.
+
+Phase 2 is elisp/writing-habit-db.el, a port of db.py onto the SQLite interface built into Emacs 29.1 and later, with elisp/test/writing-habit-db-tests.el porting tests/test_schema.py and covering the ported API. A cross-port check confirms the contract in both directions: a database written by the Elisp layer reads correctly through the Python module, and a database written by Python reads correctly through Elisp, with the generated columns and all four compare views agreeing.
+
+Phase 3 is elisp/writing-habit-plan.el, a port of plan_import.py, with elisp/test/writing-habit-plan-tests.el. It reuses the real writing-schedule.el parser rather than re-parsing the org table, so the plan and the schedule share one dialect. A three-way differential confirms the agreement: the same weekly table imported through the Elisp port (using writing-schedule.el) and through the Python port (using the writing-schedule Python package) produces byte-identical plan_block rows and identical project legends, with the risk tags stripped the same way. Eighteen ERT tests pass in batch mode across the three phases.
+
+Phase 4 is elisp/writing-habit-track.el, a port of the track module, with elisp/test/writing-habit-track-tests.el. The manual entry (~writing-habit-track-add~) and the CSV import (~writing-habit-track-import-csv~) match the Python surface, with a CSV parser written here so the core needs no third-party package. A CSV differential confirms that the same actuals file imports to byte-identical session rows through both ports, and an end-to-end differential confirms that plan import and CSV track together feed all four compare views identically in Elisp and Python. The org-clock harvest (~writing-habit-track-harvest-clock~) is the capture path the Python version cannot offer: it reads completed CLOCK lines, attributes each to a project by a [CODE] bracket in the heading and to an activity by a generative, editing, or support tag, and is idempotent, so re-running it inserts nothing new. The ICS importer (~writing-habit-track-import-ics~) reuses the parsing primitives inside icalendar.el, which is bundled with Emacs, so the Elisp ICS import needs no optional package, unlike the Python version, which depends on the third-party icalendar. An ICS differential confirms the same calendar imports to byte-identical session rows through both ports. The importer reads times as the calendar's literal wall clock, so local floating times import without a timezone shift.
+
+Two Emacs-specific notes. First, ~sqlite-execute~ runs only the first statement of a multi-statement string, so ~writing-habit-db-init~ splits the shared schema into statements before running them; the schema's string literals contain no semicolons, so the split is safe. Second, the plan importer reuses three functions that writing-schedule.el currently keeps internal (~writing-schedule--parse~, ~writing-schedule--week-monday~, and ~writing-schedule--iso-date~). Reusing them keeps one source of truth rather than copying the parser. Promoting a public parse entry point upstream is tracked as a follow-up.
+
+One schema note for the org-clock harvest. The session.source column is checked against the fixed set of ics, csv, manual, and sqlite, so a harvested clock is stored with the source value manual and a source_ref beginning "orgclock:", which keeps the shared schema unchanged and interoperable. A first-class orgclock source value would be a one-line change to schema.sql that both ports would pick up, if a cleaner provenance is wanted later.
+
+Phase 5 is elisp/writing-habit-compare.el and elisp/writing-habit-report.el, with elisp/test/writing-habit-compare-tests.el. The compare module ports compare/queries.py, thin wrappers over the four views plus the streak, and it writes no aggregation SQL of its own, so the schema stays the single source of truth. The report module is the analogue of render_week, but where the Python report writes plain text to standard output, this one writes an org document, with real org tables that carry the booktabs attribute and captions, so the report folds, exports, and pastes into a log with no conversion. A compare-layer differential confirms that the four view wrappers, the Monday snapping, and the streak count all agree with the Python compare module byte for byte on the same data.
+
+The optional matplotlib plot is now ported too. The grouped bar chart of planned against actual minutes per project is defined once as a matplotlib script, then offered two ways, each suited to how the report is used. For the interactive org report the chart is embedded as an Org Babel python source block, so C-c C-c on the block, or an export, renders it in place. For headless and batch use ~writing-habit-report-write-plot~ runs the same script through Python in Agg mode and writes the PNG directly, which is what the compare --plot command uses. A plot differential confirms the result is byte-identical to compare/report.py's write_plot on the same data. Either path needs python3 with matplotlib, the same optional dependency the Python extra needs.
+
+Phase 6 is elisp/writing-habit.el, the aggregator, with elisp/test/writing-habit-main-tests.el and an elisp/Makefile. It pulls in the five module files, adds an initdb command, gathers every command under a transient menu (M-x writing-habit), and offers a batch entry point so the toolkit runs from a shell or a Makefile the way the Python argparse CLI does. The batch surface matches the Python commands: initdb, plan import, track import with a csv or ics format, track add, compare, and name. The compare command prints the org report to standard output. The cross-port interoperability guard is a committed fixture: a database built by the Python port, read back through the Elisp compare layer, with an ERT test that checks the numbers. The Makefile runs the ERT suite and a warnings-as-errors byte-compile, and points at writing-schedule.el through WRITING_SCHEDULE_DIR. End-to-end shell runs of every batch command confirm the exit codes and output, and that surfaced one bug now fixed: track add read the new session id after logging the import, so it returned the log row's id rather than the session's; it now reads the id first, matching the Python order.
+
+A dashboard was then added to both ports at once, not just ported. Each package now renders a self-contained HTML dashboard from the shared database, with two panels: the week's planned schedule as a time-by-day grid colored by activity, and the planned-versus-actual comparison as summary tiles, per-project meters with adherence, the activity balance, and the barbell split. The markup is inline, needs no server, and carries a light and a dark theme. The Python module is dashboard.py, with a dashboard subcommand in cli.py; the Elisp module is writing-habit-dashboard.el, with an interactive command, a transient entry, and a dashboard batch subcommand. The two are built deterministically from the same data and share the static style and script text, so they produce byte-identical files; a committed fixture render pins both ports to the same bytes, guarded by a test on each side. The palette is the data-viz reference palette, validated with its script: the three activities take blue, green, and magenta, and the planned and actual marks take blue and orange, each pairing clearing the colorblind and normal-vision floors, with every colored mark also carrying a text label.
+
+The Elisp port now matches the Python package feature for feature, across forty-five ERT tests, with per-stage differentials that confirm agreement on decode, schema, plan import, CSV and ICS track import, the four compare views, the streak, the optional plot, the HTML dashboard, and a database written by the other port.
+
+* To-do checklist
+
+#+begin_src org
+- [X] Port name.py to writing-habit-name.el and cover it with ERT
+- [X] Wrap the SQLite backend in writing-habit-db-connect with a sqlite-available-p guard
+- [X] Load the shared schema.sql from writing-habit-db-init
+- [X] Reuse the writing-schedule.el parser in writing-habit-plan-import
+- [X] Build track: manual and CSV to match Python, plus the org-clock harvest
+- [X] Decide the clocked-heading to project-code mapping rule
+- [X] Add the ICS track importer through the bundled icalendar.el
+- [X] Run the four views and the streak in writing-habit-compare
+- [X] Render the report as an org buffer in writing-habit-report
+- [X] Add the transient menu and the batch entry point
+- [X] Add autoloads, package headers, and a cross-port interoperability test
+- [X] Add the optional matplotlib plot, embedded and headless
+- [X] Add the HTML dashboard to both ports, byte-identical and palette-validated
+#+end_src

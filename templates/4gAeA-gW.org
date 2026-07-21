@@ -1,0 +1,12 @@
+#+TITLE: Starter schedule, main project on weekdays and a new idea on Friday
+# Generative and editing on your main project Monday to Thursday. Friday morning starts a second, exploratory project, which introduces a small speculative bet.
+
+| Time <l>    | M  | Tu | W  | Th | F  |
+|-------------+----+----+----+----+----|
+| Generative: |    |    |    |    |    |
+| 09:00-09:30 | A  | A  | A  | A  | W  |
+| Rewriting:  |    |    |    |    |    |
+| 10:30-11:00 | A  | A  | A  | A  |    |
+|-------------+----+----+----+----+----|
+| A: main paper :safe: |  |  |  |  |  |
+| W: new idea :speculative: |  |  |  |  |  |

@@ -1,0 +1,10 @@
+#+TITLE: Starter schedule, one generative block a day
+# The gentlest start. One 30-minute generative block each weekday at 9 AM on your main project.
+# Writing every weekday is the point, because small daily doses build the habit.
+
+| Time <l>    | M  | Tu | W  | Th | F  |
+|-------------+----+----+----+----+----|
+| Generative: |    |    |    |    |    |
+| 09:00-09:30 | A  | A  | A  | A  | A  |
+|-------------+----+----+----+----+----|
+| A: main paper :safe: |  |  |  |  |  |

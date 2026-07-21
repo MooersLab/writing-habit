@@ -1,0 +1,10 @@
+#+TITLE: Starter schedule, two morning generative blocks a day
+# Builds writing volume with a second generative block. Two 30-minute blocks at 9 AM and 9:45 AM on your main project.
+
+| Time <l>    | M  | Tu | W  | Th | F  |
+|-------------+----+----+----+----+----|
+| Generative: |    |    |    |    |    |
+| 09:00-09:30 | A  | A  | A  | A  | A  |
+| 09:45-10:15 | A  | A  | A  | A  | A  |
+|-------------+----+----+----+----+----|
+| A: main paper :safe: |  |  |  |  |  |

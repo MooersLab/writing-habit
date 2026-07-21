@@ -1,0 +1,11 @@
+#+TITLE: Starter schedule, generative then editing each day
+# Adds a short editing block after the morning writing. Generative at 9 AM, editing at 10:30 AM, both on your main project.
+
+| Time <l>    | M  | Tu | W  | Th | F  |
+|-------------+----+----+----+----+----|
+| Generative: |    |    |    |    |    |
+| 09:00-09:30 | A  | A  | A  | A  | A  |
+| Rewriting:  |    |    |    |    |    |
+| 10:30-11:00 | A  | A  | A  | A  | A  |
+|-------------+----+----+----+----+----|
+| A: main paper :safe: |  |  |  |  |  |
