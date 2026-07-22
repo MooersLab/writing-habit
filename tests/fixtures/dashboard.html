@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Writing dashboard, week of 2026-01-19</title>
+  <style>
+    .wh { color-scheme: light;
+      --surface: #fcfcfb; --plane: #f9f9f7; --ink: #0b0b0b; --ink2: #52514e;
+      --muted: #898781; --grid: #e1e0d9; --axis: #c3c2b7;
+      --border: rgba(11,11,11,0.10);
+      --gen: #2a78d6; --edit: #008300; --sup: #e87ba4;
+      --planned: #2a78d6; --actual: #eb6834; }
+    @media (prefers-color-scheme: dark) {
+      .wh:not([data-theme="light"]) { color-scheme: dark;
+        --surface: #1a1a19; --plane: #0d0d0d; --ink: #ffffff; --ink2: #c3c2b7;
+        --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+        --border: rgba(255,255,255,0.10);
+        --gen: #3987e5; --edit: #008300; --sup: #d55181;
+        --planned: #3987e5; --actual: #d95926; } }
+    .wh[data-theme="dark"] { color-scheme: dark;
+      --surface: #1a1a19; --plane: #0d0d0d; --ink: #ffffff; --ink2: #c3c2b7;
+      --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+      --border: rgba(255,255,255,0.10);
+      --gen: #3987e5; --edit: #008300; --sup: #d55181;
+      --planned: #3987e5; --actual: #d95926; }
+    * { box-sizing: border-box; }
+    body.wh { margin: 0; background: var(--plane); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.45; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 22px; margin: 0; }
+    h2 { font-size: 15px; margin: 32px 0 12px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink2); }
+    .sub { color: var(--ink2); margin: 2px 0 0; }
+    .toggle { border: 1px solid var(--border); background: var(--surface); color: var(--ink2); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+    .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+    .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .tile .v { font-size: 26px; font-weight: 650; }
+    .tile .k { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    table { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-top: 4px; }
+    caption { text-align: left; color: var(--muted); font-size: 12px; padding: 0 2px 6px; }
+    th, td { padding: 7px 10px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--grid); }
+    thead th { color: var(--muted); font-weight: 600; }
+    tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .time { color: var(--ink2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .cell { font-weight: 600; }
+    .cell.gen { background: color-mix(in srgb, var(--gen) 15%, transparent); border-left: 3px solid var(--gen); }
+    .cell.edit { background: color-mix(in srgb, var(--edit) 15%, transparent); border-left: 3px solid var(--edit); }
+    .cell.sup { background: color-mix(in srgb, var(--sup) 15%, transparent); border-left: 3px solid var(--sup); }
+    .meter { display: flex; align-items: center; gap: 8px; }
+    .track { flex: 1; min-width: 120px; }
+    .bar { height: 8px; border-radius: 4px; }
+    .bar.planned { background: var(--planned); }
+    .bar.actual { background: var(--actual); margin-top: 2px; }
+    .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: middle; margin-right: 5px; }
+    .legend { display: flex; gap: 16px; color: var(--ink2); font-size: 12px; margin: 8px 2px 0; flex-wrap: wrap; }
+    .foot { color: var(--muted); font-size: 11px; margin-top: 28px; }
+  </style>
+</head>
+<body class="wh">
+  <div class="wrap">
+  <header>
+    <div><h1>Writing dashboard</h1><p class="sub">Week of 2026-01-19</p></div>
+    <button id="wh-theme" class="toggle" type="button">Dark theme</button>
+  </header>
+  <section class="tiles">
+    <div class="tile"><div class="v">1980</div><div class="k">planned minutes</div></div>
+    <div class="tile"><div class="v">520</div><div class="k">actual minutes</div></div>
+    <div class="tile"><div class="v">0.26</div><div class="k">overall adherence</div></div>
+    <div class="tile"><div class="v">3</div><div class="k">day writing streak</div></div>
+  </section>
+  <h2>Schedule</h2>
+  <table>
+    <caption>Planned blocks, colored by activity.</caption>
+    <thead><tr><th>Time</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr></thead>
+    <tbody>
+      <tr><th class="time">04:00-05:30</th><td class="cell gen">A</td><td class="cell gen">B</td><td class="cell gen">A</td><td class="cell gen">B</td><td class="cell gen">W</td><td></td></tr>
+      <tr><th class="time">05:45-07:15</th><td class="cell gen">A</td><td class="cell gen">B</td><td class="cell gen">A</td><td class="cell gen">B</td><td class="cell gen">W</td><td class="cell gen">A</td></tr>
+      <tr><th class="time">09:15-10:45</th><td class="cell edit">B</td><td class="cell edit">A</td><td class="cell edit">B</td><td class="cell edit">A</td><td class="cell edit">TT</td><td class="cell edit">A</td></tr>
+      <tr><th class="time">13:15-14:45</th><td class="cell sup">EM</td><td class="cell sup">EM</td><td class="cell sup">EM</td><td class="cell sup">EM</td><td class="cell sup">EM</td><td></td></tr>
+    </tbody>
+  </table>
+  <div class="legend"><span><span class="swatch" style="background:var(--gen)"></span>generative</span><span><span class="swatch" style="background:var(--edit)"></span>editing</span><span><span class="swatch" style="background:var(--sup)"></span>support</span></div>
+  <h2>Planned vs actual by project</h2>
+  <table>
+    <thead><tr><th>Code</th><th>Project</th><th class="num">Planned</th><th class="num">Actual</th><th>Progress</th><th class="num">Adherence</th></tr></thead>
+    <tbody>
+      <tr><td class="cell">A</td><td>DNPH1 docking</td><td class="num">720</td><td class="num">310</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:100%"></div><div class="bar actual" style="width:43%"></div></div></div></td><td class="num">0.43</td></tr>
+      <tr><td class="cell">B</td><td>DUSP1 radiation</td><td class="num">540</td><td class="num">90</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:75%"></div><div class="bar actual" style="width:13%"></div></div></div></td><td class="num">0.17</td></tr>
+      <tr><td class="cell">EM</td><td>email</td><td class="num">450</td><td class="num">120</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:63%"></div><div class="bar actual" style="width:17%"></div></div></div></td><td class="num">0.27</td></tr>
+      <tr><td class="cell">TT</td><td>teaching</td><td class="num">90</td><td class="num">0</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:13%"></div><div class="bar actual" style="width:0%"></div></div></div></td><td class="num">0.00</td></tr>
+      <tr><td class="cell">W</td><td>2026words</td><td class="num">180</td><td class="num">0</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:25%"></div><div class="bar actual" style="width:0%"></div></div></div></td><td class="num">0.00</td></tr>
+    </tbody>
+  </table>
+  <div class="legend"><span><span class="swatch" style="background:var(--planned)"></span>planned</span><span><span class="swatch" style="background:var(--actual)"></span>actual</span></div>
+  <h2>Activity balance</h2>
+  <table>
+    <thead><tr><th>Activity</th><th class="num">Planned</th><th class="num">Actual</th><th>Progress</th></tr></thead>
+    <tbody>
+      <tr><td>generative</td><td class="num">990</td><td class="num">310</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:100%"></div><div class="bar actual" style="width:31%"></div></div></div></td></tr>
+      <tr><td>editing</td><td class="num">540</td><td class="num">90</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:55%"></div><div class="bar actual" style="width:9%"></div></div></div></td></tr>
+      <tr><td>support</td><td class="num">450</td><td class="num">120</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:45%"></div><div class="bar actual" style="width:12%"></div></div></div></td></tr>
+    </tbody>
+  </table>
+  <h2>Barbell split</h2>
+  <table>
+    <thead><tr><th>Risk class</th><th class="num">Planned</th><th class="num">Actual</th></tr></thead>
+    <tbody>
+      <tr><td>safe</td><td class="num">1260</td><td class="num">400</td></tr>
+      <tr><td>speculative</td><td class="num">180</td><td class="num">0</td></tr>
+      <tr><td>support</td><td class="num">540</td><td class="num">120</td></tr>
+    </tbody>
+  </table>
+  <p class="sub">Speculative share: planned 13%, actual 0%.</p>
+  <p class="foot">Generated by writing-habit from the shared SQLite database. Planned versus actual, self-reported effort.</p>
+  </div>
+  <script>
+    document.getElementById('wh-theme').addEventListener('click', function () {
+      var b = document.body;
+      var dark = b.getAttribute('data-theme') === 'dark';
+      b.setAttribute('data-theme', dark ? 'light' : 'dark');
+      this.textContent = dark ? 'Dark theme' : 'Light theme';
+    });
+  </script>
+</body>
+</html>

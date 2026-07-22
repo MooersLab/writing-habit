@@ -1,0 +1,88 @@
+digraph schema {
+  rankdir=LR;
+  bgcolor="white";
+  fontname="Helvetica";
+  fontsize=11;
+  labelloc="t";
+  label="The shared schema: two reference tables, three fact tables, four views";
+  node [fontname="Helvetica", fontsize=10, shape=plaintext];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+  // ---------- Reference tables ----------
+  category [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="#dbe8f5">
+      <tr><td bgcolor="#2f6fb2"><font color="white"><b>category</b></font></td></tr>
+      <tr><td align="left"><b>category_id</b>  PK</td></tr>
+      <tr><td align="left">name  (generative | editing | support)</td></tr>
+      <tr><td align="left">sort_order</td></tr>
+    </table>>];
+
+  project [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="#dbe8f5">
+      <tr><td bgcolor="#2f6fb2"><font color="white"><b>project</b></font></td></tr>
+      <tr><td align="left"><b>project_id</b>  PK</td></tr>
+      <tr><td align="left">code  (A, B, EM, W2 ...)</td></tr>
+      <tr><td align="left">description</td></tr>
+      <tr><td align="left">risk_class  (safe | speculative | support)</td></tr>
+      <tr><td align="left">active</td></tr>
+    </table>>];
+
+  // ---------- Fact tables ----------
+  plan_block [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="#dceede">
+      <tr><td bgcolor="#2e8b57"><font color="white"><b>plan_block</b>  (schedule)</font></td></tr>
+      <tr><td align="left"><b>block_id</b>  PK</td></tr>
+      <tr><td align="left">day, start_time, end_time</td></tr>
+      <tr><td align="left">project_id  FK</td></tr>
+      <tr><td align="left">category_id  FK</td></tr>
+      <tr><td align="left"><i>planned_min</i>  generated</td></tr>
+      <tr><td align="left"><i>week_start</i>  generated</td></tr>
+    </table>>];
+
+  session [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="#dceede">
+      <tr><td bgcolor="#2e8b57"><font color="white"><b>session</b>  (track)</font></td></tr>
+      <tr><td align="left"><b>session_id</b>  PK</td></tr>
+      <tr><td align="left">day, start_time?, end_time?</td></tr>
+      <tr><td align="left">actual_min</td></tr>
+      <tr><td align="left">project_id  FK</td></tr>
+      <tr><td align="left">category_id  FK (nullable)</td></tr>
+      <tr><td align="left">source, source_ref, note</td></tr>
+      <tr><td align="left"><i>week_start</i>  generated</td></tr>
+    </table>>];
+
+  import_log [label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="#dceede">
+      <tr><td bgcolor="#2e8b57"><font color="white"><b>import_log</b>  (provenance)</font></td></tr>
+      <tr><td align="left"><b>import_id</b>  PK</td></tr>
+      <tr><td align="left">source_type, source_name</td></tr>
+      <tr><td align="left">rows_read, rows_inserted</td></tr>
+      <tr><td align="left">tool_version, imported_at</td></tr>
+    </table>>];
+
+  // ---------- Views ----------
+  node [shape=box, style="rounded,filled", fillcolor="#f6dfe8", color="#c94f7c", fontsize=10];
+  v_project  [label="v_week_project\nplanned vs actual per project\n(adherence, Rule 10)"];
+  v_category [label="v_week_category\nplanned vs actual per activity\n(Rule 2 balance)"];
+  v_barbell  [label="v_week_barbell\nplanned vs actual per risk class\n(Rule 6 drift)"];
+  v_day      [label="v_day_actual\nminutes and worked flag per day\n(streak, Rule 10)"];
+
+  // Foreign keys
+  plan_block -> project  [label="project_id"];
+  plan_block -> category [label="category_id"];
+  session    -> project  [label="project_id"];
+  session    -> category [label="category_id"];
+
+  // Views read from the fact and reference tables (dashed)
+  edge [style=dashed, color="#c94f7c", arrowhead=open];
+  v_project  -> plan_block;
+  v_project  -> session;
+  v_category -> plan_block;
+  v_category -> session;
+  v_barbell  -> plan_block;
+  v_barbell  -> session;
+  v_day      -> session;
+
+  { rank=same; category; project; }
+  { rank=same; v_project; v_category; v_barbell; v_day; }
+}

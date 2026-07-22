@@ -1,0 +1,77 @@
+digraph code {
+  rankdir=TB;
+  bgcolor="white";
+  fontname="Helvetica";
+  fontsize=11;
+  labelloc="t";
+  label="Decoding the schedule code 4gAAeAsA-gWW into a week of blocks";
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+  // ---- Token breakdown ----
+  tokens [shape=plaintext, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="6">
+      <tr>
+        <td bgcolor="#f4efe4"><b>4</b></td>
+        <td bgcolor="#dbe8f5"><b>g</b></td>
+        <td bgcolor="#dbe8f5"><b>A A</b></td>
+        <td bgcolor="#dceede"><b>e</b></td>
+        <td bgcolor="#dceede"><b>A</b></td>
+        <td bgcolor="#f6dfe8"><b>s</b></td>
+        <td bgcolor="#f6dfe8"><b>A</b></td>
+        <td bgcolor="#ffffff"><b>-</b></td>
+        <td bgcolor="#dbe8f5"><b>g</b></td>
+        <td bgcolor="#dbe8f5"><b>W W</b></td>
+      </tr>
+      <tr>
+        <td>count<br/>4 days</td>
+        <td>gen.</td>
+        <td>2 blocks<br/>on A</td>
+        <td>edit</td>
+        <td>1 block<br/>on A</td>
+        <td>supp.</td>
+        <td>1 block<br/>on A</td>
+        <td>new<br/>pattern</td>
+        <td>gen.</td>
+        <td>2 blocks<br/>on W</td>
+      </tr>
+    </table>>];
+
+  // ---- Decoded week grid ----
+  grid [shape=plaintext, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="6">
+      <tr>
+        <td bgcolor="#eeeeee"><b>block</b></td>
+        <td bgcolor="#eeeeee"><b>Mon</b></td>
+        <td bgcolor="#eeeeee"><b>Tue</b></td>
+        <td bgcolor="#eeeeee"><b>Wed</b></td>
+        <td bgcolor="#eeeeee"><b>Thu</b></td>
+        <td bgcolor="#eeeeee"><b>Fri</b></td>
+      </tr>
+      <tr>
+        <td align="left">generative</td>
+        <td bgcolor="#dbe8f5">A</td><td bgcolor="#dbe8f5">A</td><td bgcolor="#dbe8f5">A</td><td bgcolor="#dbe8f5">A</td><td bgcolor="#dbe8f5">W</td>
+      </tr>
+      <tr>
+        <td align="left">generative</td>
+        <td bgcolor="#dbe8f5">A</td><td bgcolor="#dbe8f5">A</td><td bgcolor="#dbe8f5">A</td><td bgcolor="#dbe8f5">A</td><td bgcolor="#dbe8f5">W</td>
+      </tr>
+      <tr>
+        <td align="left">editing</td>
+        <td bgcolor="#dceede">A</td><td bgcolor="#dceede">A</td><td bgcolor="#dceede">A</td><td bgcolor="#dceede">A</td><td bgcolor="#ffffff"> </td>
+      </tr>
+      <tr>
+        <td align="left">support</td>
+        <td bgcolor="#f6dfe8">A</td><td bgcolor="#f6dfe8">A</td><td bgcolor="#f6dfe8">A</td><td bgcolor="#f6dfe8">A</td><td bgcolor="#ffffff"> </td>
+      </tr>
+    </table>>];
+
+  legend [shape=plaintext, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="5">
+      <tr><td bgcolor="#dbe8f5">generative (g)</td><td bgcolor="#dceede">editing (e)</td><td bgcolor="#f6dfe8">support (s)</td></tr>
+      <tr><td colspan="3" align="left">uppercase = project, lowercase = activity, leading digit = day count</td></tr>
+    </table>>];
+
+  tokens -> grid [label="decodes to  (18 blocks over 5 days)"];
+  grid -> legend [style=invis];
+}

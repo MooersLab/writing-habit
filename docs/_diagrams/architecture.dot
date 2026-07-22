@@ -1,0 +1,68 @@
+digraph architecture {
+  rankdir=LR;
+  bgcolor="white";
+  labelloc="t";
+  fontname="Helvetica";
+  fontsize=11;
+  label="writing-habit: three modules over one shared database";
+  node [fontname="Helvetica", fontsize=11, style="filled", color="#333333"];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+  // ---- Inputs ----
+  subgraph cluster_in {
+    label="Open input formats";
+    labelloc="t";
+    fontsize=10;
+    color="#cccccc";
+    style="rounded";
+    org  [label="Weekly org table\nmy-week.org", shape=note, fillcolor="#eef3f9"];
+    csv  [label="Tracking CSV\nactuals.csv", shape=note, fillcolor="#eef3f9"];
+    ics  [label="Actuals ICS\nactuals.ics", shape=note, fillcolor="#eef3f9"];
+    hand [label="By hand\ntrack add", shape=note, fillcolor="#eef3f9"];
+  }
+
+  // ---- Modules ----
+  plan  [label="plan import\n(schedule)", shape=box, style="rounded,filled", fillcolor="#dbe8f5", color="#2f6fb2"];
+  track [label="track\ncsv / ics / manual", shape=box, style="rounded,filled", fillcolor="#dceede", color="#2e8b57"];
+  cmp   [label="compare\nfour views -> report", shape=box, style="rounded,filled", fillcolor="#f6dfe8", color="#c94f7c"];
+
+  // ---- The contract ----
+  db [label="SQLite database\nschema.sql is the contract", shape=cylinder, fillcolor="#f4efe4", color="#8a7b52", fontsize=11];
+
+  // ---- Reference / interop ----
+  wsched [label="writing-schedule\nparser (extra: plan)", shape=box, style="rounded,filled,dashed", fillcolor="#ffffff", color="#999999", fontsize=10];
+  el     [label="writing-habit-el\n(Emacs Lisp twin)", shape=box, style="rounded,filled,dashed", fillcolor="#ffffff", color="#999999", fontsize=10];
+
+  // ---- Outputs ----
+  subgraph cluster_out {
+    label="compare outputs";
+    labelloc="t";
+    fontsize=10;
+    color="#cccccc";
+    style="rounded";
+    rep  [label="Text report", shape=note, fillcolor="#fbf6ee"];
+    plt  [label="Bar chart PNG\n(extra: plot)", shape=note, fillcolor="#fbf6ee"];
+    dash [label="HTML dashboard\n(shared rendering)", shape=note, fillcolor="#fbf6ee"];
+  }
+
+  // Flows in
+  org  -> plan;
+  csv  -> track;
+  ics  -> track;
+  hand -> track;
+  wsched -> plan [style=dashed, label="reuses"];
+
+  plan  -> db [label="plan_block"];
+  track -> db [label="session"];
+
+  // Flows out
+  db -> cmp [label="reads views"];
+  cmp -> rep;
+  cmp -> plt;
+  cmp -> dash;
+
+  // Interop
+  el -> db [dir=both, style=dashed, label="same file", color="#999999"];
+
+  { rank=same; plan; track; }
+}

@@ -1,0 +1,23 @@
+digraph loop {
+  rankdir=LR;
+  bgcolor="white";
+  fontname="Helvetica";
+  fontsize=11;
+  labelloc="t";
+  label="The weekly loop: plan on Monday, track through the week, compare at the end";
+  node [fontname="Helvetica", fontsize=11, style="filled"];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+  init [label="initdb\n(once per database)", shape=box, style="rounded,filled", fillcolor="#f4efe4", color="#8a7b52"];
+
+  plan  [label="plan import\nfill plan_block", shape=box, style="rounded,filled", fillcolor="#dbe8f5", color="#2f6fb2"];
+  track [label="track import / add\nfill session", shape=box, style="rounded,filled", fillcolor="#dceede", color="#2e8b57"];
+  cmp   [label="compare / dashboard\nread the four views", shape=box, style="rounded,filled", fillcolor="#f6dfe8", color="#c94f7c"];
+
+  init -> plan [label="seeds schema"];
+  plan  -> track [label="Monday"];
+  track -> cmp   [label="through the week"];
+  cmp -> plan [label="next week", constraint=false, color="#2f6fb2", fontcolor="#2f6fb2"];
+
+  { rank=same; plan; track; cmp; }
+}
