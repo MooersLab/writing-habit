@@ -20,7 +20,7 @@ This is a tool for one person studying and improving their own writing habit, an
 
 The weekly HTML dashboard, with a light and a dark theme:
 
-![Dashboard](https://raw.githubusercontent.com/MooersLab/writing-habit-py/main/assets/images/dashboard-light.png)
+![Dashboard](./assets/images/dashboard-light.png)
 
 The optional planned-versus-actual chart from the compare stage:
 
