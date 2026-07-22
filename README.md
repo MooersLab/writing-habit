@@ -24,7 +24,7 @@ The weekly HTML dashboard, with a light and a dark theme:
 
 The optional planned-versus-actual chart from the compare stage:
 
-![Planned versus actual](https://raw.githubusercontent.com/MooersLab/writing-habit-py/main/assets/images/plot.png)
+![Planned versus actual](./assets/images/plot.png)
 
 ## Install
 
