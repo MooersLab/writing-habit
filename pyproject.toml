@@ -9,8 +9,22 @@ description = "Track and compare planned versus actual academic writing effort, 
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
-authors = [{name = "Blaine H. M. Mooers"}]
+authors = [{name = "Blaine H. M. Mooers", email = "blaine-mooers@ou.edu"}]
 keywords = ["writing", "habit", "scheduling", "time tracking", "N-of-1"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Text Processing",
+]
 dependencies = []
 
 [project.optional-dependencies]
@@ -24,6 +38,12 @@ dev = ["pytest>=7"]
 
 [project.scripts]
 writing-habit = "writing_habit.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/MooersLab/writing-habit-py"
+Documentation = "https://writing-habit-py.readthedocs.io/"
+Repository = "https://github.com/MooersLab/writing-habit-py"
+Issues = "https://github.com/MooersLab/writing-habit-py/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

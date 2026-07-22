@@ -7,15 +7,19 @@ when you need them.
 
 ## The core
 
-Install the package in editable mode from a checkout, which is the usual choice
-while the toolkit is young:
+Install the package from PyPI:
+
+```
+pip install writing-habit
+```
+
+This gives you `initdb`, `track` (CSV and by hand), `compare`, `dashboard`, and
+`name`. None of these needs anything beyond the standard library. For
+development, install from a checkout in editable mode instead:
 
 ```
 pip install -e .
 ```
-
-This gives you `initdb`, `track` (CSV and by hand), `compare`, `dashboard`, and
-`name`. None of these needs anything beyond the standard library.
 
 ## The optional extras
 
@@ -25,25 +29,27 @@ one-command install.
 
 | Extra | Command | What it adds |
 |-------|---------|--------------|
-| `plan` | `pip install -e '.[plan]'` | Plan import, through the real `writing-schedule` parser, so the plan and the schedule never diverge. |
-| `ics` | `pip install -e '.[ics]'` | Actuals import from an ICS calendar, through `icalendar`. |
-| `plot` | `pip install -e '.[plot]'` | The planned-versus-actual bar chart from `compare --plot`, through `matplotlib`. |
-| `sheets` | `pip install -e '.[sheets]'` | A live Google Sheets reader, through `gspread`, kept as an extra so it is never a core dependency. |
+| `plan` | `pip install 'writing-habit[plan]'` | Plan import, through the real `writing-schedule` parser, so the plan and the schedule never diverge. |
+| `ics` | `pip install 'writing-habit[ics]'` | Actuals import from an ICS calendar, through `icalendar`. |
+| `plot` | `pip install 'writing-habit[plot]'` | The planned-versus-actual bar chart from `compare --plot`, through `matplotlib`. |
+| `sheets` | `pip install 'writing-habit[sheets]'` | A live Google Sheets reader, through `gspread`, kept as an extra so it is never a core dependency. |
 
-You may combine extras, for example `pip install -e '.[plan,ics,plot]'`.
+You may combine extras, for example `pip install 'writing-habit[plan,ics,plot]'`.
 
-## Installing writing-schedule for plan import
+## The plan extra and writing-schedule
 
 Plan import calls the real `writing-schedule` parser rather than a copy of it.
-Until `writing-schedule` is published to PyPI, install it from its checkout so
-the `plan` extra resolves:
+The `plan` extra installs
+[writing-schedule](https://pypi.org/project/writing-schedule/) from PyPI, so
+`pip install 'writing-habit[plan]'` resolves it for you. The other commands,
+namely `initdb`, `track`, `compare`, `dashboard`, and `name`, run without it.
+
+When you are working from a checkout of both projects, install `writing-schedule`
+in editable mode instead so your local changes are picked up:
 
 ```
 pip install -e <path>/writing-schedule-py/writing_schedule
 ```
-
-The other commands, namely `initdb`, `track`, `compare`, `dashboard`, and
-`name`, run without it.
 
 ## Verifying the installation
 
