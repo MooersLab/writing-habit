@@ -1,0 +1,28 @@
+# Read the Docs build configuration.
+# https://docs.readthedocs.io/en/stable/config-file/v2.html
+version: 2
+
+build:
+  os: ubuntu-24.04
+  tools:
+    python: "3.12"
+  # Graphviz is only needed to regenerate the diagram PNGs, which are committed
+  # under docs/imgs/, so the build itself does not require it.
+
+sphinx:
+  configuration: docs/conf.py
+  fail_on_warning: true
+
+python:
+  install:
+    # Install the package so autodoc can import it. The core has no third-party
+    # dependency, and every optional import in the package is lazy, so autodoc
+    # imports every module without the extras.
+    - method: pip
+      path: .
+    # Documentation-only build dependencies.
+    - requirements: docs/requirements.txt
+
+formats:
+  - pdf
+  - epub

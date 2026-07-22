@@ -1,6 +1,7 @@
 # writing-habit
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code License: MIT](https://img.shields.io/badge/Code_License-MIT-yellow.svg)](https://github.com/MooersLab/writing-habit-py/blob/main/LICENSE)
+[![Image License: CC BY 4.0](https://img.shields.io/badge/Image_License-CC_BY_4.0-lightgrey.svg)](https://github.com/MooersLab/writing-habit-py/blob/main/assets/images/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 
 Track and compare planned versus actual academic writing effort. A companion to [writing-schedule](https://github.com/MooersLab/writing-schedule-py), and the twin of the Emacs Lisp package [writing-habit-el](https://github.com/MooersLab/writing-habit-el).
@@ -19,27 +20,24 @@ This is a tool for one person studying and improving their own writing habit, an
 
 The weekly HTML dashboard, with a light and a dark theme:
 
-![Dashboard](imgs/dashboard-light.png)
+![Dashboard](https://raw.githubusercontent.com/MooersLab/writing-habit-py/main/assets/images/dashboard-light.png)
 
 The optional planned-versus-actual chart from the compare stage:
 
-![Planned versus actual](imgs/plot.png)
+![Planned versus actual](https://raw.githubusercontent.com/MooersLab/writing-habit-py/main/assets/images/plot.png)
 
 ## Install
 
 ```
-pip install -e .            # core, standard library only
-pip install -e '.[ics]'     # add ICS import
-pip install -e '.[plot]'    # add the comparison plot
+pip install writing-habit             # core, standard library only
+pip install 'writing-habit[plan]'     # add plan import (pulls in writing-schedule)
+pip install 'writing-habit[ics]'      # add ICS import
+pip install 'writing-habit[plot]'     # add the comparison plot
 ```
 
-Plan import calls the real writing-schedule parser, so the plan and the schedule never diverge. Until writing-schedule is on PyPI, install it from its checkout:
+For development, install from a checkout in editable mode instead, for example `pip install -e '.[plan,ics,plot,dev]'`.
 
-```
-pip install -e <path>/writing-schedule-py/writing_schedule
-```
-
-The other commands (initdb, track, compare, dashboard) run without it.
+Plan import calls the real writing-schedule parser, so the plan and the schedule never diverge. The `plan` extra installs [writing-schedule](https://pypi.org/project/writing-schedule/) from PyPI. The other commands (initdb, track, compare, dashboard) run without it.
 
 ## Quick start
 
@@ -102,7 +100,11 @@ The Emacs Lisp twin, [writing-habit-el](https://github.com/MooersLab/writing-hab
 
 ## License
 
-MIT.
+This project uses split licensing.
+
+Source code is licensed under the MIT License; see [`LICENSE`](https://github.com/MooersLab/writing-habit-py/blob/main/LICENSE).
+
+Images in `assets/images/` are licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0); see [`assets/images/LICENSE`](https://github.com/MooersLab/writing-habit-py/blob/main/assets/images/LICENSE). The Creative Commons portion covers all of the generated figures, namely the architecture and schema diagrams, the weekly-loop and schedule-code figures, the planned-versus-actual chart, and the dashboard screenshots. The same images also appear under `docs/imgs/` for the documentation build, and they are CC BY 4.0 wherever they appear in this repository. Each image carries its CC BY 4.0 attribution embedded in the file metadata, so a figure reused in a manuscript keeps its license and credit. A suggested attribution is: "writing-habit" figures by Blaine H. M. Mooers, licensed under CC BY 4.0, https://github.com/MooersLab/writing-habit-py.
 
 ## Sources of funding
 

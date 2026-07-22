@@ -1,0 +1,41 @@
+NOTICE — image attribution and licensing
+
+Copyright (c) 2026 Blaine H. M. Mooers
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+         https://creativecommons.org/licenses/by/4.0/
+
+All images listed below are licensed CC BY 4.0. Each PNG also carries this
+attribution embedded in its metadata (XMP plus PNG text chunks), so the
+license travels with the file when it is reused in a manuscript or elsewhere.
+The diagram sources (Graphviz .dot files) are under docs/_diagrams/.
+
+architecture.png
+  Title:       writing-habit architecture diagram
+  Description: Data-flow diagram: the schedule, track, and compare modules over one shared SQLite database whose schema is the contract.
+
+schema-er.png
+  Title:       writing-habit database schema (ER diagram)
+  Description: Entity-relationship diagram of the shared schema: two reference tables, three fact tables, and four comparison views.
+
+workflow-loop.png
+  Title:       writing-habit weekly loop
+  Description: The weekly loop: seed the database once, import the plan, track sessions through the week, and compare at the end.
+
+schedule-code.png
+  Title:       writing-habit schedule-code decode
+  Description: Decoding the schedule code 4gAAeAsA-gWW into a week of writing blocks.
+
+dashboard-light.png
+  Title:       writing-habit dashboard, light theme
+  Description: The weekly HTML dashboard rendered in the light theme.
+
+dashboard-dark.png
+  Title:       writing-habit dashboard, dark theme
+  Description: The weekly HTML dashboard rendered in the dark theme.
+
+plot.png
+  Title:       writing-habit planned-versus-actual chart
+  Description: Grouped bar chart of planned versus actual minutes per project for one week.
+
+Suggested attribution:
+  "writing-habit" figures by Blaine H. M. Mooers, licensed under CC BY 4.0. https://github.com/MooersLab/writing-habit-py
