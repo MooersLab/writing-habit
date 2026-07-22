@@ -5,6 +5,7 @@
     writing-habit track     import actuals.csv --format csv        --db habit.db
     writing-habit track     add --day 2026-01-19 --project A --minutes 75 --category generative --db habit.db
     writing-habit compare   --week 2026-01-19 --db habit.db [--plot out.png]
+    writing-habit dashboard --week 2026-01-19 --out week.html --db habit.db
     writing-habit name      4gAAeAsA-gWW [--table my-week.org]
 """
 
@@ -60,6 +61,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_cmp.add_argument("--week", required=True, help="any date in the target week")
     p_cmp.add_argument("--plot", help="also write a bar chart to this path")
     _add_db(p_cmp)
+
+    p_dash = sub.add_parser(
+        "dashboard", help="write a self-contained HTML dashboard for a week"
+    )
+    p_dash.add_argument("--week", required=True, help="any date in the target week")
+    p_dash.add_argument("--out", required=True, help="path to write the HTML dashboard")
+    _add_db(p_dash)
 
     p_name = sub.add_parser(
         "name", help="decode a schedule file-name code and check it against a table legend"
@@ -163,6 +171,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.plot:
             report.write_plot(con, args.week, args.plot)
             print(f"\nWrote plot to {args.plot}")
+        return 0
+
+    if args.command == "dashboard":
+        from .dashboard import write_dashboard
+        write_dashboard(con, args.week, args.out)
+        print(f"Wrote dashboard to {args.out}")
         return 0
 
     return 1
