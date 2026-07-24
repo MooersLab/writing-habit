@@ -1,7 +1,6 @@
 # writing-habit
 
-[![Code License: MIT](https://img.shields.io/badge/Code_License-MIT-yellow.svg)](https://github.com/MooersLab/writing-habit-py/blob/main/LICENSE)
-[![Image License: CC BY 4.0](https://img.shields.io/badge/Image_License-CC_BY_4.0-lightgrey.svg)](https://github.com/MooersLab/writing-habit-py/blob/main/assets/images/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 
 Track and compare planned versus actual academic writing effort. A companion to [writing-schedule](https://github.com/MooersLab/writing-schedule-py), and the twin of the Emacs Lisp package [writing-habit-el](https://github.com/MooersLab/writing-habit-el).
@@ -20,24 +19,27 @@ This is a tool for one person studying and improving their own writing habit, an
 
 The weekly HTML dashboard, with a light and a dark theme:
 
-![Dashboard](./assets/images/dashboard-light.png)
+![Dashboard](imgs/dashboard-light.png)
 
 The optional planned-versus-actual chart from the compare stage:
 
-![Planned versus actual](./assets/images/plot.png)
+![Planned versus actual](imgs/plot.png)
 
 ## Install
 
 ```
-pip install writing-habit             # core, standard library only
-pip install 'writing-habit[plan]'     # add plan import (pulls in writing-schedule)
-pip install 'writing-habit[ics]'      # add ICS import
-pip install 'writing-habit[plot]'     # add the comparison plot
+pip install -e .            # core, standard library only
+pip install -e '.[ics]'     # add ICS import
+pip install -e '.[plot]'    # add the comparison plot
 ```
 
-For development, install from a checkout in editable mode instead, for example `pip install -e '.[plan,ics,plot,dev]'`.
+Plan import calls the real writing-schedule parser, so the plan and the schedule never diverge. Until writing-schedule is on PyPI, install it from its checkout:
 
-Plan import calls the real writing-schedule parser, so the plan and the schedule never diverge. The `plan` extra installs [writing-schedule](https://pypi.org/project/writing-schedule/) from PyPI. The other commands (initdb, track, compare, dashboard) run without it.
+```
+pip install -e <path>/writing-schedule-py/writing_schedule
+```
+
+The other commands (initdb, track, compare, dashboard) run without it.
 
 ## Quick start
 
@@ -47,6 +49,9 @@ writing-habit plan import examples/my-week.org --week 2026-01-19 --db habit.db
 writing-habit track import examples/actuals.csv --format csv --db habit.db
 writing-habit compare --week 2026-01-19 --db habit.db
 writing-habit dashboard --week 2026-01-19 --out week.html --db habit.db
+writing-habit history --db habit.db
+writing-habit context set --week 2026-01-19 --tag teaching --db habit.db
+writing-habit seasons --out seasons.html --db habit.db
 ```
 
 Add a session by hand at the end of the day:
@@ -76,7 +81,7 @@ For calendar tracking, keep actuals in their own ICS calendar. Put the legend co
 
 ## Marking safe and speculative projects
 
-To drive the barbell view, add a risk tag to the end of a legend description in the weekly table, in either the org-tag form `:safe:` or the parenthesis form `(safe)`. Recognized tags are `safe`, `speculative`, and `support`.
+To drive the barbell view, add a risk tag to the end of a legend description in the weekly table, in either the org-tag form `:safe:` or the parenthesis form `(safe)`. The two risk classes are `safe` and `speculative`. Support is an activity category, not a risk class, so a support project carries no risk tag.
 
 ```
 | A: DNPH1 docking :safe:      |  |  |  |  |  |
@@ -94,17 +99,27 @@ Inside a table cell `:safe:` is literal text, because org only reads `:tag:` syn
 
 These come three ways: a plain-text report from `compare`, an optional matplotlib bar chart from `compare --plot week.png`, and a self-contained HTML dashboard from `dashboard --out week.html`. The dashboard has two panels, the week's planned schedule as a time-by-day grid colored by activity, and the planned-versus-actual comparison as tiles, per-project meters, the activity balance, and the barbell split. It carries a light and a dark theme and needs no server.
 
+## Tracking adherence over time
+
+Beyond a single week, `history` prints the weekly adherence series and, with `--plot`, writes five plots by week: overall adherence, the mean of the per-project ratios, and the mean adherence within each of the three activities.
+
+`context` tags a week with an event, for example a national meeting, a teaching block, or a data-collection push, so the weeks can be grouped by what kind of period they were.
+
+`seasons` writes a second self-contained HTML dashboard that groups adherence three ways: by calendar month for seasonal trends, by event-context tag, and by the schedule file-name code so plan shapes can be compared. The schedule code is captured at plan import from the table file name.
+
+```
+writing-habit history --db habit.db --from 2026-01-01 --to 2026-06-30 --plot trend.png
+writing-habit context set --week 2026-02-02 --tag teaching --db habit.db
+writing-habit seasons --out seasons.html --db habit.db
+```
+
 ## Interoperability with the Emacs Lisp version
 
-The Emacs Lisp twin, [writing-habit-el](https://github.com/MooersLab/writing-habit-el), shares this schema and the schedule-code specification, so the two interoperate on one database file. A session written by this package reads in the Emacs Lisp package, and the reverse holds too, because neither owns the schema. Both render the same dashboard from the same data, down to the byte. Use whichever fits your workflow, or both on the same database. The Emacs Lisp version adds one capture path this one cannot offer: an org-clock harvest, because Emacs already measures writing time.
+The Emacs Lisp twin, [writing-habit-el](https://github.com/MooersLab/writing-habit-el), shares this schema and the schedule-code specification, so the two interoperate on one database file. A session written by this package reads in the Emacs Lisp package, and the reverse holds too, because neither owns the schema. Both render the same dashboard from the same data, down to the byte. Use whichever fits your workflow, or both on the same database. The Emacs Lisp version adds one capture path this one cannot offer, an org-clock harvest, because Emacs already measures writing time.
 
 ## License
 
-This project uses split licensing.
-
-Source code is licensed under the MIT License; see [`LICENSE`](https://github.com/MooersLab/writing-habit-py/blob/main/LICENSE).
-
-Images in `assets/images/` are licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0); see [`assets/images/LICENSE`](https://github.com/MooersLab/writing-habit-py/blob/main/assets/images/LICENSE). The Creative Commons portion covers all of the generated figures, namely the architecture and schema diagrams, the weekly-loop and schedule-code figures, the planned-versus-actual chart, and the dashboard screenshots. The same images also appear under `docs/imgs/` for the documentation build, and they are CC BY 4.0 wherever they appear in this repository. Each image carries its CC BY 4.0 attribution embedded in the file metadata, so a figure reused in a manuscript keeps its license and credit. A suggested attribution is: "writing-habit" figures by Blaine H. M. Mooers, licensed under CC BY 4.0, https://github.com/MooersLab/writing-habit-py.
+MIT.
 
 ## Sources of funding
 

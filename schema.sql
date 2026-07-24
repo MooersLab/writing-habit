@@ -25,12 +25,13 @@ CREATE TABLE IF NOT EXISTS category (
 );
 
 -- The writing portfolio. code matches the schedule legend, for example A, B, EM, W2.
--- risk_class supports the Rule 6 barbell analysis.
+-- risk_class is the barbell class and is one of safe or speculative. Support is an
+-- activity category, not a risk class, so a support project carries no risk_class.
 CREATE TABLE IF NOT EXISTS project (
     project_id  INTEGER PRIMARY KEY,
     code        TEXT NOT NULL UNIQUE,
     description TEXT,
-    risk_class  TEXT CHECK (risk_class IN ('safe','speculative','support')),
+    risk_class  TEXT CHECK (risk_class IN ('safe','speculative')),
     active      INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -154,14 +155,19 @@ JOIN category c ON c.category_id=k.category_id
 ORDER BY k.week_start, c.sort_order;
 
 -- Planned versus actual minutes per week and barbell class. Detects the Rule 6 drift.
+-- Only the two risk classes, safe and speculative, take part in the barbell. Support
+-- is an activity category, not a risk class, so support and untagged projects are
+-- excluded here.
 CREATE VIEW IF NOT EXISTS v_week_barbell AS
 WITH pb AS (
         SELECT b.week_start, pr.risk_class, SUM(b.planned_min) AS planned_min
         FROM plan_block b JOIN project pr ON pr.project_id=b.project_id
+        WHERE pr.risk_class IN ('safe','speculative')
         GROUP BY b.week_start, pr.risk_class),
 sb AS (
         SELECT s.week_start, pr.risk_class, SUM(s.actual_min) AS actual_min
         FROM session s JOIN project pr ON pr.project_id=s.project_id
+        WHERE pr.risk_class IN ('safe','speculative')
         GROUP BY s.week_start, pr.risk_class),
 keys AS (
         SELECT week_start, risk_class FROM pb
@@ -185,3 +191,146 @@ SELECT  day,
 FROM session
 GROUP BY day, week_start
 ORDER BY day;
+
+-- ---------------------------------------------------------------------------
+-- Cross-week views for the adherence tracker (build step 1).
+-- These carry every week in the database, so the history reader and the weekly
+-- plots select a range from them rather than one week.
+-- ---------------------------------------------------------------------------
+
+-- Overall adherence per week: the ratio of the summed actual minutes to the
+-- summed planned minutes across all projects. This weights a project by its
+-- size, so a large project dominates the number. First headline series.
+CREATE VIEW IF NOT EXISTS v_week_overall AS
+WITH p AS (SELECT week_start, SUM(planned_min) AS planned_min
+             FROM plan_block GROUP BY week_start),
+     a AS (SELECT week_start, SUM(actual_min)  AS actual_min
+             FROM session    GROUP BY week_start),
+     keys AS (SELECT week_start FROM p UNION SELECT week_start FROM a)
+SELECT  k.week_start,
+        COALESCE(p.planned_min,0) AS planned_min,
+        COALESCE(a.actual_min,0)  AS actual_min,
+        CASE WHEN COALESCE(p.planned_min,0)=0 THEN NULL
+             ELSE ROUND(1.0*COALESCE(a.actual_min,0)/p.planned_min, 2) END AS adherence
+FROM keys k
+LEFT JOIN p ON p.week_start=k.week_start
+LEFT JOIN a ON a.week_start=k.week_start
+ORDER BY k.week_start;
+
+-- Mean of the per-project adherence ratios per week. This weights every project
+-- equally rather than by size, so a small starved project counts as much as a
+-- large one. AVG ignores a project with no planned minutes. Second headline series.
+CREATE VIEW IF NOT EXISTS v_week_project_mean AS
+SELECT  week_start,
+        ROUND(AVG(adherence), 2) AS mean_adherence,
+        COUNT(adherence)         AS n_projects
+FROM v_week_project
+WHERE adherence IS NOT NULL
+GROUP BY week_start
+ORDER BY week_start;
+
+-- Planned versus actual minutes per week, project, and activity, with the per-cell
+-- adherence ratio. This is the base for the per-category series.
+CREATE VIEW IF NOT EXISTS v_week_project_category AS
+WITH keys AS (
+        SELECT week_start, project_id, category_id FROM plan_block
+        UNION
+        SELECT week_start, project_id, category_id FROM session WHERE category_id IS NOT NULL
+),
+p AS (SELECT week_start, project_id, category_id, SUM(planned_min) AS planned_min
+        FROM plan_block GROUP BY week_start, project_id, category_id),
+a AS (SELECT week_start, project_id, category_id, SUM(actual_min)  AS actual_min
+        FROM session WHERE category_id IS NOT NULL
+        GROUP BY week_start, project_id, category_id)
+SELECT  k.week_start,
+        pr.code,
+        c.name AS category,
+        COALESCE(p.planned_min,0) AS planned_min,
+        COALESCE(a.actual_min,0)  AS actual_min,
+        CASE WHEN COALESCE(p.planned_min,0)=0 THEN NULL
+             ELSE ROUND(1.0*COALESCE(a.actual_min,0)/p.planned_min, 2) END AS adherence
+FROM keys k
+LEFT JOIN p ON p.week_start=k.week_start AND p.project_id=k.project_id AND p.category_id=k.category_id
+LEFT JOIN a ON a.week_start=k.week_start AND a.project_id=k.project_id AND a.category_id=k.category_id
+JOIN project  pr ON pr.project_id=k.project_id
+JOIN category c  ON c.category_id=k.category_id
+ORDER BY k.week_start, pr.code, c.sort_order;
+
+-- Mean per-project adherence within each activity, per week. One row per week and
+-- category. The generative, editing, and support rows each feed their own plot.
+CREATE VIEW IF NOT EXISTS v_week_category_mean AS
+SELECT  week_start,
+        category,
+        ROUND(AVG(adherence), 2) AS mean_adherence,
+        COUNT(adherence)         AS n_projects
+FROM v_week_project_category
+WHERE adherence IS NOT NULL
+GROUP BY week_start, category
+ORDER BY week_start, category;
+
+-- ---------------------------------------------------------------------------
+-- Cross-week grouping (build step 3, the second dashboard). Two small metadata
+-- tables and three rollups that group the weekly overall series by month, by
+-- event context, and by the schedule file-name code.
+-- ---------------------------------------------------------------------------
+
+-- One row per planned week, capturing the schedule file that produced it. The
+-- schedule_code is the file-name code from the naming convention, used to group
+-- weeks that share a plan shape.
+CREATE TABLE IF NOT EXISTS plan_week (
+    week_start    TEXT PRIMARY KEY,
+    schedule_code TEXT,
+    table_path    TEXT,
+    imported_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Free tags that mark the context of a week, for example a national meeting, a
+-- teaching block, or a data-collection push. A week may carry several tags.
+CREATE TABLE IF NOT EXISTS week_context (
+    week_start TEXT NOT NULL,
+    tag        TEXT NOT NULL,
+    note       TEXT,
+    PRIMARY KEY (week_start, tag)
+);
+
+CREATE INDEX IF NOT EXISTS ix_context_tag ON week_context(tag);
+
+-- Overall adherence per calendar month, rolled up from the weekly series.
+CREATE VIEW IF NOT EXISTS v_month_overall AS
+SELECT  substr(week_start, 1, 7) AS month,
+        SUM(planned_min) AS planned_min,
+        SUM(actual_min)  AS actual_min,
+        COUNT(*)         AS weeks,
+        CASE WHEN SUM(planned_min)=0 THEN NULL
+             ELSE ROUND(1.0*SUM(actual_min)/SUM(planned_min), 2) END AS adherence
+FROM v_week_overall
+GROUP BY month
+ORDER BY month;
+
+-- Overall adherence per context tag, summed over the weeks that carry the tag.
+-- A week counts once per tag it carries.
+CREATE VIEW IF NOT EXISTS v_context_overall AS
+SELECT  c.tag,
+        SUM(o.planned_min) AS planned_min,
+        SUM(o.actual_min)  AS actual_min,
+        COUNT(*)           AS weeks,
+        CASE WHEN SUM(o.planned_min)=0 THEN NULL
+             ELSE ROUND(1.0*SUM(o.actual_min)/SUM(o.planned_min), 2) END AS adherence
+FROM week_context c
+JOIN v_week_overall o ON o.week_start = c.week_start
+GROUP BY c.tag
+ORDER BY c.tag;
+
+-- Overall adherence per schedule code, summed over the weeks that used it.
+CREATE VIEW IF NOT EXISTS v_schedule_overall AS
+SELECT  w.schedule_code,
+        SUM(o.planned_min) AS planned_min,
+        SUM(o.actual_min)  AS actual_min,
+        COUNT(*)           AS weeks,
+        CASE WHEN SUM(o.planned_min)=0 THEN NULL
+             ELSE ROUND(1.0*SUM(o.actual_min)/SUM(o.planned_min), 2) END AS adherence
+FROM plan_week w
+JOIN v_week_overall o ON o.week_start = w.week_start
+WHERE w.schedule_code IS NOT NULL
+GROUP BY w.schedule_code
+ORDER BY w.schedule_code;
