@@ -29,6 +29,9 @@ _LEGEND = re.compile(r"^([A-Z][A-Z0-9]{0,3})\s*:\s*(.*?)\s*$")
 _RISK = re.compile(
     r"(?:\((safe|speculative|support)\)|:(safe|speculative|support):)\s*$", re.IGNORECASE
 )
+# Support is an activity category, not a risk class. A legacy support tag is
+# stripped but yields no risk class.
+_RISK_CLASSES = {"safe", "speculative"}
 
 
 def decode(code: str):
@@ -100,8 +103,9 @@ def read_legend(table_path: str) -> dict:
         risk = None
         rt = _RISK.search(desc)
         if rt:
-            risk = (rt.group(1) or rt.group(2)).lower()
+            tag = (rt.group(1) or rt.group(2)).lower()
             desc = _RISK.sub("", desc).strip()
+            risk = tag if tag in _RISK_CLASSES else None
         legend[code] = (desc, risk)
     return legend
 

@@ -4,7 +4,7 @@ digraph schema {
   fontname="Helvetica";
   fontsize=11;
   labelloc="t";
-  label="The shared schema: two reference tables, three fact tables, four views";
+  label="The shared schema: two reference tables, three fact tables, eight views";
   node [fontname="Helvetica", fontsize=10, shape=plaintext];
   edge [fontname="Helvetica", fontsize=9, color="#555555"];
 
@@ -23,7 +23,7 @@ digraph schema {
       <tr><td align="left"><b>project_id</b>  PK</td></tr>
       <tr><td align="left">code  (A, B, EM, W2 ...)</td></tr>
       <tr><td align="left">description</td></tr>
-      <tr><td align="left">risk_class  (safe | speculative | support)</td></tr>
+      <tr><td align="left">risk_class  (safe | speculative)</td></tr>
       <tr><td align="left">active</td></tr>
     </table>>];
 
@@ -67,6 +67,12 @@ digraph schema {
   v_barbell  [label="v_week_barbell\nplanned vs actual per risk class\n(Rule 6 drift)"];
   v_day      [label="v_day_actual\nminutes and worked flag per day\n(streak, Rule 10)"];
 
+  // Cross-week views for the adherence tracker (steps 1 and 2)
+  v_overall  [label="v_week_overall\noverall adherence per week\n(summed minutes)"];
+  v_pcat     [label="v_week_project_category\nplanned vs actual per\nproject and activity"];
+  v_pmean    [label="v_week_project_mean\nmean per-project adherence\nper week"];
+  v_cmean    [label="v_week_category_mean\nmean per-project adherence\nper activity per week"];
+
   // Foreign keys
   plan_block -> project  [label="project_id"];
   plan_block -> category [label="category_id"];
@@ -82,7 +88,13 @@ digraph schema {
   v_barbell  -> plan_block;
   v_barbell  -> session;
   v_day      -> session;
+  v_overall  -> plan_block;
+  v_overall  -> session;
+  v_pcat     -> plan_block;
+  v_pcat     -> session;
+  v_pmean    -> v_project;
+  v_cmean    -> v_pcat;
 
   { rank=same; category; project; }
-  { rank=same; v_project; v_category; v_barbell; v_day; }
+  { rank=same; v_project; v_category; v_barbell; v_day; v_overall; v_pcat; }
 }

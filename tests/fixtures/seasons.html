@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Writing seasons: grouped adherence</title>
+  <style>
+    .wh { color-scheme: light;
+      --surface: #fcfcfb; --plane: #f9f9f7; --ink: #0b0b0b; --ink2: #52514e;
+      --muted: #898781; --grid: #e1e0d9; --axis: #c3c2b7;
+      --border: rgba(11,11,11,0.10);
+      --gen: #2a78d6; --edit: #008300; --sup: #e87ba4;
+      --planned: #2a78d6; --actual: #eb6834; }
+    @media (prefers-color-scheme: dark) {
+      .wh:not([data-theme="light"]) { color-scheme: dark;
+        --surface: #1a1a19; --plane: #0d0d0d; --ink: #ffffff; --ink2: #c3c2b7;
+        --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+        --border: rgba(255,255,255,0.10);
+        --gen: #3987e5; --edit: #008300; --sup: #d55181;
+        --planned: #3987e5; --actual: #d95926; } }
+    .wh[data-theme="dark"] { color-scheme: dark;
+      --surface: #1a1a19; --plane: #0d0d0d; --ink: #ffffff; --ink2: #c3c2b7;
+      --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+      --border: rgba(255,255,255,0.10);
+      --gen: #3987e5; --edit: #008300; --sup: #d55181;
+      --planned: #3987e5; --actual: #d95926; }
+    * { box-sizing: border-box; }
+    body.wh { margin: 0; background: var(--plane); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.45; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 22px; margin: 0; }
+    h2 { font-size: 15px; margin: 32px 0 12px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink2); }
+    .sub { color: var(--ink2); margin: 2px 0 0; }
+    .toggle { border: 1px solid var(--border); background: var(--surface); color: var(--ink2); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+    .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+    .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .tile .v { font-size: 26px; font-weight: 650; }
+    .tile .k { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    table { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-top: 4px; }
+    caption { text-align: left; color: var(--muted); font-size: 12px; padding: 0 2px 6px; }
+    th, td { padding: 7px 10px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--grid); }
+    thead th { color: var(--muted); font-weight: 600; }
+    tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .time { color: var(--ink2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .cell { font-weight: 600; }
+    .cell.gen { background: color-mix(in srgb, var(--gen) 15%, transparent); border-left: 3px solid var(--gen); }
+    .cell.edit { background: color-mix(in srgb, var(--edit) 15%, transparent); border-left: 3px solid var(--edit); }
+    .cell.sup { background: color-mix(in srgb, var(--sup) 15%, transparent); border-left: 3px solid var(--sup); }
+    .meter { display: flex; align-items: center; gap: 8px; }
+    .track { flex: 1; min-width: 120px; }
+    .bar { height: 8px; border-radius: 4px; }
+    .bar.planned { background: var(--planned); }
+    .bar.actual { background: var(--actual); margin-top: 2px; }
+    .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: middle; margin-right: 5px; }
+    .legend { display: flex; gap: 16px; color: var(--ink2); font-size: 12px; margin: 8px 2px 0; flex-wrap: wrap; }
+    .foot { color: var(--muted); font-size: 11px; margin-top: 28px; }
+  </style>
+</head>
+<body class="wh">
+  <div class="wrap">
+  <header>
+    <div><h1>Writing seasons</h1><p class="sub">Grouped adherence by month, context, and schedule</p></div>
+    <button id="wh-theme" class="toggle" type="button">Dark theme</button>
+  </header>
+  <section class="tiles">
+    <div class="tile"><div class="v">20</div><div class="k">weeks recorded</div></div>
+    <div class="tile"><div class="v">5400</div><div class="k">planned minutes</div></div>
+    <div class="tile"><div class="v">2725</div><div class="k">actual minutes</div></div>
+    <div class="tile"><div class="v">0.50</div><div class="k">overall adherence</div></div>
+  </section>
+  <h2>By month</h2>
+  <p class="sub">Seasonal trend in adherence across the calendar.</p>
+  <table>
+    <thead><tr><th>Month</th><th class="num">Weeks</th><th class="num">Planned</th><th class="num">Actual</th><th>Progress</th><th class="num">Adherence</th></tr></thead>
+    <tbody>
+      <tr><td>2026-01</td><td class="num">3</td><td class="num">750</td><td class="num">480</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:56%"></div><div class="bar actual" style="width:36%"></div></div></div></td><td class="num">0.64</td></tr>
+      <tr><td>2026-02</td><td class="num">4</td><td class="num">1200</td><td class="num">480</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:89%"></div><div class="bar actual" style="width:36%"></div></div></div></td><td class="num">0.40</td></tr>
+      <tr><td>2026-03</td><td class="num">5</td><td class="num">1350</td><td class="num">740</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:100%"></div><div class="bar actual" style="width:55%"></div></div></div></td><td class="num">0.55</td></tr>
+      <tr><td>2026-04</td><td class="num">4</td><td class="num">1200</td><td class="num">510</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:89%"></div><div class="bar actual" style="width:38%"></div></div></div></td><td class="num">0.42</td></tr>
+      <tr><td>2026-05</td><td class="num">4</td><td class="num">900</td><td class="num">515</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:67%"></div><div class="bar actual" style="width:38%"></div></div></div></td><td class="num">0.57</td></tr>
+    </tbody>
+  </table>
+  <h2>By event context</h2>
+  <p class="sub">Adherence in weeks tagged with an event, for example a meeting, teaching, or data collection.</p>
+  <table>
+    <thead><tr><th>Context</th><th class="num">Weeks</th><th class="num">Planned</th><th class="num">Actual</th><th>Progress</th><th class="num">Adherence</th></tr></thead>
+    <tbody>
+      <tr><td>data-collection</td><td class="num">2</td><td class="num">300</td><td class="num">275</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:6%"></div><div class="bar actual" style="width:6%"></div></div></div></td><td class="num">0.92</td></tr>
+      <tr><td>finals</td><td class="num">1</td><td class="num">300</td><td class="num">90</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:6%"></div><div class="bar actual" style="width:2%"></div></div></div></td><td class="num">0.30</td></tr>
+      <tr><td>meeting</td><td class="num">1</td><td class="num">300</td><td class="num">75</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:6%"></div><div class="bar actual" style="width:2%"></div></div></div></td><td class="num">0.25</td></tr>
+      <tr><td>spring-break</td><td class="num">1</td><td class="num">150</td><td class="num">140</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:3%"></div><div class="bar actual" style="width:3%"></div></div></div></td><td class="num">0.93</td></tr>
+      <tr><td>teaching</td><td class="num">16</td><td class="num">4800</td><td class="num">2175</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:100%"></div><div class="bar actual" style="width:45%"></div></div></div></td><td class="num">0.45</td></tr>
+    </tbody>
+  </table>
+  <h2>By schedule</h2>
+  <p class="sub">Adherence grouped by the schedule file-name code, so plan shapes can be compared.</p>
+  <table>
+    <thead><tr><th>Schedule</th><th class="num">Weeks</th><th class="num">Planned</th><th class="num">Actual</th><th>Progress</th><th class="num">Adherence</th></tr></thead>
+    <tbody>
+      <tr><td>2gA-gW</td><td class="num">4</td><td class="num">600</td><td class="num">550</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:13%"></div><div class="bar actual" style="width:11%"></div></div></div></td><td class="num">0.92</td></tr>
+      <tr><td>4gAeAsA-gW</td><td class="num">16</td><td class="num">4800</td><td class="num">2175</td><td><div class="meter"><div class="track"><div class="bar planned" style="width:100%"></div><div class="bar actual" style="width:45%"></div></div></div></td><td class="num">0.45</td></tr>
+    </tbody>
+  </table>
+  <p class="foot">Generated by writing-habit from the shared SQLite database. Planned versus actual, self-reported effort.</p>
+  </div>
+  <script>
+    document.getElementById('wh-theme').addEventListener('click', function () {
+      var b = document.body;
+      var dark = b.getAttribute('data-theme') === 'dark';
+      b.setAttribute('data-theme', dark ? 'light' : 'dark');
+      this.textContent = dark ? 'Dark theme' : 'Light theme';
+    });
+  </script>
+</body>
+</html>

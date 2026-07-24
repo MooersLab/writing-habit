@@ -61,3 +61,75 @@ def current_streak(con) -> int:
         else:
             break
     return streak
+
+
+# ---------------------------------------------------------------------------
+# Cross-week series readers for the adherence tracker (build step 1).
+# Each returns one row per week from a cross-week view, optionally limited to a
+# [start, end] window given as any date inside the first and last week.
+# ---------------------------------------------------------------------------
+
+def _range_clause(params: list, start, end) -> str:
+    clauses = []
+    if start:
+        clauses.append("week_start >= ?")
+        params.append(_monday(start))
+    if end:
+        clauses.append("week_start <= ?")
+        params.append(_monday(end))
+    return (" WHERE " + " AND ".join(clauses)) if clauses else ""
+
+
+def overall_series(con, start=None, end=None):
+    """Overall adherence per week: summed actual over summed planned minutes."""
+    params: list = []
+    where = _range_clause(params, start, end)
+    return con.execute(
+        f"SELECT * FROM v_week_overall{where} ORDER BY week_start", params
+    ).fetchall()
+
+
+def project_mean_series(con, start=None, end=None):
+    """Mean of the per-project adherence ratios per week."""
+    params: list = []
+    where = _range_clause(params, start, end)
+    return con.execute(
+        f"SELECT * FROM v_week_project_mean{where} ORDER BY week_start", params
+    ).fetchall()
+
+
+def category_mean_series(con, category: str, start=None, end=None):
+    """Mean per-project adherence within one activity, per week."""
+    params: list = [category]
+    clauses = ["category = ?"]
+    if start:
+        clauses.append("week_start >= ?")
+        params.append(_monday(start))
+    if end:
+        clauses.append("week_start <= ?")
+        params.append(_monday(end))
+    where = " WHERE " + " AND ".join(clauses)
+    return con.execute(
+        f"SELECT * FROM v_week_category_mean{where} ORDER BY week_start", params
+    ).fetchall()
+
+
+# ---------------------------------------------------------------------------
+# Grouping readers for the second dashboard (build step 3).
+# ---------------------------------------------------------------------------
+
+def month_overall(con):
+    """Overall adherence per calendar month."""
+    return con.execute("SELECT * FROM v_month_overall ORDER BY month").fetchall()
+
+
+def context_overall(con):
+    """Overall adherence per event-context tag."""
+    return con.execute("SELECT * FROM v_context_overall ORDER BY tag").fetchall()
+
+
+def schedule_overall(con):
+    """Overall adherence per schedule code."""
+    return con.execute(
+        "SELECT * FROM v_schedule_overall ORDER BY schedule_code"
+    ).fetchall()

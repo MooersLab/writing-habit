@@ -31,8 +31,9 @@ name to those three values, because the activity split depends on a fixed set.
 
 The `project` table is your portfolio, one row per legend code such as `A`,
 `B`, or `EM`. Each project carries an optional description and an optional
-`risk_class` of safe, speculative, or support, which is what the barbell view
-groups on. A project row is created by plan import when it first sees a code,
+`risk_class` of safe or speculative, which is what the barbell view groups on.
+Support is an activity category, not a risk class, so a support project carries
+no `risk_class`. A project row is created by plan import when it first sees a code,
 and a tracker can also create one, so a later plan import backfills the
 description and the risk class when they were previously empty.
 

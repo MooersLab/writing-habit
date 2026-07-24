@@ -38,11 +38,12 @@ grouped bar chart of planned against actual minutes per project. This needs the
 
 `writing-habit dashboard --week DATE --out week.html --db DB` writes a
 self-contained page. It embeds its own style and script, so it opens in any
-browser with no server and no network request. The page has four sections below
-the summary tiles, namely the week's schedule redrawn as a time-by-day grid
-colored by activity, the planned-versus-actual comparison by project with a
-two-bar meter and an adherence column, the activity balance, and the barbell
-split with the speculative share.
+browser with no server and no network request. The page has five sections below
+the summary tiles, namely a trend of overall adherence over recent weeks, the
+week's schedule redrawn as a time-by-day grid colored by activity, the
+planned-versus-actual comparison by project with a two-bar meter and an
+adherence column, the activity balance, and the barbell split with the
+speculative share.
 
 ![The dashboard, light theme.](imgs/dashboard-light.png)
 
@@ -57,6 +58,17 @@ green, and magenta, and the planned and actual marks take blue and orange,
 which sit far apart for colorblind readers. Every value appears as a direct
 label in ink, never by color alone, and the schedule is a labeled table, so the
 page reads without relying on color.
+
+## The seasons dashboard
+
+A second dashboard groups adherence across many weeks rather than within one.
+`writing-habit seasons --out seasons.html --db DB` writes a self-contained page
+with three tables: adherence by calendar month for seasonal trends, adherence by
+event-context tag, and adherence by the schedule file-name code so plan shapes
+can be compared. Tag a week with `writing-habit context set --week DATE --tag
+teaching`, and the schedule code is captured at plan import from the table file
+name. The page reuses the weekly dashboard's style, so the two read as one, and
+the Emacs Lisp twin renders it byte for byte from the same database.
 
 ## Why the dashboard and the report can disagree by a point
 

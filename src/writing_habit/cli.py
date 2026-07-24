@@ -5,7 +5,9 @@
     writing-habit track     import actuals.csv --format csv        --db habit.db
     writing-habit track     add --day 2026-01-19 --project A --minutes 75 --category generative --db habit.db
     writing-habit compare   --week 2026-01-19 --db habit.db [--plot out.png]
-    writing-habit dashboard --week 2026-01-19 --out week.html --db habit.db
+    writing-habit history   --db habit.db [--from 2026-01-01] [--to 2026-06-30] [--plot trend.png]
+    writing-habit context   set --week 2026-03-16 --tag teaching --db habit.db
+    writing-habit seasons   --out seasons.html --db habit.db
     writing-habit name      4gAAeAsA-gWW [--table my-week.org]
 """
 
@@ -62,12 +64,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_cmp.add_argument("--plot", help="also write a bar chart to this path")
     _add_db(p_cmp)
 
-    p_dash = sub.add_parser(
-        "dashboard", help="write a self-contained HTML dashboard for a week"
+    p_hist = sub.add_parser(
+        "history", help="cross-week adherence tracker: text series and optional plots"
     )
-    p_dash.add_argument("--week", required=True, help="any date in the target week")
-    p_dash.add_argument("--out", required=True, help="path to write the HTML dashboard")
-    _add_db(p_dash)
+    p_hist.add_argument("--from", dest="start", help="earliest week, any date in it (optional)")
+    p_hist.add_argument("--to", dest="end", help="latest week, any date in it (optional)")
+    p_hist.add_argument(
+        "--plot", help="also write the five weekly adherence plots to this PNG path"
+    )
+    _add_db(p_hist)
+
+    p_ctx = sub.add_parser("context", help="tag a week with an event context")
+    ctx_sub = p_ctx.add_subparsers(dest="context_command", required=True)
+    p_ctx_set = ctx_sub.add_parser("set", help="attach a tag to a week")
+    p_ctx_set.add_argument("--week", required=True, help="any date in the target week")
+    p_ctx_set.add_argument("--tag", required=True, help="for example teaching, meeting, data-collection")
+    p_ctx_set.add_argument("--note")
+    _add_db(p_ctx_set)
+    p_ctx_clear = ctx_sub.add_parser("clear", help="remove a tag, or all tags, from a week")
+    p_ctx_clear.add_argument("--week", required=True)
+    p_ctx_clear.add_argument("--tag", help="omit to clear every tag on the week")
+    _add_db(p_ctx_clear)
+    p_ctx_list = ctx_sub.add_parser("list", help="list context tags")
+    p_ctx_list.add_argument("--week", help="omit to list every week")
+    _add_db(p_ctx_list)
+
+    p_seasons = sub.add_parser(
+        "seasons",
+        help="write the grouped-adherence dashboard, by month, context, and schedule",
+    )
+    p_seasons.add_argument("--out", required=True, help="output HTML path")
+    _add_db(p_seasons)
 
     p_name = sub.add_parser(
         "name", help="decode a schedule file-name code and check it against a table legend"
@@ -173,10 +200,32 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\nWrote plot to {args.plot}")
         return 0
 
-    if args.command == "dashboard":
-        from .dashboard import write_dashboard
-        write_dashboard(con, args.week, args.out)
-        print(f"Wrote dashboard to {args.out}")
+    if args.command == "history":
+        from .compare import history
+        print(history.render_text(con, args.start, args.end))
+        if args.plot:
+            history.write_plots(con, args.plot, args.start, args.end)
+            print(f"\nWrote plots to {args.plot}")
+        return 0
+
+    if args.command == "context":
+        from . import context as ctxmod
+        if args.context_command == "set":
+            ctxmod.set_tag(con, args.week, args.tag, args.note)
+            print(f"Tagged the week of {args.week} with {args.tag}")
+        elif args.context_command == "clear":
+            n = ctxmod.clear_tag(con, args.week, args.tag)
+            print(f"Cleared {n} tag(s) from the week of {args.week}")
+        elif args.context_command == "list":
+            for r in ctxmod.list_tags(con, args.week):
+                note = f"  {r['note']}" if r["note"] else ""
+                print(f"{r['week_start']}  {r['tag']}{note}")
+        return 0
+
+    if args.command == "seasons":
+        from . import seasons
+        seasons.write_seasons(con, args.out)
+        print(f"Wrote seasons dashboard to {args.out}")
         return 0
 
     return 1

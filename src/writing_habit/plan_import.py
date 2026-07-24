@@ -8,9 +8,10 @@ so the rest of the toolkit (initdb, track, compare) runs without it installed.
 Risk tags. The base writing-schedule legend maps a code to a description, for
 example ``A: DNPH1 docking``. To give the barbell view a class to group on,
 add a risk tag at the end of the description in either the org-tag form
-``:safe:`` or the parenthesis form ``(safe)``. Recognized tags are ``safe``,
-``speculative``, and ``support``. The tag is stripped before the description
-is stored, so it never pollutes the project name.
+``:safe:`` or the parenthesis form ``(safe)``. The two risk classes are ``safe``
+and ``speculative``. Support is an activity category, not a risk class, so a
+legacy ``:support:`` tag is stripped but records no risk class. The tag is
+stripped before the description is stored, so it never pollutes the project name.
 """
 
 from __future__ import annotations
@@ -35,24 +36,47 @@ SECTION_TO_CATEGORY = {
     "support": "support",
 }
 
-# A trailing risk tag in either :safe: or (safe) form.
+# A trailing risk tag in either :safe: or (safe) form. The regex still matches a
+# legacy support tag so it can be stripped, but only safe and speculative name a
+# risk class (see _split_risk).
 RISK_TAG = re.compile(
     r"(?:\((?P<paren>safe|speculative|support)\)"
     r"|:(?P<colon>safe|speculative|support):)\s*$",
     re.IGNORECASE,
 )
 
+# Support is an activity category, not a risk class.
+RISK_CLASSES = {"safe", "speculative"}
+
 
 def _split_risk(description: str | None) -> tuple[str | None, str | None]:
-    """Return (clean_description, risk_class) from a legend description."""
+    """Return (clean_description, risk_class) from a legend description.
+
+    The trailing risk tag is stripped from the description. Only safe and
+    speculative name a risk class. A legacy support tag is stripped as well but
+    yields no risk class, because support is an activity category.
+    """
     if not description:
         return None, None
     m = RISK_TAG.search(description)
     if not m:
         return description.strip() or None, None
-    risk = (m.group("paren") or m.group("colon")).lower()
+    tag = (m.group("paren") or m.group("colon")).lower()
     clean = RISK_TAG.sub("", description).strip()
+    risk = tag if tag in RISK_CLASSES else None
     return clean or None, risk
+
+
+def _schedule_code(path: str) -> str:
+    """Derive the schedule file-name code from a table PATH.
+
+    Strips the directory and the ``.org`` extension, and an optional leading ISO
+    date prefix, so ``2026-01-19_4gAAeAsA-gWW.org`` yields ``4gAAeAsA-gWW`` and a
+    plain ``my-week.org`` yields ``my-week``.
+    """
+    stem = Path(path).stem
+    m = re.match(r"^\d{4}-\d{2}-\d{2}[_-](.+)$", stem)
+    return m.group(1) if m else stem
 
 
 def _category_for(section: str, unknown: set[str]) -> str:
@@ -93,6 +117,12 @@ def import_org(con, path: str, week: str) -> int:
             " VALUES (?, ?, ?, ?, ?)",
             (day, ev.start, ev.end, pid, cat_id),
         )
+    # Record which schedule file produced this week, for the grouping dashboard.
+    con.execute(
+        "INSERT OR REPLACE INTO plan_week(week_start, schedule_code, table_path)"
+        " VALUES (?, ?, ?)",
+        (monday.isoformat(), _schedule_code(path), path),
+    )
     con.commit()
 
     count = con.execute(

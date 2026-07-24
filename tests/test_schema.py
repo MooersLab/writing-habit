@@ -27,7 +27,11 @@ def test_tables_and_views_exist(con):
     }
     for expected in [
         "category", "project", "plan_block", "session", "import_log",
+        "plan_week", "week_context",
         "v_week_project", "v_week_category", "v_week_barbell", "v_day_actual",
+        "v_week_overall", "v_week_project_mean", "v_week_project_category",
+        "v_week_category_mean",
+        "v_month_overall", "v_context_overall", "v_schedule_overall",
     ]:
         assert expected in names
 
@@ -51,3 +55,12 @@ def test_foreign_key_enforced(con):
             "INSERT INTO session(day, actual_min, project_id, source)"
             " VALUES ('2026-01-19', 10, 999, 'manual')"
         )
+
+
+def test_support_is_not_a_risk_class(con):
+    # support is an activity category, not a risk class, so the CHECK rejects it
+    with pytest.raises(sqlite3.IntegrityError):
+        con.execute("INSERT INTO project(code, risk_class) VALUES ('S','support')")
+    # safe and speculative remain valid risk classes
+    con.execute("INSERT INTO project(code, risk_class) VALUES ('A','safe')")
+    con.execute("INSERT INTO project(code, risk_class) VALUES ('W','speculative')")

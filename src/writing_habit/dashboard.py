@@ -154,6 +154,80 @@ def _schedule_rows(con, week_start):
 
 
 # ---------------------------------------------------------------------------
+# Weekly adherence trend (build step 2). An inline SVG of overall adherence over
+# recent weeks, drawn with integer coordinates so the Emacs Lisp twin can emit
+# byte-identical output. The geometry constants are shared verbatim with the twin.
+# ---------------------------------------------------------------------------
+
+TREND_W = 680
+TREND_H = 170
+TREND_ML = 42          # left margin, room for the y labels
+TREND_MR = 12
+TREND_MT = 14
+TREND_MB = 24          # bottom margin, room for the week labels
+TREND_TOP_PCT = 150    # the top of the y axis, in percent of plan
+
+
+def _iround(value: float) -> int:
+    """Round half up to an int, matching the Emacs Lisp twin."""
+    return int(math.floor(value + 0.5))
+
+
+def _trend_x(i: int, n: int) -> int:
+    plot_w = TREND_W - TREND_ML - TREND_MR
+    if n <= 1:
+        return TREND_ML + plot_w // 2
+    return TREND_ML + _iround(plot_w * i / (n - 1))
+
+
+def _trend_y(pct: int) -> int:
+    plot_h = TREND_H - TREND_MT - TREND_MB
+    p = 0 if pct < 0 else (TREND_TOP_PCT if pct > TREND_TOP_PCT else pct)
+    return TREND_MT + plot_h - _iround(plot_h * p / TREND_TOP_PCT)
+
+
+def _trend(rows) -> list:
+    """Return the SVG trend of overall adherence for the weekly ROWS (oldest first)."""
+    if not rows:
+        return []
+    n = len(rows)
+    pts = [
+        (_trend_x(i, n), _trend_y(_pct(r["actual_min"], r["planned_min"])), r["week_start"])
+        for i, r in enumerate(rows)
+    ]
+    y0 = _trend_y(0)
+    y100 = _trend_y(100)
+    x_left = TREND_ML
+    x_right = TREND_W - TREND_MR
+    poly = " ".join(f"{x},{y}" for x, y, _w in pts)
+    out = [
+        "  <h2>Adherence over recent weeks</h2>",
+        f'  <svg viewBox="0 0 {TREND_W} {TREND_H}"'
+        ' style="display:block;width:100%;height:auto;max-width:680px"'
+        ' role="img" aria-label="Overall adherence over recent weeks">',
+        f'    <line x1="{x_left}" y1="{y0}" x2="{x_right}" y2="{y0}" stroke="var(--grid)"/>',
+        f'    <line x1="{x_left}" y1="{y100}" x2="{x_right}" y2="{y100}"'
+        ' stroke="var(--axis)" stroke-dasharray="4 3"/>',
+        f'    <text x="{x_left - 4}" y="{y100 + 4}" text-anchor="end" font-size="10" fill="var(--muted)">1.0</text>',
+        f'    <text x="{x_left - 4}" y="{y0 + 4}" text-anchor="end" font-size="10" fill="var(--muted)">0.0</text>',
+        f'    <polyline fill="none" stroke="var(--planned)" stroke-width="2" points="{poly}"/>',
+    ]
+    for x, y, _w in pts:
+        out.append(f'    <circle cx="{x}" cy="{y}" r="3" fill="var(--planned)"/>')
+    for x, _y, w in pts:
+        out.append(
+            f'    <text x="{x}" y="{TREND_H - 8}" text-anchor="middle"'
+            f' font-size="9" fill="var(--muted)">{_esc(w[5:])}</text>'
+        )
+    out.append("  </svg>")
+    out.append(
+        '  <p class="sub">Overall adherence, the ratio of actual to planned minutes,'
+        " for each recent week. The dashed line is on plan.</p>"
+    )
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Section builders
 # ---------------------------------------------------------------------------
 
@@ -335,6 +409,7 @@ def dashboard_html(con, week: str) -> str:
         "  </header>",
     ]
     lines += _tiles(planned_total, actual_total, streak)
+    lines += _trend(queries.overall_series(con, end=week)[-8:])
     lines += _schedule(_schedule_rows(con, week_start))
     lines += _projects(proj)
     lines += _activities(cat)

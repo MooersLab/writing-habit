@@ -1,6 +1,6 @@
 # Command-line reference
 
-The console command is `writing-habit`. It has six subcommands, and every
+The console command is `writing-habit`. It has nine subcommands, and every
 subcommand prints its own help with `writing-habit SUBCOMMAND --help`. Every
 subcommand except `name` takes a `--db` path, so you can keep more than one
 database.
@@ -11,7 +11,10 @@ writing-habit plan import TABLE --week DATE --db DB
 writing-habit track import FILE --format csv|ics --db DB
 writing-habit track add   --day DATE --project CODE [--minutes N] [--category C] [--start HH:MM] [--end HH:MM] [--note TEXT] --db DB
 writing-habit compare   --week DATE [--plot FILE] --db DB
+writing-habit history   [--from DATE] [--to DATE] [--plot FILE] --db DB
 writing-habit dashboard --week DATE --out FILE --db DB
+writing-habit seasons   --out FILE --db DB
+writing-habit context   set|clear|list [--week DATE] [--tag TAG] [--note TEXT] --db DB
 writing-habit name      CODE [--table TABLE]
 ```
 
@@ -89,6 +92,40 @@ the Emacs Lisp twin renders, byte for byte, from the same database.
 
 ```
 writing-habit dashboard --week 2026-01-19 --out week.html --db habit.db
+```
+
+## history
+
+Print the weekly adherence series across a date range. With `--plot`, also write
+five plots by week: overall adherence, the mean of the per-project ratios, and
+the mean adherence within each of the three activities. Plotting needs the
+`plot` extra (matplotlib).
+
+```
+writing-habit history --db habit.db
+writing-habit history --db habit.db --from 2026-01-01 --to 2026-06-30 --plot trend.png
+```
+
+## seasons
+
+Write a second self-contained HTML dashboard that groups adherence by calendar
+month, by event-context tag, and by the schedule file-name code, so seasonal
+trends and the effect of plan shape become visible across many weeks.
+
+```
+writing-habit seasons --out seasons.html --db habit.db
+```
+
+## context
+
+Tag a week with an event context, for example a meeting, teaching, or a
+data-collection push, so the `seasons` dashboard can group weeks by kind. A week
+may carry several tags.
+
+```
+writing-habit context set   --week 2026-02-02 --tag teaching --note "spring block" --db habit.db
+writing-habit context list  --db habit.db
+writing-habit context clear --week 2026-02-02 --tag teaching --db habit.db
 ```
 
 ## name
