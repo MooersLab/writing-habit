@@ -97,10 +97,12 @@ header row, so a six-day table and a seven-day table both work.
 ![The weekly table, its legend, and the panel naming the week.](imgs/gui-schedule.png)
 
 A cell takes a project code from a drop-down of the legend codes. The box is
-editable, so you can type a new code and add its legend row afterwards. Section
-rows and the time column refuse edits, because they belong to the file rather
-than to the week. The legend table below the grid edits the code, the
-description, and the risk tag, which is one of `none`, `safe`, and `risky`.
+editable, so you can type a new code, and the legend gains a blank row for it at
+once. Section rows and the time column refuse edits, because they belong to the
+file rather than to the week. Clicking a time does something else, which
+[Finding the times that do not overlap](#finding-the-times-that-do-not-overlap)
+describes. The legend table below the grid edits the code, the description, and
+the risk tag, which is one of `none`, `safe`, and `risky`.
 
 **Every edit rewrites one line of the file.** A value that fits its column keeps
 the table aligned; a longer value widens its own slot and leaves the rest alone,
@@ -118,7 +120,10 @@ Four panels report on the week as you edit it.
 
 The toolbar holds **Open table**, **New from template**, which asks for a
 project count and calls the scheduler's own scaffold, **Save**, **Save as**,
-which offers the canonical name, **Rename to canonical**, and **Reload**.
+which offers the canonical name, **Rename to canonical**, **Reload**,
+**Open in editor**, **Insert above**, and **Insert below**. The last three are
+described below. The file name at the end of the toolbar shrinks when the
+window is narrow, and its tooltip gives the full path.
 
 Renaming is worth its button. The tracker groups weeks by the schedule code
 captured at plan import, and that code comes from the file name, so a table
@@ -131,6 +136,129 @@ A week has no canonical name when a cell holds a project code of more than one
 letter, because a file name gives one letter to one block. The Name panel says
 which code is at fault, and the naming rules answer it with a single-letter
 alias kept beside the full code in the legend.
+
+### Inserting a time block
+
+Select any cell of a time-block row or a section header and press
+**Insert above** or **Insert below**. Both buttons stay disabled until a cell is
+selected. A dialog asks for the time range of the new block. It starts with a
+block of the same length placed flush against the selected one, so a block
+inserted below 05:45-07:15 is offered as 07:15-08:45. Beside a section header
+the nearest block of the neighbouring section serves as the model. Edit the
+range or accept it.
+
+![The dialog that asks for the time range of the new block.](imgs/gui-insert-row-dialog.png)
+
+The new row is empty and selected, so you can type project codes into it at
+once. It copies the column widths of the row beside it, and it copies how that
+row pads its time, so a table whose Time column is padded on the left stays
+that way. Saving adds exactly one line to the file.
+
+![The Schedule tab after Insert below, with the empty 07:15-08:45 block selected.](imgs/gui-insert-row.png)
+
+The section a row belongs to follows from where it lands, which is how the
+scheduler reads the file.
+
+| Where you insert | The new block belongs to |
+|------------------|--------------------------|
+| above or below a time block | that block's section |
+| below a section header | that header's section |
+| above a section header | the section before the header |
+
+A range that cannot be read, or one that ends before it starts, is refused with
+a message and nothing changes. The time of a row cannot be edited in the grid,
+so fix a wrong time in your own editor, as described under
+[Opening the table in your own editor](#opening-the-table-in-your-own-editor).
+
+### Finding the times that do not overlap
+
+Click a cell in the Time column. Every row whose time range does not overlap
+the selected one turns yellow, across all sections at once. This shows where
+else in the day a block could go without a clash, which the grid cannot show on
+its own because the blocks of different sections share one clock.
+
+![Selecting 05:00-06:00 tints the two later rows yellow, while the red cells mark its clashes on Monday.](imgs/gui-time-tint.png)
+
+The rule is the one the Clashes panel and the scheduler use. Each range runs
+from its start up to, but not including, its end, so blocks that only touch,
+such as 04:00-05:30 and 05:30-07:00, do not overlap. A range whose end is not
+after its start runs past midnight. The selected row itself is never tinted.
+
+A day cell that is red for a clash stays red inside a yellow row, because the
+clash is the more urgent thing to see. Clicking a day cell or a section header
+removes the tint, and so does opening another table. Hovering over a yellow
+time says that it does not overlap the selected one.
+
+### Inserting a project into the legend
+
+Two buttons above the legend table, **Insert project above** and
+**Insert project below**, add a project beside the selected entry. They are
+enabled as soon as a table is open. With no entry selected, a project inserted
+below goes to the end of the legend and one inserted above goes to the start.
+
+![The dialog for a new project, with its code, description, and risk tag.](imgs/gui-insert-project-dialog.png)
+
+The dialog asks for three things.
+
+Code
+: A capital letter followed by up to three capitals or digits. The field starts
+  with the first letter that neither the legend nor the grid uses yet.
+
+Description
+: The project name, optionally followed by a due date such as `Sept 25`, which
+  the cell tooltips read.
+
+Risk tag
+: One of `none`, `safe`, and `risky`.
+
+A lowercase code is raised to capitals. A code the legend already defines is
+refused, because the readers keep the first definition of a code and silently
+drop the second. The new entry is selected on its description, and its code
+appears at once in the drop-down of every grid cell.
+
+![The legend after inserting project C below project B.](imgs/gui-insert-project.png)
+
+A project you insert stays in the legend even before any cell uses it. The
+legend removes only the blank rows it added by itself, for a code you typed into
+a cell and then deleted, so a typo leaves nothing behind. A blank project read
+from the file is kept too. A blank entry is written as `C:`, which both this
+editor and the scheduler read as a legend row rather than as a section header.
+
+### Opening the table in your own editor
+
+**Open in editor**, to the right of **Reload**, opens the table file in your
+text editor. It is enabled once the table has been saved to a file. The editor
+is named by the `WHGEDITOR` variable, which may carry arguments.
+
+```
+# in ~/.bashrc
+export WHGEDITOR="emacsclient -n"
+```
+
+The button looks for the editor in this order.
+
+| Order | Where it looks |
+|-------|----------------|
+| 1 | `WHGEDITOR` in the environment of the running interface |
+| 2 | the last `WHGEDITOR=` line of `~/.bashrc`, with quotes, a trailing comment, and `$HOME` handled |
+| 3 | the system's default text editor, which is `open -t` on macOS, `xdg-open` on Linux, and the file association on Windows |
+
+The second step exists because a window started from the Dock or Finder has not
+sourced your shell start-up file. For the same reason, a bare program name is
+also looked for in `/opt/homebrew/bin`, `/usr/local/bin`, and `/opt/local/bin`,
+which such a window does not have on its path. A full path always works. The
+editor runs on its own, so closing the interface does not close it.
+
+The editor reads the file on disk, so the button checks for unsaved edits
+first.
+
+![The prompt shown when the grid holds edits that are not saved yet.](imgs/gui-open-in-editor.png)
+
+**Save and open** writes your edits and then opens the file.
+**Open the saved version** leaves your edits in the grid and opens the file as
+it was last saved. **Cancel** opens nothing. The session log records the command
+that started the editor. After you save in the editor, press **Reload** to bring
+the changes back into the grid.
 
 ## Seeing what a command wrote
 
@@ -164,6 +292,10 @@ without the extra skips the graphical tests rather than failing them.
 | The Generate and Sheets tabs show an install note | `writing-schedule` is missing; the `gui` extra installs it, or install a checkout in editable mode |
 | A dashboard preview looks unstyled | the `preview` extra is not installed; use **Open outside**, or add `PyQtWebEngine` |
 | `plan import` reports a missing package | the same `writing-schedule` dependency, reported in the output pane rather than as a traceback |
+| **Open in editor** reports that the editor could not start | the program in `WHGEDITOR` is not on the path the window sees; give its full path, such as `/opt/homebrew/bin/emacsclient -n` |
+| **Open in editor** opens the wrong program | `WHGEDITOR` is unset, so the system default for `.org` files opened; set `WHGEDITOR` in `~/.bashrc` |
+| An edit made in your editor does not show in the grid | the grid does not watch the file; press **Reload** |
+| **Insert above** and **Insert below** are greyed out | no grid cell is selected; click any cell of a time block or a section header |
 
 ## Licensing
 
