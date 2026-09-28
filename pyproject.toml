@@ -48,10 +48,10 @@ writing-habit = "writing_habit.cli:main"
 writing-habit-gui = "writing_habit.gui.app:main"
 
 [project.urls]
-Homepage = "https://github.com/MooersLab/writing-habit-py"
-Documentation = "https://writing-habit-py.readthedocs.io/"
-Repository = "https://github.com/MooersLab/writing-habit-py"
-Issues = "https://github.com/MooersLab/writing-habit-py/issues"
+Homepage = "https://github.com/MooersLab/writing-habit"
+Documentation = "https://github.com/MooersLab/writing-habit/tree/main/docs"
+Repository = "https://github.com/MooersLab/writing-habit"
+Issues = "https://github.com/MooersLab/writing-habit/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

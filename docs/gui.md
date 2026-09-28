@@ -68,7 +68,10 @@ into a terminal. The **preview** dock appears the first time a command writes a
 file. Both are toggled from the View menu.
 
 The status bar names the database the last command used, so a run against the
-wrong file is visible at once. When `writing-schedule` is not installed, the
+wrong file is visible at once. Its right end holds three buttons.
+**Documentation** opens this page in your web browser, **README** opens the
+README of the repository on GitHub, and **Quit** closes the window. The Help
+menu offers the same two pages. When `writing-schedule` is not installed, the
 status bar says so and the three scheduler tabs explain how to add it.
 
 ## Running a command

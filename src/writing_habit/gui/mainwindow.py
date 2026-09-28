@@ -16,12 +16,12 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from .. import __version__
-from . import argspec, runner, settings
+from . import argspec, links, runner, settings
 from .command_panel import CommandPanel
 from .report_view import PreviewDock
 import os
 
-from .qt import Qt, QtGui, QtWidgets, fixed_font, versions
+from .qt import Qt, QtCore, QtGui, QtWidgets, fixed_font, versions
 
 HABIT = "writing-habit"
 SCHEDULE = "writing-schedule"
@@ -127,6 +127,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._build_menus()
         self.statusBar().showMessage(self._status_text())
+        self.docs_button = QtWidgets.QPushButton("Documentation")
+        self.docs_button.setToolTip(
+            f"Open the guide to this interface in your web browser\n{links.DOCS_URL}")
+        self.docs_button.clicked.connect(lambda: self.open_web_page(links.DOCS_URL))
+        self.readme_button = QtWidgets.QPushButton("README")
+        self.readme_button.setToolTip(
+            f"Open the README on GitHub in your web browser\n{links.README_URL}")
+        self.readme_button.clicked.connect(lambda: self.open_web_page(links.README_URL))
+        for button in (self.docs_button, self.readme_button):
+            self.statusBar().addPermanentWidget(button)
         self.quit_button = QtWidgets.QPushButton("Quit")
         self.quit_button.setToolTip(
             "Leave writing-habit. Unsaved work is offered for saving first.")
@@ -215,10 +225,34 @@ class MainWindow(QtWidgets.QMainWindow):
         clear.triggered.connect(self.log.clear)
 
         help_menu = self.menuBar().addMenu("&Help")
+        docs_action = help_menu.addAction("&Documentation")
+        docs_action.triggered.connect(lambda: self.open_web_page(links.DOCS_URL))
+        readme_action = help_menu.addAction("&README on GitHub")
+        readme_action.triggered.connect(lambda: self.open_web_page(links.README_URL))
+        help_menu.addSeparator()
         about_action = help_menu.addAction("&About")
         about_action.triggered.connect(self.show_about)
 
     # -- helpers -----------------------------------------------------------
+    #: Hands a URL to the desktop.  A test replaces it so no browser opens.
+    launch_url = staticmethod(
+        lambda url: QtGui.QDesktopServices.openUrl(QtCore.QUrl(url)))
+
+    def open_web_page(self, url: str) -> bool:
+        """Open ``url`` in the default web browser.  Return whether it opened.
+
+        The desktop decides which browser, exactly as a click on a link in any
+        other program would. A failure is logged with the address, so the
+        writer can paste it into a browser by hand.
+        """
+        opened = bool(self.launch_url(url))
+        if opened:
+            self.append_log(f"Opened {url} in the web browser")
+        else:
+            self.append_log(f"Could not open a web browser. The page is {url}")
+            self.statusBar().showMessage(f"Could not open {url}", 8000)
+        return opened
+
     def _status_text(self) -> str:
         db = settings.get("db")
         head = f"Database: {db}" if db else "No database chosen yet"
