@@ -13,7 +13,7 @@ Public functions:
 from __future__ import annotations
 
 from .compare import queries
-from .dashboard import STYLE, SCRIPT, _esc, _fmt2, _meter, _ratio
+from .dashboard import STYLE, SCRIPT, _esc, _meter, _ratio
 
 
 def _section(title, subtitle, label_head, rows, label_key, empty) -> list:
@@ -44,7 +44,7 @@ def _section(title, subtitle, label_head, rows, label_key, empty) -> list:
             f'<td class="num">{r["planned_min"]}</td>'
             f'<td class="num">{r["actual_min"]}</td>'
             f'<td>{_meter(r["planned_min"], r["actual_min"], scale)}</td>'
-            f'<td class="num">{_fmt2(r["adherence"])}</td></tr>'
+            f'<td class="num">{_ratio(r["actual_min"], r["planned_min"])}</td></tr>'
         )
     out.append("    </tbody>")
     out.append("  </table>")

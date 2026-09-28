@@ -46,8 +46,11 @@ def test_legend_check_exact_and_alias():
     status = {r[0]: r[4] for r in rows}
     assert status["A"] == "exact" and status["W"] == "exact"
     assert problems == []
-    # EM is a two-letter legend code; the single-letter alias E resolves to it.
-    rows2, problems2 = name.check_against_legend(name.decode("gAsE"), legend)
+    # A single letter resolves to a longer legend code that starts with it.
+    # The example table now uses single letters throughout, so the alias case
+    # is shown with a legend of its own.
+    aliased = {"A": ("DNPH1 docking", "safe"), "EM": ("email", None)}
+    rows2, problems2 = name.check_against_legend(name.decode("gAsE"), aliased)
     status2 = {r[0]: (r[1], r[4]) for r in rows2}
     assert status2["E"] == ("EM", "alias")
     assert problems2 == []

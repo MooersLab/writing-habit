@@ -5,6 +5,10 @@ import a plan, record what you actually did, and read the gap back as a text
 report and as a dashboard. The example files ship in the `examples/` directory
 of the repository.
 
+The same week is walked through the window in
+[the point-and-click tutorial](tutorial-gui.md), which reaches the same database
+and the same reports.
+
 ![Seed the database once, import the plan on Monday, track through the week, and compare at the end.](imgs/workflow-loop.png)
 
 ## Step 1, seed the database
@@ -79,8 +83,8 @@ By project (planned -> actual, adherence)
 ----------------------------------------------------
   A    DNPH1 docking           720 ->  310   0.43  #########-----------
   B    DUSP1 radiation         540 ->   90   0.17  ###-----------------
-  EM   email                   450 ->  120   0.27  #####---------------
-  TT   teaching                 90 ->    0   0.00  --------------------
+  E    email                   450 ->  120   0.27  #####---------------
+  T    teaching                 90 ->    0   0.00  --------------------
   W    2026words               180 ->    0   0.00  --------------------
 
 By activity (Rule 2 balance)
@@ -93,7 +97,6 @@ By barbell class (Rule 6 drift)
 ----------------------------------------------------
   safe         1260 ->  400
   speculative   180 ->    0
-  support       540 ->  120
   speculative share  planned 12%  actual 0%
 
 Current streak of consecutive writing days: 3

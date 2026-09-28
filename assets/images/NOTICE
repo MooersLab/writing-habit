@@ -37,5 +37,29 @@ plot.png
   Title:       writing-habit planned-versus-actual chart
   Description: Grouped bar chart of planned versus actual minutes per project for one week.
 
+gui-insert-row.png
+  Title:       writing-habit Schedule tab, inserting a time block
+  Description: The Schedule tab after Insert below: an empty 07:15-08:45 block added under 05:45-07:15 and selected.
+
+gui-insert-row-dialog.png
+  Title:       writing-habit insert time block dialog
+  Description: The dialog that asks for the time range of a new block, prefilled flush against the selected block.
+
+gui-time-tint.png
+  Title:       writing-habit Schedule tab, non-overlapping rows in yellow
+  Description: Selecting the 05:00-06:00 time tints yellow the rows that do not overlap it; clashing cells stay red.
+
+gui-insert-project.png
+  Title:       writing-habit legend with insert project buttons
+  Description: The Legend box with the Insert project above and Insert project below buttons and a newly inserted project C.
+
+gui-insert-project-dialog.png
+  Title:       writing-habit insert project dialog
+  Description: The dialog that asks for a new project's code, description, and risk tag.
+
+gui-open-in-editor.png
+  Title:       writing-habit open in editor prompt
+  Description: The prompt shown by Open in editor when the grid holds unsaved edits.
+
 Suggested attribution:
   "writing-habit" figures by Blaine H. M. Mooers, licensed under CC BY 4.0. https://github.com/MooersLab/writing-habit-py

@@ -82,7 +82,7 @@ or the parenthesis form `(safe)`. The recognized tags are `safe`,
 
 ```
 | A: DNPH1 docking :safe:      |  |  |  |  |  |
-| W: 2026words :speculative:   |  |  |  |  |  |
+| W: 2026words :risky:   |  |  |  |  |  |
 ```
 
 Inside a table cell `:safe:` is literal text, because org reads `:tag:` syntax

@@ -5,6 +5,7 @@
     writing-habit track     import actuals.csv --format csv        --db habit.db
     writing-habit track     add --day 2026-01-19 --project A --minutes 75 --category generative --db habit.db
     writing-habit compare   --week 2026-01-19 --db habit.db [--plot out.png]
+    writing-habit dashboard --week 2026-01-19 --out week.html --db habit.db
     writing-habit history   --db habit.db [--from 2026-01-01] [--to 2026-06-30] [--plot trend.png]
     writing-habit context   set --week 2026-03-16 --tag teaching --db habit.db
     writing-habit seasons   --out seasons.html --db habit.db
@@ -63,6 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_cmp.add_argument("--week", required=True, help="any date in the target week")
     p_cmp.add_argument("--plot", help="also write a bar chart to this path")
     _add_db(p_cmp)
+
+    p_dash = sub.add_parser(
+        "dashboard", help="write the single-week HTML dashboard"
+    )
+    p_dash.add_argument("--week", required=True, help="any date in the target week")
+    p_dash.add_argument("--out", required=True, help="output HTML path")
+    _add_db(p_dash)
 
     p_hist = sub.add_parser(
         "history", help="cross-week adherence tracker: text series and optional plots"
@@ -198,6 +206,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.plot:
             report.write_plot(con, args.week, args.plot)
             print(f"\nWrote plot to {args.plot}")
+        return 0
+
+    if args.command == "dashboard":
+        from . import dashboard
+        dashboard.write_dashboard(con, args.week, args.out)
+        print(f"Wrote dashboard to {args.out}")
         return 0
 
     if args.command == "history":

@@ -129,3 +129,33 @@ def test_plan_import_records_schedule(tmp_path):
     c.close()
     assert row is not None
     assert row["schedule_code"] == "my-week"
+
+
+# -- the rounding rule -----------------------------------------------------
+#
+# The page used to print the adherence column of the view, which SQL rounded.
+# SQLite has changed how it rounds a value such as 510/1200, exactly 0.425, so
+# the same database gave two different pages on two machines and this file's
+# golden failed on whichever machine did not write it. Every displayed ratio is
+# now computed in Python from the planned and actual minutes.
+
+def test_the_page_ignores_the_adherence_column_of_the_view(monkeypatch):
+    """A view column that disagrees must not reach the page."""
+    row = {"month": "2026-04", "weeks": 4, "planned_min": 1200,
+           "actual_min": 510, "adherence": 0.99}      # a deliberately wrong column
+    monkeypatch.setattr(seasons.queries, "month_overall", lambda con: [row])
+    monkeypatch.setattr(seasons.queries, "context_overall", lambda con: [])
+    monkeypatch.setattr(seasons.queries, "schedule_overall", lambda con: [])
+
+    html = seasons.seasons_html(None)
+    assert ">0.42<" in html                            # 510/1200, formatted here
+    assert "0.99" not in html
+
+
+def test_the_ratio_of_a_half_cent_value_is_stable():
+    """510/1200 is exactly 0.425, the value the two SQLite builds disagreed on."""
+    from writing_habit.dashboard import _ratio
+
+    assert _ratio(510, 1200) == "0.42"
+    assert _ratio(0, 0) == "n/a"
+    assert _ratio(90, 90) == "1.00"

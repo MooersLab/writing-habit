@@ -9,4 +9,4 @@
 | 10:30-11:00 | A  | A  | A  | A  |    |
 |-------------+----+----+----+----+----|
 | A: main paper :safe: |  |  |  |  |  |
-| W: new idea :speculative: |  |  |  |  |  |
+| W: new idea :risky: |  |  |  |  |  |

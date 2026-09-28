@@ -34,10 +34,18 @@ plan = ["writing-schedule"]
 ics = ["icalendar>=5"]
 plot = ["matplotlib>=3.5"]
 sheets = ["gspread>=5"]
-dev = ["pytest>=7"]
+# The graphical front end. PyQt5 is distributed under the GPL, so this extra
+# carries GPL terms while the library and the command line stay MIT.
+gui = ["PyQt5>=5.15", "writing-schedule>=0.3.1"]
+# A faithful in-window preview of the two HTML dashboards. Optional even
+# with the gui extra, because Open outside covers the same need and the web
+# engine is a large dependency. It is also GPL.
+preview = ["PyQtWebEngine>=5.15"]
+dev = ["pytest>=7", "pytest-qt>=4"]
 
 [project.scripts]
 writing-habit = "writing_habit.cli:main"
+writing-habit-gui = "writing_habit.gui.app:main"
 
 [project.urls]
 Homepage = "https://github.com/MooersLab/writing-habit-py"

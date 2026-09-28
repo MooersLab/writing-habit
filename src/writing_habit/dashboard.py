@@ -125,7 +125,16 @@ def _fmt2(value) -> str:
 
 
 def _ratio(actual: int, planned: int) -> str:
-    """Format ACTUAL over PLANNED to two places, or ``n/a`` when PLANNED is zero."""
+    """Format ACTUAL over PLANNED to two places, or ``n/a`` when PLANNED is zero.
+
+    Every displayed ratio is computed here rather than read from the ``adherence``
+    column of a view, because ``ROUND`` in SQL is not portable. SQLite has
+    changed its rounding of a value such as 510/1200, which is exactly 0.425, so
+    the same database rendered on two machines produced two different pages and
+    the cross-port fixture failed on whichever machine did not write it. Python
+    formats the same double the same way everywhere, so the page a database
+    yields no longer depends on the SQLite build underneath.
+    """
     return f"{actual / planned:.2f}" if planned and planned > 0 else "n/a"
 
 
@@ -309,7 +318,7 @@ def _projects(proj) -> list:
             f'</td><td class="num">{r["planned_min"]}'
             f'</td><td class="num">{r["actual_min"]}'
             f'</td><td>{_meter(r["planned_min"], r["actual_min"], scale)}'
-            f'</td><td class="num">{_fmt2(r["adherence"])}'
+            f'</td><td class="num">{_ratio(r["actual_min"], r["planned_min"])}'
             "</td></tr>"
         )
     out.append("    </tbody>")

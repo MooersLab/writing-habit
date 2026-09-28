@@ -40,21 +40,24 @@ SECTION_TO_CATEGORY = {
 # legacy support tag so it can be stripped, but only safe and speculative name a
 # risk class (see _split_risk).
 RISK_TAG = re.compile(
-    r"(?:\((?P<paren>safe|speculative|support)\)"
-    r"|:(?P<colon>safe|speculative|support):)\s*$",
+    r"(?:\((?P<paren>safe|risky|support)\)"
+    r"|:(?P<colon>safe|risky|support):)\s*$",
     re.IGNORECASE,
 )
 
-# Support is an activity category, not a risk class.
-RISK_CLASSES = {"safe", "speculative"}
+# The tag a writer types, and the risk class it names. The stored class keeps the
+# name "speculative", which the schema and both dashboards use. Support is an
+# activity category rather than a class, so it names nothing.
+TAG_TO_RISK = {"safe": "safe", "risky": "speculative"}
 
 
 def _split_risk(description: str | None) -> tuple[str | None, str | None]:
     """Return (clean_description, risk_class) from a legend description.
 
-    The trailing risk tag is stripped from the description. Only safe and
-    speculative name a risk class. A legacy support tag is stripped as well but
-    yields no risk class, because support is an activity category.
+    The trailing risk tag is stripped from the description. Two tags name a
+    class, namely safe and risky, and risky names the class the database calls
+    speculative. A legacy support tag is stripped as well but names nothing,
+    because support is an activity category.
     """
     if not description:
         return None, None
@@ -63,7 +66,7 @@ def _split_risk(description: str | None) -> tuple[str | None, str | None]:
         return description.strip() or None, None
     tag = (m.group("paren") or m.group("colon")).lower()
     clean = RISK_TAG.sub("", description).strip()
-    risk = tag if tag in RISK_CLASSES else None
+    risk = TAG_TO_RISK.get(tag)
     return clean or None, risk
 
 

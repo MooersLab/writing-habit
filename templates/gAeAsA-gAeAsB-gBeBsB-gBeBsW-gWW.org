@@ -14,4 +14,4 @@
 |-----------------------------------+---+----+---+----+---|
 | A: main project :safe:            |   |    |   |    |   |
 | B: second project :safe:          |   |    |   |    |   |
-| W: exploratory idea :speculative: |   |    |   |    |   |
+| W: exploratory idea :risky: |   |    |   |    |   |

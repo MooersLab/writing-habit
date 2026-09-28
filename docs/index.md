@@ -30,11 +30,12 @@ recorded, and the two render one byte-identical dashboard from the same data.
 :caption: User guide
 
 installation
-tutorial
+tutorials
 data-model
 tracking-formats
 schedule-codes
 cli
+gui
 library
 dashboard
 ```

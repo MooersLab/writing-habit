@@ -26,4 +26,4 @@
 | C: 0211dnph1 :safe:               |   |    |   |    |   |    |
 | D: 3288sc :safe:                  |   |    |   |    |   |    |
 | E: 3285CC :safe:                  |   |    |   |    |   |    |
-| W: exploratory idea :speculative: |   |    |   |    |   |    |
+| W: exploratory idea :risky: |   |    |   |    |   |    |

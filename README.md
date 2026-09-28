@@ -19,11 +19,11 @@ This is a tool for one person studying and improving their own writing habit, an
 
 The weekly HTML dashboard, with a light and a dark theme:
 
-![Dashboard](imgs/dashboard-light.png)
+![Dashboard](assets/images/dashboard-light.png)
 
 The optional planned-versus-actual chart from the compare stage:
 
-![Planned versus actual](imgs/plot.png)
+![Planned versus actual](assets/images/plot.png)
 
 ## Install
 
@@ -40,6 +40,112 @@ pip install -e <path>/writing-schedule-py/writing_schedule
 ```
 
 The other commands (initdb, track, compare, dashboard) run without it.
+
+## The graphical interface
+
+A point-and-click front end ships as an optional extra. It edits the weekly
+block table and runs every subcommand of writing-habit and writing-schedule
+through a generated form, showing the equivalent shell command above each run
+button.
+
+```
+pip install -e '.[gui]'     # the interface, through PyQt5
+pip install -e '.[preview]' # optional: a faithful dashboard preview
+writing-habit-gui
+```
+
+PyQt5 and PyQtWebEngine are distributed under the GPL, while this library and
+its command line remain MIT, so installing either extra brings GPL terms with
+it. An installation without them is unaffected. See
+[docs/gui.md](docs/gui.md) for the tour.
+
+### Editing the weekly table in the Schedule tab
+
+The Schedule tab edits the weekly block table in place. Every change rewrites
+only the lines it touches, so a saved table differs from the file on disk only
+where you changed it. Four tools make the table easier to build and check.
+
+#### Inserting a time block
+
+Select any cell of a time-block row or a section header and press
+**Insert above** or **Insert below**. A dialog asks for the time range of the
+new block. It starts with a block of the same length placed flush against the
+selected one, so a block inserted below 05:45-07:15 is offered as 07:15-08:45.
+Edit the range or accept it.
+
+![The dialog that asks for the time range of the new block.](assets/images/gui-insert-row-dialog.png)
+
+The new row is empty and selected, so you can type project codes into it at
+once. A row inserted below a section header joins that section, and a row
+inserted above a header joins the section before it. A range that cannot be
+read, or one that ends before it starts, is refused with a message and nothing
+changes.
+
+![The Schedule tab after Insert below, with the empty 07:15-08:45 block selected.](assets/images/gui-insert-row.png)
+
+#### Finding the times that do not overlap
+
+Click a cell in the Time column. Every row whose time range does not overlap
+the selected one turns yellow, across all sections at once. This shows where
+else in the day a block could go without a clash. Blocks that only touch, such
+as 04:00-05:30 and 05:30-07:00, do not overlap, which is the same rule the
+Clashes panel and the scheduler use. A day cell that is red for a clash stays
+red inside a yellow row, so the tint never hides a clash. Clicking a day cell
+or a section header removes the tint.
+
+![Selecting 05:00-06:00 tints the two later rows yellow, while the red cells mark its clashes on Monday.](assets/images/gui-time-tint.png)
+
+#### Inserting a project into the legend
+
+The Legend box below the grid holds the project codes, their descriptions, and
+their risk tags. Two buttons above it, **Insert project above** and
+**Insert project below**, add a project beside the selected entry. With no
+entry selected, a project inserted below goes to the end of the legend and one
+inserted above goes to the start.
+
+![The dialog for a new project, with its code, description, and risk tag.](assets/images/gui-insert-project-dialog.png)
+
+The dialog offers the first letter that neither the legend nor the grid uses
+yet, and it asks for a description and a risk tag of `none`, `safe`, or
+`risky`. A code must be a capital letter followed by up to three capitals or
+digits. A code the legend already defines is refused, because the readers keep
+the first definition of a code and silently drop the second. The new code
+appears at once in the list of codes the grid cells offer.
+
+![The Legend box after inserting project C below project B.](assets/images/gui-insert-project.png)
+
+A project you insert stays in the legend even before any cell uses it. The
+legend still removes a blank row that it added by itself for a code you typed
+into the grid and then deleted, so a typo leaves nothing behind.
+
+#### Opening the table in your own editor
+
+**Open in editor**, to the right of **Reload**, opens the table file in your
+text editor. The editor is named by the `WHGEDITOR` variable. The button reads
+it from the environment first and then from `~/.bashrc`, because a window
+started from the Dock or Finder has not sourced your shell start-up file. The
+value may carry arguments.
+
+```
+# in ~/.bashrc
+export WHGEDITOR="emacsclient -n"
+```
+
+When `WHGEDITOR` is not set, the file opens in the system's default text
+editor, which is `open -t` on macOS, `xdg-open` on Linux, and the file
+association on Windows. A bare program name is also looked for in
+`/opt/homebrew/bin`, `/usr/local/bin`, and `/opt/local/bin`, which a window
+started from the Dock does not have on its path. A full path always works.
+
+The editor reads the file on disk, so the button checks for unsaved edits
+first.
+
+![The prompt shown when the grid holds edits that are not saved yet.](assets/images/gui-open-in-editor.png)
+
+**Save and open** writes your edits and then opens the file.
+**Open the saved version** leaves your edits in the grid and opens the file as
+it was last saved. After you save in the editor, press **Reload** to bring the
+changes back into the grid.
 
 ## Quick start
 
@@ -81,11 +187,11 @@ For calendar tracking, keep actuals in their own ICS calendar. Put the legend co
 
 ## Marking safe and speculative projects
 
-To drive the barbell view, add a risk tag to the end of a legend description in the weekly table, in either the org-tag form `:safe:` or the parenthesis form `(safe)`. The two risk classes are `safe` and `speculative`. Support is an activity category, not a risk class, so a support project carries no risk tag.
+To drive the barbell view, add a risk tag to the end of a legend description in the weekly table, in either the org-tag form `:safe:` or the parenthesis form `(safe)`. The two tags are `:safe:` and `:risky:`, and `:risky:` names the class the database calls `speculative`. Support is an activity category, not a risk class, so a support project carries no risk tag.
 
 ```
 | A: DNPH1 docking :safe:      |  |  |  |  |  |
-| W: 2026words :speculative:   |  |  |  |  |  |
+| W: 2026words :risky:   |  |  |  |  |  |
 ```
 
 Inside a table cell `:safe:` is literal text, because org only reads `:tag:` syntax on headlines, so it does not affect the table or its export. The plan importer strips the tag before storing the description.
