@@ -63,7 +63,7 @@ it. An installation without them is unaffected. See
 
 The Schedule tab edits the weekly block table in place. Every change rewrites
 only the lines it touches, so a saved table differs from the file on disk only
-where you changed it. Four tools make the table easier to build and check.
+where you changed it. Five tools make the table easier to build and check.
 
 #### Inserting a time block
 
@@ -82,6 +82,25 @@ read, or one that ends before it starts, is refused with a message and nothing
 changes.
 
 ![The Schedule tab after Insert below, with the empty 07:15-08:45 block selected.](assets/images/gui-insert-row.png)
+
+#### Moving a time block up or down
+
+Select any cell of a time-block row and press **Move up** or **Move down**, or
+press Alt+Up or Alt+Down while the grid has the focus, which mirrors M-up and
+M-down on an org table in Emacs. The row trades places with its neighbour and
+stays selected, so pressing the button again keeps moving the same block. Its
+times and project codes travel with it unchanged.
+
+A block that moves past a section header joins the neighbouring section. Moving
+the last Generative block down puts it at the top of Rewriting, so it now
+counts as editing time in the Totals panel and in the tracker. A block cannot
+move above the first section header or below the last row, and a section header
+does not move, so the buttons turn grey in those cases.
+
+The file line is moved rather than rewritten. A move inside one section
+therefore changes the order of two lines in the saved file and nothing else.
+
+![The Schedule tab after Move down, with the 05:45-07:15 block moved into the Rewriting section and still selected.](assets/images/gui-move-row.png)
 
 #### Finding the times that do not overlap
 
