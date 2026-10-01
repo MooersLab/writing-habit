@@ -537,6 +537,47 @@ class WeeklyTable:
         self.dirty = True
         return at
 
+    # -- moving legend rows ------------------------------------------------
+    def legend_move_target(self, row_index: int, up: bool) -> Optional[int]:
+        """Return the legend row a move of ``row_index`` would pass, or ``None``.
+
+        A legend row trades places with the legend row beside it, so it never
+        leaves the legend, and nothing moves past the first or the last entry.
+        """
+        legend = self.legend_rows()
+        if row_index not in legend:
+            return None
+        position = legend.index(row_index) + (-1 if up else 1)
+        if not 0 <= position < len(legend):
+            return None
+        return legend[position]
+
+    def can_move_legend(self, row_index: int, up: bool) -> bool:
+        """Return whether :meth:`move_legend` would move ``row_index``."""
+        return self.legend_move_target(row_index, up) is not None
+
+    def move_legend(self, row_index: int, up: bool) -> int:
+        """Move a legend row one place up or down.  Return its new index.
+
+        The order of the legend is the order a writer reads the projects in,
+        and it also decides which definition wins when a code is defined twice,
+        because the readers keep the first. The line is moved, not rewritten,
+        so a move up undoes a move down byte for byte.
+        """
+        target = self.legend_move_target(row_index, up)
+        if target is None:
+            if not 0 <= row_index < len(self.rows) or (
+                    self.rows[row_index].kind != LEGEND):
+                raise ValueError("only a legend row can be moved in the legend")
+            raise ValueError("the project is already at the "
+                             + ("top" if up else "bottom") + " of the legend")
+        row = self.rows.pop(row_index)
+        # The same arithmetic as move_block: the target's old index is the
+        # right slot in both directions.
+        self.rows.insert(target, row)
+        self.dirty = True
+        return target
+
     def _resection(self) -> None:
         """Give every block row the section of the header above it."""
         section = DEFAULT_SECTION

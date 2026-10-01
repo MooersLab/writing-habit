@@ -167,10 +167,30 @@ class ScheduleEditor(QtWidgets.QWidget):
             "the end when none is selected")
         self.project_below_button.clicked.connect(
             lambda: self.insert_project(above=False))
-        for button in (self.project_above_button, self.project_below_button):
+        self.project_up_button = QtWidgets.QPushButton("Move project up")
+        self.project_up_button.setToolTip(
+            "Shift the selected project one row up in the legend (Alt+Up)")
+        self.project_up_button.clicked.connect(
+            lambda: self.move_project(up=True))
+        self.project_down_button = QtWidgets.QPushButton("Move project down")
+        self.project_down_button.setToolTip(
+            "Shift the selected project one row down in the legend (Alt+Down)")
+        self.project_down_button.clicked.connect(
+            lambda: self.move_project(up=False))
+        for button in (self.project_above_button, self.project_below_button,
+                       self.project_up_button, self.project_down_button):
             button.setEnabled(False)
             legend_bar.addWidget(button)
         legend_bar.addStretch(1)
+        # The same keys as the grid. Each shortcut belongs to its own view, so
+        # Alt+Up moves a block when the grid has the focus and a project when
+        # the legend has it.
+        for keys, up in (("Alt+Up", True), ("Alt+Down", False)):
+            shortcut = QtWidgets.QShortcut(QtGui.QKeySequence(keys), self.legend_view)
+            shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(lambda up=up: self.move_project(up=up))
+        self.legend_view.selectionModel().currentChanged.connect(
+            lambda *_args: self._update_project_move_buttons())
         legend_layout.addLayout(legend_bar)
         legend_layout.addWidget(self.legend_view)
         rows.addWidget(legend_box)
@@ -476,6 +496,48 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.on_edit()
         return at
 
+    # -- moving projects ---------------------------------------------------
+    def _update_project_move_buttons(self) -> None:
+        near = self.selected_legend_row()
+        ready = near is not None
+        self.project_up_button.setEnabled(
+            ready and self.table.can_move_legend(near, True))
+        self.project_down_button.setEnabled(
+            ready and self.table.can_move_legend(near, False))
+
+    def move_project(self, up: bool) -> Optional[int]:
+        """Shift the selected legend entry one row up or down.
+
+        The selection follows the entry, so pressing the button again keeps
+        moving the same project. Return its new document index, or ``None``
+        when nothing moved.
+        """
+        near = self.selected_legend_row()
+        if near is None:
+            self.logged.emit("Select a project in the legend before moving it")
+            return None
+        if not self.table.can_move_legend(near, up):
+            self.logged.emit("The project is already at the "
+                             + ("top" if up else "bottom") + " of the legend")
+            return None
+        code = self.table.rows[near].parsed[0]
+        at = self.table.move_legend(near, up)
+
+        column = self.legend_view.currentIndex().column()
+        if min(at, near) <= max(self.model._rows, default=-1):
+            self.model.set_table(self.table)    # a grid row moved
+            self._fit_columns()
+        self.legend_model.set_table(self.table)
+        self._fit_legend_columns()
+        legend_row = self.legend_model._rows.index(at)
+        self.legend_view.setCurrentIndex(
+            self.legend_model.index(legend_row, max(column, 0)))
+        self._update_project_move_buttons()
+        self.logged.emit(f"Moved project {code} "
+                         + ("up" if up else "down") + " in the legend")
+        self.on_edit()
+        return at
+
     # -- the external editor -----------------------------------------------
     def _ask_save_before_editing(self) -> str:
         """Return ``save``, ``saved``, or ``cancel`` for a table with unsaved edits."""
@@ -625,6 +687,7 @@ class ScheduleEditor(QtWidgets.QWidget):
             bool(self.table.path) and not self.table.dirty
             and not self.table.name_matches_code())
         self.model.refresh()
+        self._update_project_move_buttons()
         self.name_panel.setPlainText(self._name_text())
         self.clash_panel.setPlainText(self._clash_text())
         self.totals_panel.setPlainText(self._totals_text())
