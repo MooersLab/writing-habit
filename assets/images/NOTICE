@@ -45,6 +45,10 @@ gui-insert-row-dialog.png
   Title:       writing-habit insert time block dialog
   Description: The dialog that asks for the time range of a new block, prefilled flush against the selected block.
 
+gui-move-row.png
+  Title:       writing-habit Schedule tab, moving a time block
+  Description: The Schedule tab after Move down: the 05:45-07:15 block has passed the Rewriting header, joined that section, and stays selected.
+
 gui-time-tint.png
   Title:       writing-habit Schedule tab, non-overlapping rows in yellow
   Description: Selecting the 05:00-06:00 time tints yellow the rows that do not overlap it; clashing cells stay red.
