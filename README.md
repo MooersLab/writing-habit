@@ -63,7 +63,7 @@ it. An installation without them is unaffected. See
 
 The Schedule tab edits the weekly block table in place. Every change rewrites
 only the lines it touches, so a saved table differs from the file on disk only
-where you changed it. Five tools make the table easier to build and check.
+where you changed it. Six tools make the table easier to build and check.
 
 #### Inserting a time block
 
@@ -136,6 +136,22 @@ appears at once in the list of codes the grid cells offer.
 A project you insert stays in the legend even before any cell uses it. The
 legend still removes a blank row that it added by itself for a code you typed
 into the grid and then deleted, so a typo leaves nothing behind.
+
+#### Moving a project up or down in the legend
+
+Select any cell of a legend entry and press **Move project up** or
+**Move project down**, or press Alt+Up or Alt+Down while the legend has the
+focus. These are the same keys that move a time block in the grid. The entry
+trades places with the one beside it and stays selected, so you can keep
+pressing until the projects read in the order you want. A project never leaves
+the legend, so the first entry cannot move up and the last cannot move down.
+
+The order matters in one case beyond reading. When a code is defined twice, the
+readers keep the first definition, so moving the second one above the first
+changes which description and risk tag the tools use. The Legend panel lists
+such codes.
+
+![The Legend box after moving project W to the top, with Move project up greyed out.](assets/images/gui-move-project.png)
 
 #### Opening the table in your own editor
 
