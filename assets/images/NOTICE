@@ -55,7 +55,11 @@ gui-time-tint.png
 
 gui-insert-project.png
   Title:       writing-habit legend with insert project buttons
-  Description: The Legend box with the Insert project above and Insert project below buttons and a newly inserted project C.
+  Description: The Legend box with the Insert project and Move project buttons and a newly inserted project C.
+
+gui-move-project.png
+  Title:       writing-habit legend, moving a project
+  Description: The Legend box after Move project up twice: project W now heads the legend, stays selected, and Move project up is greyed out.
 
 gui-insert-project-dialog.png
   Title:       writing-habit insert project dialog
