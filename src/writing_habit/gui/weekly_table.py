@@ -477,6 +477,75 @@ class WeeklyTable:
         self.dirty = True
         return at
 
+    # -- moving time-block rows --------------------------------------------
+    def _grid_rows(self) -> List[int]:
+        """Return the document rows the grid shows, section rows and blocks."""
+        return [i for i, row in enumerate(self.rows) if row.kind in (SECTION, BLOCK)]
+
+    def move_target(self, row_index: int, up: bool) -> Optional[int]:
+        """Return the grid neighbour a move of ``row_index`` would pass, or ``None``.
+
+        Only a time-block row moves. It passes the next grid row in the chosen
+        direction, which is either another block of its section or the header of
+        the neighbouring section. A block never moves above the first section
+        header, because a block there belongs to no section, and nothing moves
+        past the top or the bottom of the grid.
+        """
+        if not 0 <= row_index < len(self.rows) or self.rows[row_index].kind != BLOCK:
+            return None
+        grid = self._grid_rows()
+        position = grid.index(row_index) + (-1 if up else 1)
+        if not 0 <= position < len(grid):
+            return None
+        target = grid[position]
+        if up and self.rows[target].kind == SECTION and not any(
+                self.rows[i].kind == SECTION for i in grid[:position]):
+            return None
+        return target
+
+    def can_move(self, row_index: int, up: bool) -> bool:
+        """Return whether :meth:`move_block` would move ``row_index``."""
+        return self.move_target(row_index, up) is not None
+
+    def move_block(self, row_index: int, up: bool) -> int:
+        """Move a time-block row one place up or down.  Return its new index.
+
+        The row trades places with its neighbour in the grid. Passing another
+        block keeps the row in its section and swaps two lines of the file.
+        Passing a section header moves the row into the neighbouring section,
+        at the bottom of the section above or the top of the section below,
+        which changes the activity the block counts toward.
+
+        The line itself is moved, not rewritten, so the saved file holds the
+        same lines as before in a new order, and every cell, time, and width is
+        kept exactly.
+        """
+        target = self.move_target(row_index, up)
+        if target is None:
+            if not 0 <= row_index < len(self.rows) or (
+                    self.rows[row_index].kind != BLOCK):
+                raise ValueError("only a time-block row can be moved")
+            raise ValueError("the row is already at the "
+                             + ("top" if up else "bottom") + " of the grid")
+        row = self.rows.pop(row_index)
+        # Moving up, the row goes into the target's slot and pushes it down.
+        # Moving down, the pop has already shifted the target up by one, so
+        # the target's old index is now the slot just after it.
+        at = target
+        self.rows.insert(at, row)
+        self._resection()
+        self.dirty = True
+        return at
+
+    def _resection(self) -> None:
+        """Give every block row the section of the header above it."""
+        section = DEFAULT_SECTION
+        for row in self.rows:
+            if row.kind == SECTION:
+                section = str(row.parsed)
+            elif row.kind == BLOCK:
+                row.section = section
+
     def _render_time(self, row: Row, model: Optional[Row]) -> str:
         """Write the time cell of a new row, justified as its model's is.
 

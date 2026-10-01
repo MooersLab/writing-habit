@@ -22,9 +22,9 @@ from typing import Optional
 from . import external_editor, settings
 from .legend_model import (CODE, DESCRIPTION, LegendModel, RISK,
                            RISK_CHOICES, RiskDelegate)
-from .qt import Qt, QtWidgets, pyqtSignal
+from .qt import Qt, QtGui, QtWidgets, pyqtSignal
 from .table_model import TIME_COLUMN, CodeDelegate, WeeklyTableModel
-from .weekly_table import WeeklyTable
+from .weekly_table import BLOCK, WeeklyTable
 
 
 def _plain(read_only: bool = True) -> QtWidgets.QPlainTextEdit:
@@ -80,6 +80,16 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.insert_below_button.setToolTip(
             "Add an empty time block below the selected row")
         self.insert_below_button.clicked.connect(lambda: self.insert_row(above=False))
+        self.move_up_button = QtWidgets.QPushButton("Move up")
+        self.move_up_button.setToolTip(
+            "Shift the selected time block one row up (Alt+Up). Past a section "
+            "header it joins the section above.")
+        self.move_up_button.clicked.connect(lambda: self.move_row(up=True))
+        self.move_down_button = QtWidgets.QPushButton("Move down")
+        self.move_down_button.setToolTip(
+            "Shift the selected time block one row down (Alt+Down). Past a "
+            "section header it joins the section below.")
+        self.move_down_button.clicked.connect(lambda: self.move_row(up=False))
         self.path_label = QtWidgets.QLabel("No table open")
         # A long path would otherwise set the window's minimum width.
         self.path_label.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
@@ -87,14 +97,16 @@ class ScheduleEditor(QtWidgets.QWidget):
         for button in (self.open_button, self.new_button, self.save_button,
                        self.save_as_button, self.rename_button, self.reload_button,
                        self.external_button, self.insert_above_button,
-                       self.insert_below_button):
+                       self.insert_below_button, self.move_up_button,
+                       self.move_down_button):
             bar.addWidget(button)
         bar.addWidget(self.path_label, 1)
         outer.addLayout(bar)
         for button in (self.save_button, self.save_as_button,
                        self.rename_button, self.reload_button,
                        self.external_button, self.insert_above_button,
-                       self.insert_below_button):
+                       self.insert_below_button, self.move_up_button,
+                       self.move_down_button):
             button.setEnabled(False)
 
         #: Starts the external editor.  A test replaces it to run nothing.
@@ -111,6 +123,13 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.view.selectionModel().currentChanged.connect(
             lambda *_args: self._on_current_changed())
         splitter.addWidget(self.view)
+        # Alt+Up and Alt+Down move the selected block, as M-up and M-down move
+        # a row of an org table in Emacs. The shortcuts belong to the grid, so
+        # they do nothing while the legend or a form has the focus.
+        for keys, up in (("Alt+Up", True), ("Alt+Down", False)):
+            shortcut = QtWidgets.QShortcut(QtGui.QKeySequence(keys), self.view)
+            shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(lambda up=up: self.move_row(up=up))
 
         self.panels = QtWidgets.QTabWidget()
         self.name_panel = _plain()
@@ -161,7 +180,8 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.note = QtWidgets.QLabel(
             "<i>A cell takes a legend code. An edit rewrites one line of the "
             "file; the rest is left alone. Select a time to tint in yellow the "
-            "rows that do not overlap it.</i>")
+            "rows that do not overlap it. Alt+Up and Alt+Down move the "
+            "selected block.</i>")
         self.note.setWordWrap(True)
         outer.addWidget(self.note)
 
@@ -292,9 +312,12 @@ class ScheduleEditor(QtWidgets.QWidget):
             self.model.set_time_anchor(None)
 
     def _update_insert_buttons(self) -> None:
-        ready = self.selected_document_row() is not None
+        near = self.selected_document_row()
+        ready = near is not None
         self.insert_above_button.setEnabled(ready)
         self.insert_below_button.setEnabled(ready)
+        self.move_up_button.setEnabled(ready and self.table.can_move(near, True))
+        self.move_down_button.setEnabled(ready and self.table.can_move(near, False))
 
     def insert_row(self, above: bool, times: Optional[str] = None) -> Optional[int]:
         """Add an empty time block beside the selected row.
@@ -336,6 +359,46 @@ class ScheduleEditor(QtWidgets.QWidget):
         start, end = self.table.rows[at].parsed
         self.logged.emit(f"Inserted an empty {start}-{end} block in "
                          f"{self.table.rows[at].section}")
+        self.on_edit()
+        return at
+
+    # -- moving rows -------------------------------------------------------
+    def move_row(self, up: bool) -> Optional[int]:
+        """Shift the selected time block one row up or down.
+
+        The selection follows the row, so pressing the button again keeps
+        moving the same block. Return the block's new document index, or
+        ``None`` when nothing moved.
+        """
+        near = self.selected_document_row()
+        if near is None:
+            self.logged.emit("Select a time block of the grid before moving a row")
+            return None
+        if not self.table.can_move(near, up):
+            kind = self.table.rows[near].kind
+            if kind == BLOCK:
+                self.logged.emit("The row is already at the "
+                                 + ("top" if up else "bottom") + " of the grid")
+            else:
+                self.logged.emit("Only a time block moves. A section header "
+                                 "stays where the file puts it.")
+            return None
+        before = self.table.rows[near].section
+        at = self.table.move_block(near, up)
+
+        column = self.view.currentIndex().column()
+        self.model.set_table(self.table)
+        self.legend_model.set_table(self.table)
+        self._fit_columns()
+        self._fit_legend_columns()
+        grid_row = self.model._rows.index(at)
+        self.view.setCurrentIndex(self.model.index(grid_row, max(column, 0)))
+        self._on_current_changed()
+        start, end = self.table.rows[at].parsed
+        after = self.table.rows[at].section
+        where = (f" into {after}" if after != before else "")
+        self.logged.emit(f"Moved the {start}-{end} block "
+                         + ("up" if up else "down") + where)
         self.on_edit()
         return at
 
