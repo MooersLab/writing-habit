@@ -105,7 +105,8 @@ once. Section rows and the time column refuse edits, because they belong to the
 file rather than to the week. Clicking a time does something else, which
 [Finding the times that do not overlap](#finding-the-times-that-do-not-overlap)
 describes. The legend table below the grid edits the code, the description, and
-the risk tag, which is one of `none`, `safe`, and `risky`.
+the risk tag, which is one of `none`, `safe`, and `risky`. Four buttons above
+the legend insert a project or move the selected one, as described below.
 
 **Every edit rewrites one line of the file.** A value that fits its column keeps
 the table aligned; a longer value widens its own slot and leaves the rest alone,
@@ -258,6 +259,31 @@ a cell and then deleted, so a typo leaves nothing behind. A blank project read
 from the file is kept too. A blank entry is written as `C:`, which both this
 editor and the scheduler read as a legend row rather than as a section header.
 
+### Moving a project up or down in the legend
+
+Two more buttons above the legend table, **Move project up** and
+**Move project down**, shift the selected entry by one row. Alt+Up and Alt+Down
+do the same while the legend has the focus. Each pair of keys belongs to its
+own table, so the keys move a time block when the grid has the focus and a
+project when the legend has it. The entry stays selected in the same column, so
+pressing again keeps moving the same project.
+
+![The legend after moving project W to the top, with Move project up greyed out.](imgs/gui-move-project.png)
+
+A project trades places with the legend entry beside it, so it never leaves the
+legend and never passes a row of the grid. The first entry cannot move up and
+the last cannot move down, and the matching button turns grey. Moving a project
+changes nothing in the grid, the totals, or the canonical name.
+
+The order is not only cosmetic. When a code is defined twice, both the editor
+and the scheduler keep the first definition, so moving the second definition
+above the first changes which description and risk tag the tools use. The
+Legend panel lists any code defined more than once, so you can see which one
+now wins.
+
+As with a block, the line is moved rather than rewritten. A move swaps two lines
+of the saved file, and a move up undoes a move down byte for byte.
+
 ### Opening the table in your own editor
 
 **Open in editor**, to the right of **Reload**, opens the table file in your
@@ -332,7 +358,8 @@ without the extra skips the graphical tests rather than failing them.
 | **Insert above** and **Insert below** are greyed out | no grid cell is selected; click any cell of a time block or a section header |
 | **Move up** and **Move down** are both greyed out | the selection is a section header, or no cell is selected; click a cell of a time block |
 | **Move up** alone is greyed out | the block is the first row under the first section header, so it has nowhere above to go |
-| Alt+Up or Alt+Down does nothing | the grid does not have the focus; click a cell of the grid first |
+| Alt+Up or Alt+Down does nothing | neither the grid nor the legend has the focus; click a cell of the table you want to reorder first |
+| **Move project up** and **Move project down** are both greyed out | no legend entry is selected; click any cell of a legend row |
 
 ## Licensing
 
