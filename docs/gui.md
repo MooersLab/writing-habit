@@ -124,8 +124,8 @@ Four panels report on the week as you edit it.
 The toolbar holds **Open table**, **New from template**, which asks for a
 project count and calls the scheduler's own scaffold, **Save**, **Save as**,
 which offers the canonical name, **Rename to canonical**, **Reload**,
-**Open in editor**, **Insert above**, and **Insert below**. The last three are
-described below. The file name at the end of the toolbar shrinks when the
+**Open in editor**, **Insert above**, **Insert below**, **Move up**, and
+**Move down**. The last five are described below. The file name at the end of the toolbar shrinks when the
 window is narrow, and its tooltip gives the full path.
 
 Renaming is worth its button. The tracker groups weeks by the schedule code
@@ -172,6 +172,37 @@ A range that cannot be read, or one that ends before it starts, is refused with
 a message and nothing changes. The time of a row cannot be edited in the grid,
 so fix a wrong time in your own editor, as described under
 [Opening the table in your own editor](#opening-the-table-in-your-own-editor).
+
+### Moving a time block up or down
+
+Select any cell of a time-block row and press **Move up** or **Move down**. The
+same moves are on the keyboard as Alt+Up and Alt+Down while the grid has the
+focus, which mirrors `M-<up>` and `M-<down>` on an org table in Emacs. The row
+trades places with the grid row beside it and stays selected in the same
+column, so pressing the button again keeps moving the same block. Its times and
+project codes travel with it unchanged, and the yellow tint, when it is shown,
+follows the row.
+
+![The Schedule tab after Move down, with the 05:45-07:15 block moved into the Rewriting section and still selected.](imgs/gui-move-row.png)
+
+A section header is a grid row too, so a block can move from one section into
+the next. The section decides the activity the block counts toward in the
+Totals panel and in the tracker, and the log says so when a move changes it,
+for example `Moved the 05:45-07:15 block down into Rewriting`.
+
+| What the block passes | Where it lands |
+|-----------------------|----------------|
+| another time block | the same section, one row higher or lower |
+| the header of the section below | the top of that section |
+| the header of its own section | the bottom of the section above |
+
+A block cannot move above the first section header, because a row there belongs
+to no section, and it cannot move past the top or the bottom of the grid.
+Section headers and legend rows do not move. The buttons turn grey in each of
+these cases, so their state tells you what a press would do.
+
+The line is moved in the file, not rewritten. A move inside one section swaps
+two lines of the saved file, and a move up undoes a move down byte for byte.
 
 ### Finding the times that do not overlap
 
@@ -299,6 +330,9 @@ without the extra skips the graphical tests rather than failing them.
 | **Open in editor** opens the wrong program | `WHGEDITOR` is unset, so the system default for `.org` files opened; set `WHGEDITOR` in `~/.bashrc` |
 | An edit made in your editor does not show in the grid | the grid does not watch the file; press **Reload** |
 | **Insert above** and **Insert below** are greyed out | no grid cell is selected; click any cell of a time block or a section header |
+| **Move up** and **Move down** are both greyed out | the selection is a section header, or no cell is selected; click a cell of a time block |
+| **Move up** alone is greyed out | the block is the first row under the first section header, so it has nowhere above to go |
+| Alt+Up or Alt+Down does nothing | the grid does not have the focus; click a cell of the grid first |
 
 ## Licensing
 
