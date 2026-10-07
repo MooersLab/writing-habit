@@ -24,7 +24,7 @@ from .legend_model import (CODE, DESCRIPTION, LegendModel, RISK,
                            RISK_CHOICES, RiskDelegate)
 from .qt import Qt, QtGui, QtWidgets, pyqtSignal
 from .table_model import TIME_COLUMN, CodeDelegate, WeeklyTableModel
-from .weekly_table import BLOCK, WeeklyTable
+from .weekly_table import BLOCK, PROJECT_CODES, WeeklyTable
 
 
 def _plain(read_only: bool = True) -> QtWidgets.QPlainTextEdit:
@@ -90,6 +90,11 @@ class ScheduleEditor(QtWidgets.QWidget):
             "Shift the selected time block one row down (Alt+Down). Past a "
             "section header it joins the section below.")
         self.move_down_button.clicked.connect(lambda: self.move_row(up=False))
+        self.delete_row_button = QtWidgets.QPushButton("Delete row")
+        self.delete_row_button.setToolTip(
+            "Delete the selected time block. A section header and the legend "
+            "stay.")
+        self.delete_row_button.clicked.connect(lambda: self.delete_row())
         self.path_label = QtWidgets.QLabel("No table open")
         # A long path would otherwise set the window's minimum width.
         self.path_label.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
@@ -98,7 +103,7 @@ class ScheduleEditor(QtWidgets.QWidget):
                        self.save_as_button, self.rename_button, self.reload_button,
                        self.external_button, self.insert_above_button,
                        self.insert_below_button, self.move_up_button,
-                       self.move_down_button):
+                       self.move_down_button, self.delete_row_button):
             bar.addWidget(button)
         bar.addWidget(self.path_label, 1)
         outer.addLayout(bar)
@@ -106,7 +111,7 @@ class ScheduleEditor(QtWidgets.QWidget):
                        self.rename_button, self.reload_button,
                        self.external_button, self.insert_above_button,
                        self.insert_below_button, self.move_up_button,
-                       self.move_down_button):
+                       self.move_down_button, self.delete_row_button):
             button.setEnabled(False)
 
         #: Starts the external editor.  A test replaces it to run nothing.
@@ -177,8 +182,13 @@ class ScheduleEditor(QtWidgets.QWidget):
             "Shift the selected project one row down in the legend (Alt+Down)")
         self.project_down_button.clicked.connect(
             lambda: self.move_project(up=False))
+        self.delete_project_button = QtWidgets.QPushButton("Delete project")
+        self.delete_project_button.setToolTip(
+            "Delete the selected project from the legend")
+        self.delete_project_button.clicked.connect(lambda: self.delete_project())
         for button in (self.project_above_button, self.project_below_button,
-                       self.project_up_button, self.project_down_button):
+                       self.project_up_button, self.project_down_button,
+                       self.delete_project_button):
             button.setEnabled(False)
             legend_bar.addWidget(button)
         legend_bar.addStretch(1)
@@ -201,7 +211,8 @@ class ScheduleEditor(QtWidgets.QWidget):
             "<i>A cell takes a legend code. An edit rewrites one line of the "
             "file; the rest is left alone. Select a time to tint in yellow the "
             "rows that do not overlap it. Alt+Up and Alt+Down move the "
-            "selected block.</i>")
+            "selected block. A code is one letter, or two letters such as AB "
+            "once A to Z are taken.</i>")
         self.note.setWordWrap(True)
         outer.addWidget(self.note)
 
@@ -338,6 +349,8 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.insert_below_button.setEnabled(ready)
         self.move_up_button.setEnabled(ready and self.table.can_move(near, True))
         self.move_down_button.setEnabled(ready and self.table.can_move(near, False))
+        self.delete_row_button.setEnabled(
+            ready and self.table.can_remove_block(near))
 
     def insert_row(self, above: bool, times: Optional[str] = None) -> Optional[int]:
         """Add an empty time block beside the selected row.
@@ -422,6 +435,99 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.on_edit()
         return at
 
+    # -- deleting rows -----------------------------------------------------
+    def _confirm(self, title: str, text: str) -> bool:
+        """Ask a yes-or-no question.  Return whether the writer said yes."""
+        answer = QtWidgets.QMessageBox.question(
+            self, title, text,
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No)
+        return answer == QtWidgets.QMessageBox.Yes
+
+    def delete_row(self, confirm: bool = True) -> Optional[int]:
+        """Delete the selected time block.  Return the index it held.
+
+        A row that still holds project codes is deleted only after the writer
+        confirms, because there is no undo short of Reload. An empty row goes
+        at once. The selection moves to the grid row that took its place, or
+        to the row above when the last row went. ``confirm`` of ``False`` skips
+        the question. Return ``None`` when nothing was deleted.
+        """
+        near = self.selected_document_row()
+        if near is None:
+            self.logged.emit("Select a time block of the grid before deleting a row")
+            return None
+        if not self.table.can_remove_block(near):
+            self.logged.emit("Only a time block is deleted. A section header "
+                             "stays where the file puts it.")
+            return None
+        row = self.table.rows[near]
+        start, end = row.parsed
+        filled = [self.table.cell(near, index)
+                  for index, _offset, _label in self.table.columns
+                  if self.table.cell(near, index)]
+        if filled and confirm and not self._confirm(
+                "Delete a row",
+                f"The {start}-{end} block holds {len(filled)} project "
+                f"code(s): {' '.join(filled)}.\n\nDelete the row?"):
+            return None
+        grid_row = self.view.currentIndex().row()
+        column = self.view.currentIndex().column()
+        section = row.section
+        self.table.remove_block(near)
+
+        self.model.set_table(self.table)
+        self.legend_model.set_table(self.table)     # its row indexes moved
+        self._fit_columns()
+        self._fit_legend_columns()
+        count = self.model.rowCount()
+        if count:
+            self.view.setCurrentIndex(
+                self.model.index(min(grid_row, count - 1), max(column, 0)))
+        self._on_current_changed()
+        self.logged.emit(f"Deleted the {start}-{end} block from {section}")
+        self.on_grid_edit()                         # the legend may owe a row less
+        return near
+
+    def delete_project(self, confirm: bool = True) -> Optional[int]:
+        """Delete the selected legend entry.  Return the index it held.
+
+        A project the grid still uses is deleted only after the writer
+        confirms, because its cells then show as not in the key. The selection
+        moves to the entry that took its place, or to the one above when the
+        last entry went. ``confirm`` of ``False`` skips the question. Return
+        ``None`` when nothing was deleted.
+        """
+        near = self.selected_legend_row()
+        if near is None:
+            self.logged.emit("Select a project in the legend before deleting it")
+            return None
+        code = self.table.rows[near].parsed[0]
+        used = self.table.cells_using(code)
+        if used and confirm and not self._confirm(
+                "Delete a project",
+                f"{used} cell(s) of the grid use {code}. They will show as not "
+                f"in the key.\n\nDelete {code} from the legend?"):
+            return None
+        legend_row = self.legend_view.currentIndex().row()
+        column = self.legend_view.currentIndex().column()
+        self.table.remove_legend(near)
+
+        if near <= max(self.model._rows, default=-1):
+            self.model.set_table(self.table)    # a grid row moved up
+            self._fit_columns()
+        self.legend_model.set_table(self.table)
+        self._fit_legend_columns()
+        count = self.legend_model.rowCount()
+        if count:
+            self.legend_view.setCurrentIndex(
+                self.legend_model.index(min(legend_row, count - 1), max(column, 0)))
+        self._update_project_move_buttons()
+        self.logged.emit(f"Deleted project {code} from the legend"
+                         + (f"; {used} cell(s) still use it" if used else ""))
+        self.on_edit()
+        return near
+
     # -- inserting projects ------------------------------------------------
     def selected_legend_row(self) -> Optional[int]:
         """Return the document row of the selected legend entry, or ``None``."""
@@ -464,7 +570,8 @@ class ScheduleEditor(QtWidgets.QWidget):
 
         With no entry selected, a project inserted below goes to the end of the
         legend and one inserted above goes to the start. ``code`` skips the
-        dialog, which otherwise offers the first letter not yet in use.
+        dialog, which otherwise offers the first code not yet in use, a
+        single letter while one is free and then ``AA``, ``AB``, and so on.
         """
         if self.table is None:
             return None
@@ -504,6 +611,7 @@ class ScheduleEditor(QtWidgets.QWidget):
             ready and self.table.can_move_legend(near, True))
         self.project_down_button.setEnabled(
             ready and self.table.can_move_legend(near, False))
+        self.delete_project_button.setEnabled(ready)
 
     def move_project(self, up: bool) -> Optional[int]:
         """Shift the selected legend entry one row up or down.
@@ -652,15 +760,24 @@ class ScheduleEditor(QtWidgets.QWidget):
         return path
 
     def scaffold(self, projects: Optional[int] = None) -> None:
-        """Start a blank table for N projects, using the scheduler's own scaffold."""
+        """Start a blank table for N projects, using the scheduler's own scaffold.
+
+        The scheduler's scaffold stops at 26 projects, one per letter. Beyond
+        that the legend is extended here with the two-letter codes ``AA``,
+        ``AB``, and so on, up to the 702 codes there are.
+        """
         from writing_schedule.template import template_string
 
         if projects is None:
             projects, accepted = QtWidgets.QInputDialog.getInt(
-                self, "New weekly table", "Number of projects", 3, 1, 26)
+                self, "New weekly table", "Number of projects", 3, 1,
+                len(PROJECT_CODES))
             if not accepted:
                 return
-        self.table = WeeklyTable(template_string(int(projects)))
+        projects = max(1, min(int(projects), len(PROJECT_CODES)))
+        self.table = WeeklyTable(template_string(min(projects, 26)))
+        for _extra in range(projects - len(self.table.legend())):
+            self.table.add_legend(self.table.next_free_code())
         self.model.set_table(self.table)
         self.legend_model.set_table(self.table)
         self.table.dirty = True

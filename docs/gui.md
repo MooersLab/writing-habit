@@ -105,8 +105,10 @@ once. Section rows and the time column refuse edits, because they belong to the
 file rather than to the week. Clicking a time does something else, which
 [Finding the times that do not overlap](#finding-the-times-that-do-not-overlap)
 describes. The legend table below the grid edits the code, the description, and
-the risk tag, which is one of `none`, `safe`, and `risky`. Four buttons above
-the legend insert a project or move the selected one, as described below.
+the risk tag, which is one of `none`, `safe`, and `risky`. Five buttons above
+the legend insert a project, move the selected one, or delete it, as described
+below. A project code is a single letter or, once A to Z are taken, two letters
+such as `AB`, so the legend can hold more than 26 projects.
 
 **Every edit rewrites one line of the file.** A value that fits its column keeps
 the table aligned; a longer value widens its own slot and leaves the rest alone,
@@ -125,8 +127,8 @@ Four panels report on the week as you edit it.
 The toolbar holds **Open table**, **New from template**, which asks for a
 project count and calls the scheduler's own scaffold, **Save**, **Save as**,
 which offers the canonical name, **Rename to canonical**, **Reload**,
-**Open in editor**, **Insert above**, **Insert below**, **Move up**, and
-**Move down**. The last five are described below. The file name at the end of the toolbar shrinks when the
+**Open in editor**, **Insert above**, **Insert below**, **Move up**,
+**Move down**, and **Delete row**. The last six are described below. The file name at the end of the toolbar shrinks when the
 window is narrow, and its tooltip gives the full path.
 
 Renaming is worth its button. The tracker groups weeks by the schedule code
@@ -139,7 +141,11 @@ different file.
 A week has no canonical name when a cell holds a project code of more than one
 letter, because a file name gives one letter to one block. The Name panel says
 which code is at fault, and the naming rules answer it with a single-letter
-alias kept beside the full code in the legend.
+alias kept beside the full code in the legend. Everything else reads a
+two-letter code whole: the scheduler, the plan importer, the totals, the
+tooltips, and the legend check. A legend with more than 26 projects is
+therefore fine, and only a week whose cells use the two-letter codes loses its
+file name.
 
 ### Inserting a time block
 
@@ -205,6 +211,24 @@ these cases, so their state tells you what a press would do.
 The line is moved in the file, not rewritten. A move inside one section swaps
 two lines of the saved file, and a move up undoes a move down byte for byte.
 
+### Deleting a time block
+
+**Delete row**, to the right of **Move down**, deletes the selected time block.
+It is enabled only while a cell of a time block is selected. A section header
+is never deleted, because the blocks under it would silently join the section
+above and change the activity they count toward.
+
+A row that still holds project codes asks before it goes and lists the codes,
+because the window has no undo short of **Reload**. An empty row goes at once.
+The selection moves to the grid row that took its place, in the same column, or
+to the row above when the last row went.
+
+The line is removed and every other line is left untouched, so the saved file
+is one line shorter and otherwise the same. The legend keeps every entry the
+writer typed. A blank entry that the legend added by itself for a code typed
+into a cell is dropped once no cell uses the code, as it is when the cell is
+cleared.
+
 ### Finding the times that do not overlap
 
 Click a cell in the Time column. Every row whose time range does not overlap
@@ -237,7 +261,10 @@ The dialog asks for three things.
 
 Code
 : A capital letter followed by up to three capitals or digits. The field starts
-  with the first letter that neither the legend nor the grid uses yet.
+  with the first code that neither the legend nor the grid uses yet. The single
+  letters come first, and once A to Z are taken the field offers `AA`, `AB`,
+  and so on to `ZZ`, which makes room for 702 projects. **New from template**
+  accepts the same range and adds the two-letter entries after `Z:`.
 
 Description
 : The project name, optionally followed by a due date such as `Sept 25`, which
@@ -283,6 +310,19 @@ now wins.
 
 As with a block, the line is moved rather than rewritten. A move swaps two lines
 of the saved file, and a move up undoes a move down byte for byte.
+
+### Deleting a project from the legend
+
+**Delete project**, to the right of **Move project down**, deletes the selected
+legend entry. It is enabled once an entry is selected. The selection moves to
+the entry that took its place, or to the one above when the last entry went.
+
+A project that cells of the grid still use asks first and says how many cells,
+because those cells then show as not in the key, both in their tooltips and in
+the Legend panel. The deletion stands until the next edit of a grid cell, which
+adds back a blank entry for every code the grid still uses. Clear or retype
+those cells first when the project should go for good. Deleting a project never
+changes the grid, the totals, or the canonical name.
 
 ### Opening the table in your own editor
 
@@ -360,6 +400,10 @@ without the extra skips the graphical tests rather than failing them.
 | **Move up** alone is greyed out | the block is the first row under the first section header, so it has nowhere above to go |
 | Alt+Up or Alt+Down does nothing | neither the grid nor the legend has the focus; click a cell of the table you want to reorder first |
 | **Move project up** and **Move project down** are both greyed out | no legend entry is selected; click any cell of a legend row |
+| **Delete row** is greyed out | the selection is a section header, or no cell is selected; click a cell of a time block |
+| **Delete project** is greyed out | no legend entry is selected; click any cell of a legend row |
+| A deleted project comes back as a blank entry | a cell of the grid still uses its code, and a grid edit restored the entry; clear those cells and delete it again |
+| The Name panel says the week has no canonical name | a cell holds a two-letter code such as `AB`; the file name allows only single letters, so give the project a letter or keep the current name |
 
 ## Licensing
 

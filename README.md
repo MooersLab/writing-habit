@@ -63,7 +63,7 @@ it. An installation without them is unaffected. See
 
 The Schedule tab edits the weekly block table in place. Every change rewrites
 only the lines it touches, so a saved table differs from the file on disk only
-where you changed it. Six tools make the table easier to build and check.
+where you changed it. Eight tools make the table easier to build and check.
 
 #### Inserting a time block
 
@@ -102,6 +102,16 @@ therefore changes the order of two lines in the saved file and nothing else.
 
 ![The Schedule tab after Move down, with the 05:45-07:15 block moved into the Rewriting section and still selected.](assets/images/gui-move-row.png)
 
+#### Deleting a time block
+
+Select any cell of a time-block row and press **Delete row**, to the right of
+**Move down**. A row that still holds project codes asks first and names them,
+because there is no undo short of **Reload**. An empty row goes at once. The
+selection moves to the row that took its place. A section header is not
+deleted, because its blocks would silently join the section above, so the
+button turns grey on a header. The legend is left alone, so a project whose
+last cell went with the row keeps its description.
+
 #### Finding the times that do not overlap
 
 Click a cell in the Time column. Every row whose time range does not overlap
@@ -124,8 +134,10 @@ inserted above goes to the start.
 
 ![The dialog for a new project, with its code, description, and risk tag.](assets/images/gui-insert-project-dialog.png)
 
-The dialog offers the first letter that neither the legend nor the grid uses
-yet, and it asks for a description and a risk tag of `none`, `safe`, or
+The dialog offers the first code that neither the legend nor the grid uses
+yet. The single letters come first, and once A to Z are all taken it offers
+`AA`, `AB`, and so on to `ZZ`, so the legend can hold more than 26 projects.
+A grid cell takes a two-letter code the same way it takes a letter. It asks for a description and a risk tag of `none`, `safe`, or
 `risky`. A code must be a capital letter followed by up to three capitals or
 digits. A code the legend already defines is refused, because the readers keep
 the first definition of a code and silently drop the second. The new code
@@ -152,6 +164,23 @@ changes which description and risk tag the tools use. The Legend panel lists
 such codes.
 
 ![The Legend box after moving project W to the top, with Move project up greyed out.](assets/images/gui-move-project.png)
+
+#### Deleting a project from the legend
+
+Select any cell of a legend entry and press **Delete project**, to the right of
+**Move project down**. A project that cells of the grid still use asks first
+and says how many cells, because those cells then show as not in the key. The
+next edit of a grid cell puts back a blank entry for any code the grid still
+uses, so retype or clear those cells first if you want the project gone for
+good.
+
+#### Two-letter project codes and the file name
+
+A week that puts a two-letter code such as `AB` in a cell has no canonical file
+name, because a file name gives one capital letter to one block. The scheduler,
+the plan importer, the totals, and the tooltips all read the two-letter code
+whole. Only **Rename to canonical** and the name offered by **Save as** are
+unavailable, and the Name panel says why.
 
 #### Opening the table in your own editor
 

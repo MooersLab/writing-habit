@@ -63,6 +63,16 @@ DUE_DATE_RE = re.compile(
 #: The word shown for each risk class in a tooltip.
 RISK_LABEL = {"safe": "safe", "speculative": "risky"}
 
+#: The codes offered to a new project, in order. The 26 single letters come
+#: first, and the two-letter codes ``AA`` to ``ZZ`` follow, as the columns of a
+#: spreadsheet do, so a legend can hold up to 702 projects. Both readers accept
+#: a code of up to four characters, so a two-letter code works in the grid and
+#: in the legend. Only the file name is limited to single letters.
+PROJECT_CODES: Tuple[str, ...] = tuple(
+    [chr(c) for c in range(ord("A"), ord("Z") + 1)]
+    + [chr(a) + chr(b) for a in range(ord("A"), ord("Z") + 1)
+       for b in range(ord("A"), ord("Z") + 1)])
+
 
 def split_due_date(description: str) -> Tuple[str, Optional[str]]:
     """Return ``(project name, due date or None)`` for a legend description.
@@ -326,11 +336,17 @@ class WeeklyTable:
         return at
 
     def next_free_code(self) -> str:
-        """Return the first letter that neither the legend nor the grid uses."""
+        """Return the first code that neither the legend nor the grid uses.
+
+        The single letters are offered first. Once all 26 are taken, the
+        two-letter codes follow in the order ``AA``, ``AB``, and so on to
+        ``ZZ``, so a legend is no longer capped at 26 projects. An empty string
+        means every one of the 702 codes is taken.
+        """
         taken = set(self.legend()) | set(self.used_codes())
-        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-            if letter not in taken:
-                return letter
+        for code in PROJECT_CODES:
+            if code not in taken:
+                return code
         return ""
 
     def insert_legend(self, near: Optional[int], above: bool, code: str,
@@ -376,10 +392,48 @@ class WeeklyTable:
 
     def remove_legend(self, row_index: int) -> None:
         """Drop one legend row from the document."""
-        if self.rows[row_index].kind != LEGEND:
+        if not 0 <= row_index < len(self.rows) or (
+                self.rows[row_index].kind != LEGEND):
             raise ValueError("not a legend row")
+        code = self.rows[row_index].parsed[0]
         del self.rows[row_index]
+        # A later grid edit must not treat a project the writer deleted as one
+        # that sync_legend added and may drop again.
+        if code not in self.legend():
+            self._synced_codes.discard(code)
         self.dirty = True
+
+    def cells_using(self, code: str) -> int:
+        """Return how many grid cells hold ``code``."""
+        code = code.strip().upper()
+        return sum(1 for block in self.blocks() if block.letter == code)
+
+    # -- deleting time-block rows ------------------------------------------
+    def can_remove_block(self, row_index: int) -> bool:
+        """Return whether :meth:`remove_block` would delete ``row_index``.
+
+        Only a time-block row is deleted. A section header stays, because
+        deleting it would silently move every block under it into the section
+        above and change the activity those blocks count toward.
+        """
+        return 0 <= row_index < len(self.rows) and self.rows[row_index].kind == BLOCK
+
+    def remove_block(self, row_index: int) -> Row:
+        """Delete one time-block row and return it.
+
+        The line is removed and every other line is left untouched, so the
+        saved file differs from the one on disk by exactly one line. The
+        legend is not touched here. A project whose last cell went with the
+        row keeps its entry, unless :meth:`sync_legend` added that entry and
+        it is still blank, which is the same rule a cleared cell follows.
+        """
+        if not self.can_remove_block(row_index):
+            raise ValueError("only a time-block row can be deleted; a section "
+                             "header and the legend stay")
+        row = self.rows.pop(row_index)
+        self._resection()
+        self.dirty = True
+        return row
 
     # -- inserting time-block rows -----------------------------------------
     def _section_at(self, index: int) -> str:
