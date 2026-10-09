@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from .qt import Qt, QtCore, QtGui, QtWidgets, pyqtSignal
-from .weekly_table import (BLOCK, CATEGORY_LETTER, SECTION, WeeklyTable,
+from .weekly_table import (BLOCK, SECTION, WeeklyTable,
                            split_cell)
 
 TIME_COLUMN = 0

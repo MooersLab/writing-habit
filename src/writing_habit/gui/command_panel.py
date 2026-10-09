@@ -15,7 +15,7 @@ from typing import Dict, Optional
 from pathlib import Path
 
 from . import argspec, forms, settings
-from .qt import Qt, QtWidgets, fixed_font, pyqtSignal
+from .qt import QtWidgets, fixed_font, pyqtSignal
 
 
 class CommandPanel(QtWidgets.QWidget):

@@ -119,11 +119,6 @@ def _pct(value: int, whole: int) -> int:
     return int(math.floor(0.5 + (100.0 * value) / whole))
 
 
-def _fmt2(value) -> str:
-    """Format an adherence VALUE, or ``n/a`` when None."""
-    return "n/a" if value is None else f"{value:.2f}"
-
-
 def _ratio(actual: int, planned: int) -> str:
     """Format ACTUAL over PLANNED to two places, or ``n/a`` when PLANNED is zero.
 

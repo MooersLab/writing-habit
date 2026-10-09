@@ -18,7 +18,7 @@ import datetime as _dt
 from typing import Optional
 
 from .argspec import OptionSpec
-from .qt import Qt, QtCore, QtWidgets
+from .qt import QtCore, QtWidgets
 
 #: Flags whose value is a calendar date.
 DATE_FLAGS = {"--week", "--day", "--from", "--to"}
