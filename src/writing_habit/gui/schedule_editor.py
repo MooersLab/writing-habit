@@ -276,6 +276,17 @@ class ScheduleEditor(QtWidgets.QWidget):
             if column < self.legend_model.columnCount():
                 header.setSectionResizeMode(column, mode)
 
+    def _rebuild_views(self) -> None:
+        """Reload the grid and the legend after rows were added or removed.
+
+        Both views cache document row indexes, and an inserted or deleted line
+        shifts every index after it, so both are rebuilt and refitted.
+        """
+        self.model.set_table(self.table)
+        self.legend_model.set_table(self.table)
+        self._fit_columns()
+        self._fit_legend_columns()
+
     # -- opening -----------------------------------------------------------
     def choose(self) -> None:
         start = settings.get("table_dir") or str(Path.home())
@@ -412,10 +423,7 @@ class ScheduleEditor(QtWidgets.QWidget):
             return None
 
         column = max(self.view.currentIndex().column(), 1)
-        self.model.set_table(self.table)
-        self.legend_model.set_table(self.table)     # its row indexes moved
-        self._fit_columns()
-        self._fit_legend_columns()
+        self._rebuild_views()
         grid_row = self.model._rows.index(at)
         self.view.setCurrentIndex(self.model.index(grid_row, column))
         self._update_insert_buttons()
@@ -450,10 +458,7 @@ class ScheduleEditor(QtWidgets.QWidget):
         at = self.table.move_block(near, up)
 
         column = self.view.currentIndex().column()
-        self.model.set_table(self.table)
-        self.legend_model.set_table(self.table)
-        self._fit_columns()
-        self._fit_legend_columns()
+        self._rebuild_views()
         grid_row = self.model._rows.index(at)
         self.view.setCurrentIndex(self.model.index(grid_row, max(column, 0)))
         self._on_current_changed()
@@ -506,10 +511,7 @@ class ScheduleEditor(QtWidgets.QWidget):
         section = row.section
         self.table.remove_block(near)
 
-        self.model.set_table(self.table)
-        self.legend_model.set_table(self.table)     # its row indexes moved
-        self._fit_columns()
-        self._fit_legend_columns()
+        self._rebuild_views()
         count = self.model.rowCount()
         if count:
             self.view.setCurrentIndex(
@@ -711,10 +713,7 @@ class ScheduleEditor(QtWidgets.QWidget):
                 QtWidgets.QMessageBox.No)
             delete_sections = answer == QtWidgets.QMessageBox.Yes
         removed = self.table.remove_section_rows() if delete_sections else 0
-        self.model.set_table(self.table)
-        self.legend_model.set_table(self.table)
-        self._fit_columns()
-        self._fit_legend_columns()
+        self._rebuild_views()
         self._update_insert_buttons()
         self.logged.emit(f"Moved the activity into {changed} cell(s)"
                          + (f" and deleted {removed} section row(s)" if removed else ""))
