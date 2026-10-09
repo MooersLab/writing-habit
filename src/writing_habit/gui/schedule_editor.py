@@ -20,11 +20,20 @@ from pathlib import Path
 from typing import Optional
 
 from . import external_editor, settings
-from .legend_model import (CODE, DESCRIPTION, LegendModel, RISK,
-                           RISK_CHOICES, RiskDelegate)
+from .legend_model import (ACTIVITY, ACTIVITY_CHOICES, ActivityDelegate, CODE,
+                           DESCRIPTION, LegendModel, RISK, RISK_CHOICES,
+                           RiskDelegate)
 from .qt import Qt, QtGui, QtWidgets, pyqtSignal
 from .table_model import TIME_COLUMN, CodeDelegate, WeeklyTableModel
-from .weekly_table import BLOCK, PROJECT_CODES, WeeklyTable
+from .weekly_table import BLOCK, PROJECT_CODES, SECTION, WeeklyTable
+
+#: The template styles offered by New from template, as (label, style).
+TEMPLATE_CHOICES = [
+    ("Standard day (nine blocks)", "standard"),
+    ("Morning writer (three blocks)", "morning"),
+    ("Evening writer (three blocks)", "evening"),
+    ("Split day (three blocks)", "split"),
+]
 
 
 def _plain(read_only: bool = True) -> QtWidgets.QPlainTextEdit:
@@ -95,6 +104,17 @@ class ScheduleEditor(QtWidgets.QWidget):
             "Delete the selected time block. A section header and the legend "
             "stay.")
         self.delete_row_button.clicked.connect(lambda: self.delete_row())
+        self.more_button = QtWidgets.QToolButton()
+        self.more_button.setText("More")
+        self.more_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        more_menu = QtWidgets.QMenu(self.more_button)
+        self.activities_action = more_menu.addAction("Move activities into cells")
+        self.activities_action.setToolTip(
+            "Write each section's activity letter into the cells under it, "
+            "such as gA, so the section rows are no longer needed")
+        self.activities_action.triggered.connect(
+            lambda: self.move_activities_into_cells())
+        self.more_button.setMenu(more_menu)
         self.path_label = QtWidgets.QLabel("No table open")
         # A long path would otherwise set the window's minimum width.
         self.path_label.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
@@ -103,7 +123,8 @@ class ScheduleEditor(QtWidgets.QWidget):
                        self.save_as_button, self.rename_button, self.reload_button,
                        self.external_button, self.insert_above_button,
                        self.insert_below_button, self.move_up_button,
-                       self.move_down_button, self.delete_row_button):
+                       self.move_down_button, self.delete_row_button,
+                       self.more_button):
             bar.addWidget(button)
         bar.addWidget(self.path_label, 1)
         outer.addLayout(bar)
@@ -111,7 +132,8 @@ class ScheduleEditor(QtWidgets.QWidget):
                        self.rename_button, self.reload_button,
                        self.external_button, self.insert_above_button,
                        self.insert_below_button, self.move_up_button,
-                       self.move_down_button, self.delete_row_button):
+                       self.move_down_button, self.delete_row_button,
+                       self.more_button):
             button.setEnabled(False)
 
         #: Starts the external editor.  A test replaces it to run nothing.
@@ -120,7 +142,9 @@ class ScheduleEditor(QtWidgets.QWidget):
         splitter = QtWidgets.QSplitter(Qt.Horizontal)
         self.view = QtWidgets.QTableView()
         self.view.setModel(self.model)
-        self.view.setAlternatingRowColors(True)
+        # Rows are shaded by start-time group in the model rather than one by
+        # one, so the choices for one start time read as a set.
+        self.view.setAlternatingRowColors(False)
         self.view.horizontalHeader().setStretchLastSection(False)
         self.view.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)
         self.view.setItemDelegate(CodeDelegate(self.view))
@@ -153,6 +177,8 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.legend_view = QtWidgets.QTableView()
         self.legend_view.setModel(self.legend_model)
         self.legend_view.setItemDelegateForColumn(RISK, RiskDelegate(self.legend_view))
+        self.legend_view.setItemDelegateForColumn(
+            ACTIVITY, ActivityDelegate(self.legend_view))
         self.legend_view.horizontalHeader().setStretchLastSection(False)
         self._fit_legend_columns()
 
@@ -212,7 +238,9 @@ class ScheduleEditor(QtWidgets.QWidget):
             "file; the rest is left alone. Select a time to tint in yellow the "
             "rows that do not overlap it. Alt+Up and Alt+Down move the "
             "selected block. A code is one letter, or two letters such as AB "
-            "once A to Z are taken.</i>")
+            "once A to Z are taken. A lowercase g, e, or s before a code, as in "
+            "eA, sets the activity of that block; otherwise the project's "
+            "default activity or the section decides.</i>")
         self.note.setWordWrap(True)
         outer.addWidget(self.note)
 
@@ -242,7 +270,8 @@ class ScheduleEditor(QtWidgets.QWidget):
         header.setStretchLastSection(False)
         modes = {CODE: QtWidgets.QHeaderView.ResizeToContents,
                  DESCRIPTION: QtWidgets.QHeaderView.Stretch,
-                 RISK: QtWidgets.QHeaderView.ResizeToContents}
+                 RISK: QtWidgets.QHeaderView.ResizeToContents,
+                 ACTIVITY: QtWidgets.QHeaderView.ResizeToContents}
         for column, mode in modes.items():
             if column < self.legend_model.columnCount():
                 header.setSectionResizeMode(column, mode)
@@ -269,7 +298,8 @@ class ScheduleEditor(QtWidgets.QWidget):
         settings.put("table", str(Path(path)))
         self._fit_columns()
         for button in (self.save_button, self.save_as_button, self.reload_button,
-                       self.project_above_button, self.project_below_button):
+                       self.project_above_button, self.project_below_button,
+                       self.more_button):
             button.setEnabled(True)
         self._update_insert_buttons()
         self.refresh()
@@ -549,9 +579,15 @@ class ScheduleEditor(QtWidgets.QWidget):
         description_edit.setPlaceholderText("e.g. 0201dusp1, Sept 25")
         risk_box = QtWidgets.QComboBox()
         risk_box.addItems([label for label, _class in RISK_CHOICES])
+        activity_box = QtWidgets.QComboBox()
+        activity_box.addItems([label for label, _a in ACTIVITY_CHOICES])
+        activity_box.setToolTip(
+            "The activity a bare code takes, so email can always count as "
+            "support. A letter in a cell, such as eA, still wins.")
         form.addRow("Code", code_edit)
         form.addRow("Description", description_edit)
         form.addRow("Risk tag", risk_box)
+        form.addRow("Default activity", activity_box)
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         buttons.accepted.connect(dialog.accept)
@@ -561,11 +597,13 @@ class ScheduleEditor(QtWidgets.QWidget):
         if dialog.exec_() != QtWidgets.QDialog.Accepted:
             return None
         risk = dict(RISK_CHOICES).get(risk_box.currentText())
-        return code_edit.text(), description_edit.text(), risk
+        activity = dict(ACTIVITY_CHOICES).get(activity_box.currentText())
+        return code_edit.text(), description_edit.text(), risk, activity
 
     def insert_project(self, above: bool, code: Optional[str] = None,
                        description: str = "",
-                       risk: Optional[str] = None) -> Optional[int]:
+                       risk: Optional[str] = None,
+                       activity: Optional[str] = None) -> Optional[int]:
         """Add a legend entry beside the selected one.  Return its document row.
 
         With no entry selected, a project inserted below goes to the end of the
@@ -583,9 +621,11 @@ class ScheduleEditor(QtWidgets.QWidget):
             answer = self._ask_project(self.table.next_free_code())
             if answer is None:
                 return None
-            code, description, risk = answer
+            code, description, risk, *rest = answer
+            activity = rest[0] if rest else None
         try:
-            at = self.table.insert_legend(near, above, code, description, risk)
+            at = self.table.insert_legend(near, above, code, description, risk,
+                                          activity)
         except ValueError as exc:
             self.logged.emit(f"Cannot insert a project: {exc}")
             QtWidgets.QMessageBox.information(self, "Insert a project", str(exc))
@@ -645,6 +685,41 @@ class ScheduleEditor(QtWidgets.QWidget):
                          + ("up" if up else "down") + " in the legend")
         self.on_edit()
         return at
+
+    # -- moving the activity into the cells --------------------------------
+    def move_activities_into_cells(self, delete_sections: Optional[bool] = None
+                                   ) -> Optional[int]:
+        """Write each section's activity letter into the bare cells under it.
+
+        A cell such as ``A`` under Rewriting becomes ``eA``. A cell that has a
+        letter already, or whose project names a default activity, is left as
+        it is. The writer is then asked whether to delete the section rows,
+        which no longer decide anything. ``delete_sections`` answers that
+        question in advance. Return the number of cells changed, or ``None``
+        when there is no table.
+        """
+        if self.table is None:
+            return None
+        changed = self.table.move_activities_into_cells()
+        has_sections = any(row.kind == SECTION for row in self.table.rows)
+        if delete_sections is None and has_sections:
+            answer = QtWidgets.QMessageBox.question(
+                self, "Move activities into cells",
+                f"{changed} cell(s) now carry their activity letter.\n\n"
+                "Delete the section rows too? Every block keeps its activity.",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                QtWidgets.QMessageBox.No)
+            delete_sections = answer == QtWidgets.QMessageBox.Yes
+        removed = self.table.remove_section_rows() if delete_sections else 0
+        self.model.set_table(self.table)
+        self.legend_model.set_table(self.table)
+        self._fit_columns()
+        self._fit_legend_columns()
+        self._update_insert_buttons()
+        self.logged.emit(f"Moved the activity into {changed} cell(s)"
+                         + (f" and deleted {removed} section row(s)" if removed else ""))
+        self.on_edit()
+        return changed
 
     # -- the external editor -----------------------------------------------
     def _ask_save_before_editing(self) -> str:
@@ -759,12 +834,16 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.saved.emit(path)
         return path
 
-    def scaffold(self, projects: Optional[int] = None) -> None:
+    def scaffold(self, projects: Optional[int] = None,
+                 style: Optional[str] = None) -> None:
         """Start a blank table for N projects, using the scheduler's own scaffold.
 
         The scheduler's scaffold stops at 26 projects, one per letter. Beyond
         that the legend is extended here with the two-letter codes ``AA``,
-        ``AB``, and so on, up to the 702 codes there are.
+        ``AB``, and so on, up to the 702 codes there are. ``style`` is
+        ``standard`` or one of the three-block starter days ``morning``,
+        ``evening``, and ``split``, and the window asks for it when the
+        project count was asked for too.
         """
         from writing_schedule.template import template_string
 
@@ -774,21 +853,38 @@ class ScheduleEditor(QtWidgets.QWidget):
                 len(PROJECT_CODES))
             if not accepted:
                 return
+            if style is None:
+                labels = [label for label, _style in TEMPLATE_CHOICES]
+                label, accepted = QtWidgets.QInputDialog.getItem(
+                    self, "New weekly table", "Shape of the day", labels, 0, False)
+                if not accepted:
+                    return
+                style = dict(TEMPLATE_CHOICES)[label]
+        style = style or "standard"
         projects = max(1, min(int(projects), len(PROJECT_CODES)))
-        self.table = WeeklyTable(template_string(min(projects, 26)))
+        try:
+            text = template_string(min(projects, 26), style)
+        except TypeError:                   # writing-schedule older than 0.4
+            if style != "standard":
+                self.logged.emit("Starter days need writing-schedule 0.4 or newer")
+                return
+            text = template_string(min(projects, 26))
+        self.table = WeeklyTable(text)
         for _extra in range(projects - len(self.table.legend())):
             self.table.add_legend(self.table.next_free_code())
         self.model.set_table(self.table)
         self.legend_model.set_table(self.table)
         self.table.dirty = True
         for button in (self.save_button, self.save_as_button,
-                       self.project_above_button, self.project_below_button):
+                       self.project_above_button, self.project_below_button,
+                       self.more_button):
             button.setEnabled(True)
         self.reload_button.setEnabled(False)
         self._update_insert_buttons()
         self._fit_columns()
         self.refresh()
-        self.logged.emit(f"Scaffolded a blank table for {projects} project(s)")
+        self.logged.emit(f"Scaffolded a blank table for {projects} project(s)"
+                         + ("" if style == "standard" else f", {style} day"))
 
     # -- readings ----------------------------------------------------------
     def refresh(self) -> None:
@@ -855,6 +951,13 @@ class ScheduleEditor(QtWidgets.QWidget):
             lines.append("")
         grand = sum(totals["day"].values())
         lines.append(f"Week total   {grand} min  ({grand / 60:.1f} h)")
+        fallbacks = self.table.activity_fallbacks()
+        if fallbacks:
+            lines += ["", "Blocks with no activity letter, no project default, "
+                          "and no section, counted as generative:"]
+            days = {offset: label for _i, offset, label in self.table.columns}
+            lines += [f"  {days.get(b.offset, b.offset)} {b.start}-{b.end} {b.letter}"
+                      for b in fallbacks]
         unknown = self.table.unknown_sections()
         if unknown:
             lines += ["", "Sections with no activity category, counted as "
@@ -883,6 +986,17 @@ class ScheduleEditor(QtWidgets.QWidget):
                           "first and drop the rest:"]
             for code, descriptions in duplicates.items():
                 lines.append(f"  {code}: " + " | ".join(descriptions))
+
+        overrides = self.table.prefix_overrides()
+        if overrides:
+            lines += ["", "Cells whose activity letter overrides their section:"]
+            for b in overrides:
+                lines.append(f"  {b.start}-{b.end} {self.table.cell(b.row, b.column)} "
+                             f"under {b.section} counts as {b.category}")
+        defaults = self.table.legend_defaults()
+        if defaults:
+            lines += ["", "Default activities: " + ", ".join(
+                f"{code} {activity}" for code, activity in defaults.items())]
 
         stray = self.table.stray_risk_tags()
         if stray:

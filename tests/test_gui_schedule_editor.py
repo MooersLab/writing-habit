@@ -97,10 +97,10 @@ def test_a_code_cell_explains_itself_through_the_legend(model):
             for r in range(model.rowCount())}
     row = rows["13:15-14:45"]
     tip = model.data(model.index(row, 1), Qt.ToolTipRole)
-    assert tip == "E: email\nRisk: not tagged"
+    assert tip == "E: email\nRisk: not tagged\nActivity: support (from the section)"
     generative = rows["04:00-05:30"]
     assert model.data(model.index(generative, 1), Qt.ToolTipRole) == \
-        "A: DNPH1 docking\nRisk: safe"
+        "A: DNPH1 docking\nRisk: safe\nActivity: generative (from the section)"
 
 
 def test_a_block_cell_is_editable_and_a_section_row_is_not(model):
@@ -228,7 +228,9 @@ def test_the_cell_editor_offers_the_legend_codes_and_a_blank(app, model):
     delegate = CodeDelegate()
     editor = delegate.createEditor(None, None, model.index(1, 1))
     try:
-        assert [editor.itemText(i) for i in range(editor.count())] == model.codes()
+        box = editor.box
+        assert [box.itemText(i) for i in range(box.count())] == model.codes()
+        assert sorted(editor.buttons) == ["e", "g", "s"]
     finally:
         editor.deleteLater()
 

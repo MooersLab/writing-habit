@@ -57,7 +57,8 @@ def test_split_due_date(description, expected):
 def test_project_info_reads_the_key():
     table = WeeklyTable(TABLE)
     assert table.project_info("a") == {
-        "code": "A", "name": "1003molGraphicsR01", "due": "Sept 25", "risk": "safe"}
+        "code": "A", "name": "1003molGraphicsR01", "due": "Sept 25", "risk": "safe",
+        "activity": None}
     assert table.project_info("W")["risk"] == "risky"
     assert table.project_info("E")["risk"] is None
     assert table.project_info("Z") is None
@@ -78,21 +79,26 @@ def _tip(model, day_column, row=1):
 
 
 def test_balloon_gives_name_due_date_and_risk(model):
-    assert _tip(model, 1) == "A: 1003molGraphicsR01\nDue: Sept 25\nRisk: safe"
-    assert _tip(model, 2) == "C: 1452PHFSboXt\nDue: September 22\nRisk: safe"
+    assert _tip(model, 1) == ("A: 1003molGraphicsR01\nDue: Sept 25\nRisk: safe"
+                              "\nActivity: generative (from the section)")
+    assert _tip(model, 2) == ("C: 1452PHFSboXt\nDue: September 22\nRisk: safe"
+                              "\nActivity: generative (from the section)")
 
 
 def test_balloon_omits_a_missing_due_date(model):
-    assert _tip(model, 3) == "F: 0382CCinJN, 4072UsersMeeting2026\nRisk: safe"
-    assert _tip(model, 3, row=2) == "E: email\nRisk: not tagged"
+    assert _tip(model, 3) == ("F: 0382CCinJN, 4072UsersMeeting2026\nRisk: safe"
+                              "\nActivity: generative (from the section)")
+    assert _tip(model, 3, row=2) == ("E: email\nRisk: not tagged"
+                                     "\nActivity: generative (from the section)")
 
 
 def test_balloon_shows_risky(model):
-    assert _tip(model, 2, row=2) == "W: new idea\nDue: 2026-10-01\nRisk: risky"
+    assert _tip(model, 2, row=2) == ("W: new idea\nDue: 2026-10-01\nRisk: risky"
+                                     "\nActivity: generative (from the section)")
 
 
 def test_balloon_flags_a_code_missing_from_the_key(model):
-    assert _tip(model, 4) == "Z: not in the key"
+    assert _tip(model, 4) == "Z: not in the key\nActivity: generative (from the section)"
 
 
 def test_blank_cell_and_time_column_have_no_balloon(model):

@@ -26,6 +26,12 @@ activity runs, where each run opens with an activity letter and is followed by
 one project letter per block. Order the blocks within a day by time of day,
 generative first by convention, then editing, then support.
 
+The activity letters are the same three letters that a day cell of the weekly
+table may carry before its code, as in `gA` or `eA`. The canonical name spells
+each block in time order with its resolved activity, so an evening writer who
+drafts last gets a code such as `sEeBgA`. The grammar has always allowed any
+order of activities within a day.
+
 ![The code 4gAAeAsA-gWW read token by token into a week of blocks.](imgs/schedule-code.png)
 
 The figure decodes `4gAAeAsA-gWW`. The leading `4` sets Monday through Thursday

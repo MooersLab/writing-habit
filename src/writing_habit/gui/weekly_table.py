@@ -44,6 +44,42 @@ RISK_TO_TAG = {"safe": "safe", "speculative": "risky"}
 #: The letter each category contributes to a schedule code.
 CATEGORY_LETTER = {"generative": "g", "editing": "e", "support": "s"}
 
+#: The category each activity letter of a day cell names, as in ``gA``.
+LETTER_CATEGORY = {letter: category for category, letter in CATEGORY_LETTER.items()}
+
+#: The section name the scheduler gives each category when a cell or a legend
+#: default names it, so the editor's events match the scheduler's.
+CATEGORY_SECTION = {"generative": "Generative", "editing": "Rewriting",
+                    "support": "Supporting"}
+
+#: A day cell with an activity letter before the code. The letter counts only
+#: when it is lowercase and the code starts with a capital, so a cell typed
+#: all in lowercase, such as ``ga``, is the code GA. This is the rule of
+#: ``writing_schedule.parser.split_cell``, and a test holds the two together.
+CELL_RE = re.compile(r"^([ges])([A-Z][A-Z0-9]{0,3})$")
+
+#: Where the activity of a block came from, in the order the rule tries them.
+ACTIVITY_SOURCES = ("cell", "legend", "section", "none")
+
+
+def split_cell(text: str) -> Tuple[Optional[str], str]:
+    """Return ``(activity letter or None, CODE)`` for a day cell."""
+    text = (text or "").strip()
+    match = CELL_RE.match(text)
+    if match:
+        return match.group(1), match.group(2)
+    return None, text.upper()
+
+
+def normalize_cell(text: str) -> str:
+    """Return the text a cell should hold for what the writer typed.
+
+    A valid activity letter is kept and the code is raised to capitals, so
+    ``gA`` stays ``gA`` and ``a`` becomes ``A``.
+    """
+    activity, code = split_cell(text)
+    return (activity or "") + code if code else ""
+
 #: A due date at the end of a legend description, as in
 #: ``A: 1003molGraphicsR01, Sept 25 :safe:`` or ``D: 0201dusp1 September 18``.
 #: A month name or any word starting with a month's first letters (so a
@@ -126,25 +162,73 @@ class Row:
 
 @dataclass
 class Block:
-    """One filled cell of a block row, which is one planned writing block."""
+    """One filled cell of a block row, which is one planned writing block.
+
+    The activity comes from the first of these that is present: an activity
+    letter in the cell, a default activity on the code's legend entry, the
+    section header above the row, and finally the generative default. The
+    scheduler applies the same rule, so the editor and the tools agree.
+    """
 
     offset: int          # 0 is Monday
     start: str
     end: str
-    letter: str
+    letter: str          # the code, without any activity letter
     section: str
     row: int             # index into ``WeeklyTable.rows``
     column: int          # index into the row's cells
+    cell_activity: Optional[str] = None     # category named by the cell
+    legend_activity: Optional[str] = None   # category named by the legend
+    headed: bool = True  # whether a section header precedes the row
 
     @property
     def category(self) -> str:
+        if self.cell_activity:
+            return self.cell_activity
+        if self.legend_activity:
+            return self.legend_activity
         return SECTION_TO_CATEGORY.get(
             self.section.strip().lower(), DEFAULT_CATEGORY)
+
+    @property
+    def activity_source(self) -> str:
+        """Return ``cell``, ``legend``, ``section``, or ``none``."""
+        if self.cell_activity:
+            return "cell"
+        if self.legend_activity:
+            return "legend"
+        return "section" if self.headed else "none"
+
+    @property
+    def event_section(self) -> str:
+        """Return the section name the scheduler gives this block."""
+        if self.activity_source in ("cell", "legend"):
+            return CATEGORY_SECTION[self.category]
+        return self.section
 
     @property
     def minutes(self) -> int:
         from writing_schedule.parser import minutes_between
         return minutes_between(self.start, self.end)
+
+
+#: Passed as ``activity`` to keep the legend entry's current default activity.
+KEEP = object()
+
+
+def legend_text(code: str, description: str, risk: Optional[str],
+                activity: Optional[str] = None) -> str:
+    """Return the first cell of a legend row.
+
+    The default activity is written before the risk tag, as in
+    ``E: email @support :safe:``, because both readers expect the risk tag at
+    the end of the cell.
+    """
+    tag = RISK_TO_TAG.get(risk or "")
+    text = f"{code}: {description.strip()}".rstrip()
+    if activity:
+        text += f" @{activity}"
+    return text + (f" :{tag}:" if tag else "")
 
 
 class WeeklyTable:
@@ -274,7 +358,7 @@ class WeeklyTable:
         row = self.rows[row_index]
         if row.kind != BLOCK:
             raise ValueError("only a time-block row holds project codes")
-        value = value.strip().upper()
+        value = normalize_cell(value)
         while len(row.cells) <= column_index:
             row.cells.append("")
         if row.cells[column_index] == value:
@@ -285,15 +369,25 @@ class WeeklyTable:
         return True
 
     def set_legend(self, row_index: int, code: str, description: str,
-                   risk: Optional[str]) -> bool:
-        """Rewrite one legend row.  ``risk`` is a class name, or ``None``."""
+                   risk: Optional[str], activity=KEEP) -> bool:
+        """Rewrite one legend row.  ``risk`` is a class name, or ``None``.
+
+        ``activity`` is a default activity (``generative``, ``editing``, or
+        ``support``), ``None`` to remove it, or :data:`KEEP` to keep the one
+        the row already names, so an edit of the description never drops it.
+        """
         row = self.rows[row_index]
         if row.kind != LEGEND:
             raise ValueError("not a legend row")
+        if activity is KEEP:
+            activity = namemod.legend_activity(row.cells[0] if row.cells else "")
         code = code.strip().upper()
         description = description.strip()
         tag = RISK_TO_TAG.get(risk or "")
-        text = f"{code}: {description}" + (f" :{tag}:" if tag else "")
+        if activity:
+            text = legend_text(code, description, risk, activity)
+        else:
+            text = f"{code}: {description}" + (f" :{tag}:" if tag else "")
         if row.cells and row.cells[0] == text:
             return False
         if not row.cells:
@@ -306,7 +400,8 @@ class WeeklyTable:
         return True
 
     def add_legend(self, code: str, description: str = "",
-                   risk: Optional[str] = None) -> int:
+                   risk: Optional[str] = None,
+                   activity: Optional[str] = None) -> int:
         """Add a legend row for ``code`` and return its index.
 
         The new line copies the shape of the last legend row, so the column
@@ -314,8 +409,7 @@ class WeeklyTable:
         as wide as its header.
         """
         code = code.strip().upper()
-        tag = RISK_TO_TAG.get(risk or "")
-        text = f"{code}: {description}".rstrip() + (f" :{tag}:" if tag else "")
+        text = legend_text(code, description, risk, activity)
         existing = self.legend_rows()
         if existing:
             model = self.rows[existing[-1]]
@@ -350,7 +444,8 @@ class WeeklyTable:
         return ""
 
     def insert_legend(self, near: Optional[int], above: bool, code: str,
-                      description: str = "", risk: Optional[str] = None) -> int:
+                      description: str = "", risk: Optional[str] = None,
+                      activity: Optional[str] = None) -> int:
         """Insert a legend row beside legend row ``near`` and return its index.
 
         ``near`` of ``None`` puts the row at the end of the legend, or starts a
@@ -372,11 +467,9 @@ class WeeklyTable:
         if near is not None and near not in existing:
             raise ValueError("not a legend row")
         if near is None:
-            at = self.add_legend(code, description, risk)
+            at = self.add_legend(code, description, risk, activity)
         else:
-            tag = RISK_TO_TAG.get(risk or "")
-            text = f"{code}: {description.strip()}".rstrip() + (
-                f" :{tag}:" if tag else "")
+            text = legend_text(code, description, risk, activity)
             model = self.rows[near]
             cells = [""] * max(len(model.cells), 1)
             cells[0] = text
@@ -404,8 +497,8 @@ class WeeklyTable:
         self.dirty = True
 
     def cells_using(self, code: str) -> int:
-        """Return how many grid cells hold ``code``."""
-        code = code.strip().upper()
+        """Return how many grid cells hold ``code``, with or without a letter."""
+        code = split_cell(code)[1]
         return sum(1 for block in self.blocks() if block.letter == code)
 
     # -- deleting time-block rows ------------------------------------------
@@ -787,23 +880,106 @@ class WeeklyTable:
 
     def blocks(self) -> List[Block]:
         """Return every filled block, in file order."""
+        defaults = self.legend_defaults()
         out: List[Block] = []
+        headed = False
         for row_index, row in enumerate(self.rows):
+            if row.kind == SECTION:
+                headed = True
             if row.kind != BLOCK:
                 continue
             start, end = row.parsed
             for column_index, offset, _label in self.columns:
                 text = self.cell(row_index, column_index)
                 if text:
-                    out.append(Block(offset, start, end, text.upper(),
-                                     row.section, row_index, column_index))
+                    letter, code = split_cell(text)
+                    out.append(Block(offset, start, end, code,
+                                     row.section, row_index, column_index,
+                                     cell_activity=LETTER_CATEGORY.get(letter or ""),
+                                     legend_activity=defaults.get(code),
+                                     headed=headed))
         return out
 
     def events(self):
         """Return the blocks as scheduler ``Event`` objects, for its overlap check."""
         from writing_schedule.model import Event
-        return [Event(section=b.section, offset=b.offset, start=b.start,
-                      end=b.end, letter=b.letter) for b in self.blocks()]
+        return [Event(section=b.event_section, offset=b.offset, start=b.start,
+                      end=b.end, letter=b.letter,
+                      activity=CATEGORY_LETTER.get(b.cell_activity or ""))
+                for b in self.blocks()]
+
+    def legend_defaults(self) -> Dict[str, str]:
+        """Return ``{code: activity}`` for every legend entry that names one.
+
+        A code defined twice takes the activity of its first definition, as
+        the readers keep the first definition of everything else.
+        """
+        out: Dict[str, str] = {}
+        seen: set = set()
+        for row in self.rows:
+            if row.kind != LEGEND:
+                continue
+            code = row.parsed[0]
+            if code in seen:
+                continue
+            seen.add(code)
+            activity = namemod.legend_activity(row.cells[0] if row.cells else "")
+            if activity:
+                out[code] = activity
+        return out
+
+    def activity_fallbacks(self) -> List[Block]:
+        """Return the blocks whose activity fell through to the default.
+
+        Such a block has no activity letter, no legend default, and no section
+        header above it, so the plan importer counts it as generative.
+        """
+        return [b for b in self.blocks() if b.activity_source == "none"]
+
+    def prefix_overrides(self) -> List[Block]:
+        """Return the blocks whose activity letter differs from their section."""
+        out = []
+        for b in self.blocks():
+            if b.activity_source != "cell" or not b.headed:
+                continue
+            section = SECTION_TO_CATEGORY.get(b.section.strip().lower(),
+                                              DEFAULT_CATEGORY)
+            if section != b.cell_activity:
+                out.append(b)
+        return out
+
+    # -- moving the activity into the cells --------------------------------
+    def move_activities_into_cells(self) -> int:
+        """Write the section's activity letter into every bare cell under it.
+
+        Only a cell whose activity comes from its section header gains a
+        letter. A cell that already has one keeps it, and a cell whose project
+        names a default activity in the legend is left bare, because that
+        default still applies once the headers are gone. Return the number of
+        cells changed. Each changed cell rewrites only its own line.
+        """
+        changed = 0
+        for block in self.blocks():
+            if block.activity_source != "section":
+                continue
+            value = CATEGORY_LETTER[block.category] + block.letter
+            if self.set_cell(block.row, block.column, value):
+                changed += 1
+        return changed
+
+    def remove_section_rows(self) -> int:
+        """Delete every section header row and return how many went.
+
+        Call this after :meth:`move_activities_into_cells`, so no block loses
+        its activity. The blocks then belong to the default section.
+        """
+        before = len(self.rows)
+        self.rows = [row for row in self.rows if row.kind != SECTION]
+        removed = before - len(self.rows)
+        if removed:
+            self._resection()
+            self.dirty = True
+        return removed
 
     def legend(self) -> Dict[str, Tuple[str, Optional[str]]]:
         """Return ``{code: (description, risk_class)}`` in first-appearance order."""
@@ -820,14 +996,15 @@ class WeeklyTable:
         This is what a cell explains about itself when the pointer rests on it,
         so a writer can read the grid without looking down at the key.
         """
-        code = code.strip().upper()
+        code = split_cell(code)[1]
         entry = self.legend().get(code)
         if entry is None:
             return None
         description, risk = entry
         name, due = split_due_date(description)
         return {"code": code, "name": name, "due": due,
-                "risk": RISK_LABEL.get(risk or "")}
+                "risk": RISK_LABEL.get(risk or ""),
+                "activity": self.legend_defaults().get(code)}
 
     # -- derived readings --------------------------------------------------
     def overlaps(self):
@@ -841,7 +1018,7 @@ class WeeklyTable:
         identities = conflicting_identities(self.events())
         return {
             (b.row, b.column) for b in self.blocks()
-            if (b.offset, b.start, b.end, b.letter, b.section) in identities
+            if (b.offset, b.start, b.end, b.letter, b.event_section) in identities
         }
 
     def week(self) -> List[List[Tuple[str, str]]]:

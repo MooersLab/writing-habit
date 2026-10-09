@@ -1,0 +1,17 @@
+#+TITLE: An Evening Writer's Week
+
+A week with the activity in each cell rather than in section rows. A
+lowercase g, e, or s before a code names the activity of that block, and
+E carries a default activity in the legend, so its bare cells count as
+support.
+
+| Time <l>    | M  | Tu | W  | Th | F  | Sa |
+|-------------+----+----+----+----+----+----|
+| 12:15-13:00 | sE | E  | sE | E  | E  |    |
+| 17:30-19:00 | eB | eA | eB | eA |    |    |
+| 21:00-23:30 | gA | gB | gA | gB | gW | gA |
+|-------------+----+----+----+----+----+----|
+| A: DNPH1 docking :safe:          |  |  |  |  |  |  |
+| B: DUSP1 radiation :safe:        |  |  |  |  |  |  |
+| E: email @support                |  |  |  |  |  |  |
+| W: 2026words :risky:             |  |  |  |  |  |  |

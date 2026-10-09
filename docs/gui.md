@@ -101,14 +101,21 @@ header row, so a six-day table and a seven-day table both work.
 
 A cell takes a project code from a drop-down of the legend codes. The box is
 editable, so you can type a new code, and the legend gains a blank row for it at
-once. Section rows and the time column refuse edits, because they belong to the
+once. Three small buttons, **g**, **e**, and **s**, sit to the left of the box
+and set the activity of the block, as described in
+[Choosing the activity of each block](#choosing-the-activity-of-each-block). Section rows and the time column refuse edits, because they belong to the
 file rather than to the week. Clicking a time does something else, which
 [Finding the times that do not overlap](#finding-the-times-that-do-not-overlap)
-describes. The legend table below the grid edits the code, the description, and
-the risk tag, which is one of `none`, `safe`, and `risky`. Five buttons above
+describes. The legend table below the grid edits the code, the description, the
+risk tag, which is one of `none`, `safe`, and `risky`, and the default activity,
+which is one of `none`, `generative`, `editing`, and `support`. Five buttons above
 the legend insert a project, move the selected one, or delete it, as described
 below. A project code is a single letter or, once A to Z are taken, two letters
 such as `AB`, so the legend can hold more than 26 projects.
+
+Rows that start at the same time share one shade, and the shade alternates
+between white and light gray from one start time to the next, so the choices
+for a slot, such as 06:15-06:45, 06:15-07:15, and 06:15-08:15, read as a set.
 
 **Every edit rewrites one line of the file.** A value that fits its column keeps
 the table aligned; a longer value widens its own slot and leaves the rest alone,
@@ -121,14 +128,15 @@ Four panels report on the week as you edit it.
 |-------|-----------------|
 | Name | the canonical file name for this grid, the week its code decodes to, and whether the file on disk is named differently |
 | Clashes | the overlapping blocks, with the count in the tab label and the offending cells tinted |
-| Totals | planned minutes by day, by project, and by activity, and any section header that maps to no activity |
-| Legend | every project letter resolved against the legend, unused legend entries, codes defined twice, and risk tags that name no class |
+| Totals | planned minutes by day, by project, and by activity, any section header that maps to no activity, and any block that has no activity at all and so counts as generative |
+| Legend | every project letter resolved against the legend, unused legend entries, codes defined twice, risk tags that name no class, cells whose activity letter overrides their section, and the default activities |
 
 The toolbar holds **Open table**, **New from template**, which asks for a
-project count and calls the scheduler's own scaffold, **Save**, **Save as**,
+project count and the shape of the day and calls the scheduler's own scaffold, **Save**, **Save as**,
 which offers the canonical name, **Rename to canonical**, **Reload**,
 **Open in editor**, **Insert above**, **Insert below**, **Move up**,
-**Move down**, and **Delete row**. The last six are described below. The file name at the end of the toolbar shrinks when the
+**Move down**, **Delete row**, and **More**, whose menu holds
+**Move activities into cells**. The last seven are described below. The file name at the end of the toolbar shrinks when the
 window is narrow, and its tooltip gives the full path.
 
 Renaming is worth its button. The tracker groups weeks by the schedule code
@@ -228,6 +236,54 @@ is one line shorter and otherwise the same. The legend keeps every entry the
 writer typed. A blank entry that the legend added by itself for a code typed
 into a cell is dropped once no cell uses the code, as it is when the cell is
 cleared.
+
+### Choosing the activity of each block
+
+Every block counts toward one writing activity, and the tracker measures
+adherence by activity as well as by project. The activity of a block comes from
+the first of these that is present.
+
+| Source | Written as | Example |
+|--------|------------|---------|
+| A letter in the cell | lowercase `g`, `e`, or `s` before the code | `eA` is editing on A |
+| The project's default | a tag in the legend description | `E: email @support` |
+| The section header | a header row above the block | `Rewriting:` |
+| Nothing at all | | counted as generative |
+
+A letter counts only when it is a lowercase `g`, `e`, or `s` followed by a
+capital, so a cell typed all in lowercase, such as `ga`, is still the code
+`GA`. The scheduler applies the same rule, so the calendar, the dated schedule,
+and the plan importer agree with the grid.
+
+In the cell editor, press **g**, **e**, or **s** to write that letter before
+the code, and press the same button again to clear it. A letter typed into the
+box wins over the buttons. Each filled cell is tinted by its activity, pale blue
+for generative, pale green for editing, and pale lilac for support. A clash
+still shows red and the clear-of-selection tint still shows yellow. The tooltip
+adds a line such as `Activity: editing (from the cell)`.
+
+The **Default activity** column of the legend sets the second rule, so a project
+such as email can count as support wherever it appears without a letter in
+every cell. Editing the description keeps the tag, and choosing `none` removes
+it. The dialog of **Insert project above** and **Insert project below** asks for
+it too.
+
+Letters in the cells make section rows optional. **More**, then
+**Move activities into cells**, writes each section's letter into the bare cells
+under it. A cell that already has a letter keeps it, and a cell whose project
+has a default activity stays bare, because the default still applies. The
+command then offers to delete the section rows. Every block keeps its activity
+either way, and the canonical name does not change.
+
+**New from template** asks for the shape of the day after the project count.
+The standard day has nine blocks in three sections. The three starter days have
+one block of each activity, in the order that suits the writer.
+
+| Starter day | Blocks, in the order of the day |
+|-------------|----------------------------------|
+| Morning writer | generative 05:30-07:30, editing 09:00-10:30, support 13:00-14:00 |
+| Evening writer | support 12:15-13:00, editing 17:30-19:00, generative 21:00-23:30 |
+| Split day | generative 06:00-07:30, support 12:30-13:15, editing 19:30-21:00 |
 
 ### Finding the times that do not overlap
 
@@ -402,6 +458,10 @@ without the extra skips the graphical tests rather than failing them.
 | **Move project up** and **Move project down** are both greyed out | no legend entry is selected; click any cell of a legend row |
 | **Delete row** is greyed out | the selection is a section header, or no cell is selected; click a cell of a time block |
 | **Delete project** is greyed out | no legend entry is selected; click any cell of a legend row |
+| A cell typed as `ga` shows `GA` | a letter counts only before a capital; type `gA`, or press **g** in the cell editor |
+| A block counts toward the wrong activity | its tooltip names the source; a letter in the cell beats the project's default, which beats the section |
+| The Totals panel lists blocks counted as generative | those blocks have no letter, no project default, and no section above them |
+| **New from template** offers no starter days | writing-schedule is older than 0.4; upgrade it |
 | A deleted project comes back as a blank entry | a cell of the grid still uses its code, and a grid edit restored the entry; clear those cells and delete it again |
 | The Name panel says the week has no canonical name | a cell holds a two-letter code such as `AB`; the file name allows only single letters, so give the project a letter or keep the current name |
 

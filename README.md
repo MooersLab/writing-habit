@@ -63,7 +63,7 @@ it. An installation without them is unaffected. See
 
 The Schedule tab edits the weekly block table in place. Every change rewrites
 only the lines it touches, so a saved table differs from the file on disk only
-where you changed it. Eight tools make the table easier to build and check.
+where you changed it. Nine tools make the table easier to build and check.
 
 #### Inserting a time block
 
@@ -181,6 +181,40 @@ name, because a file name gives one capital letter to one block. The scheduler,
 the plan importer, the totals, and the tooltips all read the two-letter code
 whole. Only **Rename to canonical** and the name offered by **Save as** are
 unavailable, and the Name panel says why.
+
+#### Choosing the activity of each block
+
+Each block counts toward one writing activity, namely generative writing,
+editing, or support writing. The activity of a block comes from the first of
+these that is present.
+
+1. A lowercase letter before the code in the cell. `gA` is generative writing
+   on A, `eA` is editing on A, and `sE` is support work on E.
+2. A default activity on the project's legend entry, such as `E: email
+   @support`, so every bare `E` counts as support.
+3. The section header above the row, as in the standard template.
+4. Generative, for a block with none of these.
+
+The cell editor shows three small buttons, **g**, **e**, and **s**, beside the
+box of codes. Press one to set the activity of that block, or press it again to
+let the project or the section decide. Typing `eA` into the box works too. Each
+filled cell is tinted pale blue, green, or lilac by its activity, and its
+tooltip says which activity it counts toward and where that came from. The
+legend has a **Default activity** column for the second rule.
+
+With letters in the cells, a table needs no section rows at all, and one time
+slot can hold different activities on different days. **More**, at the end of
+the toolbar, offers **Move activities into cells**. It writes each section's
+letter into the bare cells under it and then offers to delete the section rows,
+so every block keeps its activity. **New from template** now also asks for the
+shape of the day, either the standard nine blocks or a three-block starter day
+for a morning writer, an evening writer, or a split day. See
+`examples/evening-week.org` for a week written this way.
+
+The plan importer stores the resolved activity of every block, so the
+adherence views, the dashboards, and the file-name code all follow it without
+any other change. The canonical name spells each block's activity, so the
+evening example is named `sEeBgA-sEeAgB-sEeBgA-sEeAgB-sEgW-gA.org`.
 
 #### Opening the table in your own editor
 

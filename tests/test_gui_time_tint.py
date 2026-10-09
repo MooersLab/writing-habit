@@ -127,7 +127,8 @@ def test_selecting_a_time_tints_the_clear_times_yellow(editor):
               for r in editor.model.clear_of_selection()}
     assert tinted == {"00:30-02:00", "13:00-14:00", "23:00-01:00"}
     assert _background(editor, _grid_row(editor, "13:00-14:00")) == CLEAR_COLOR
-    assert _background(editor, _grid_row(editor, "05:30-07:00")) is None
+    # An overlapping row is not yellow. It may carry its start-time shade.
+    assert _background(editor, _grid_row(editor, "05:30-07:00")) != CLEAR_COLOR
 
 
 def test_the_whole_row_is_tinted(editor):

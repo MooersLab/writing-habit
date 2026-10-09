@@ -36,6 +36,33 @@ _RISK = re.compile(
 # so a legacy support tag is stripped and names nothing.
 TAG_TO_RISK = {"safe": "safe", "risky": "speculative"}
 
+# A default activity in a legend description, as in "E: email @support". The
+# scheduler reads the same tag, so a bare code in a cell takes this activity
+# when the cell carries no activity letter of its own.
+_ACTIVITY = re.compile(r"(?:^|\s)@(generative|editing|support)\b", re.IGNORECASE)
+
+
+def split_legend_activity(desc: str):
+    """Return ``(description without the tag, activity or None)``.
+
+    The tag is a word such as ``@support`` anywhere in the description. Only
+    the first tag counts, and the activity is returned in lowercase, so it is
+    one of ``generative``, ``editing``, and ``support``.
+    """
+    m = _ACTIVITY.search(desc or "")
+    if not m:
+        return desc, None
+    rest = (desc[:m.start()] + desc[m.end():]).strip()
+    return re.sub(r"[ \t]{2,}", " ", rest), m.group(1).lower()
+
+
+def legend_activity(cell: str):
+    """Return the default activity named in a legend cell, or ``None``."""
+    m = _LEGEND.match((cell or "").strip())
+    if not m:
+        return None
+    return split_legend_activity(m.group(2))[1]
+
 
 def decode(code: str):
     """Return a list of (day_name, [(activity, project), ...]) for the week."""
@@ -180,7 +207,9 @@ def parse_legend_cell(cell: str):
     the ``:safe:`` or the ``(safe)`` form is stripped from the description. Two
     tags name a class, namely ``safe`` and ``risky``, and ``risky`` names the
     class the database calls ``speculative``. A legacy ``support`` tag is
-    stripped and names nothing, because support is an activity.
+    stripped and names nothing, because support is an activity. A default
+    activity tag such as ``@support`` is stripped too; read it with
+    :func:`legend_activity`.
 
     Callers that hold the table in memory, such as the graphical editor, use
     this rather than re-implementing the pattern, so one rule governs both.
@@ -189,6 +218,9 @@ def parse_legend_cell(cell: str):
     if not m:
         return None
     code, desc = m.group(1), m.group(2)
+    # The activity tag goes first, so a risk tag written after it, as in
+    # "email @support :safe:", is still at the end when the risk is read.
+    desc, _activity = split_legend_activity(desc)
     risk = None
     tag_match = _RISK.search(desc)
     if tag_match:

@@ -14,13 +14,19 @@ from __future__ import annotations
 from typing import List, Optional
 
 from .qt import Qt, QtCore, QtWidgets, pyqtSignal
-from .weekly_table import RISK_TO_TAG, WeeklyTable
+from ..name import legend_activity
+from .weekly_table import KEEP, RISK_TO_TAG, WeeklyTable
 
-CODE, DESCRIPTION, RISK = 0, 1, 2
-HEADERS = ["Code", "Description", "Risk tag"]
+CODE, DESCRIPTION, RISK, ACTIVITY = 0, 1, 2, 3
+HEADERS = ["Code", "Description", "Risk tag", "Default activity"]
 
 #: The choices of the risk column, from the shown label to the stored class.
 RISK_CHOICES = [("none", None), ("safe", "safe"), ("risky", "speculative")]
+
+#: The choices of the default-activity column. ``none`` leaves the activity to
+#: the cell's letter or the section header.
+ACTIVITY_CHOICES = [("none", None), ("generative", "generative"),
+                    ("editing", "editing"), ("support", "support")]
 
 
 class LegendModel(QtCore.QAbstractTableModel):
@@ -69,21 +75,31 @@ class LegendModel(QtCore.QAbstractTableModel):
             return code
         if index.column() == DESCRIPTION:
             return description
+        if index.column() == ACTIVITY:
+            return self.activity(index.row()) or "none"
         return RISK_TO_TAG.get(risk or "", "none")
+
+    def activity(self, row: int):
+        """Return the default activity of legend row ``row``, or ``None``."""
+        cells = self.table.rows[self.document_row(row)].cells
+        return legend_activity(cells[0] if cells else "")
 
     def setData(self, index, value, role=Qt.EditRole) -> bool:
         if role != Qt.EditRole or not index.isValid():
             return False
         code, description, risk = self.entry(index.row())
+        activity = KEEP
         text = "" if value is None else str(value).strip()
         if index.column() == CODE:
             code = text
         elif index.column() == DESCRIPTION:
             description = text
+        elif index.column() == ACTIVITY:
+            activity = dict(ACTIVITY_CHOICES).get(text or "none")
         else:
             risk = dict(RISK_CHOICES).get(text or "none")
         if not self.table.set_legend(self.document_row(index.row()),
-                                     code, description, risk):
+                                     code, description, risk, activity):
             return False
         self.dataChanged.emit(index, index)
         self.edited.emit()
@@ -93,6 +109,21 @@ class LegendModel(QtCore.QAbstractTableModel):
         if not index.isValid():
             return Qt.NoItemFlags
         return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
+
+
+class ActivityDelegate(QtWidgets.QStyledItemDelegate):
+    """Offer the default activities rather than free text."""
+
+    def createEditor(self, parent, option, index):
+        box = QtWidgets.QComboBox(parent)
+        box.addItems([label for label, _activity in ACTIVITY_CHOICES])
+        return box
+
+    def setEditorData(self, editor, index):
+        editor.setCurrentText(index.data(Qt.DisplayRole) or "none")
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentText(), Qt.EditRole)
 
 
 class RiskDelegate(QtWidgets.QStyledItemDelegate):

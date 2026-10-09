@@ -177,6 +177,9 @@ def test_the_new_table_button_asks_for_a_count(qtbot, monkeypatch, tmp_path):
 
     monkeypatch.setattr(module.QtWidgets.QInputDialog, "getInt",
                         staticmethod(fake_get_int))
+    # The second question picks the shape of the day.
+    monkeypatch.setattr(module.QtWidgets.QInputDialog, "getItem",
+                        staticmethod(lambda *a, **k: (a[3][0], True)))
 
     editor = ScheduleEditor()
     qtbot.addWidget(editor)
