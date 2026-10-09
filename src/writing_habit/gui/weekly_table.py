@@ -249,7 +249,7 @@ class WeeklyTable:
 
     # -- reading -----------------------------------------------------------
     @classmethod
-    def from_file(cls, path: str) -> "WeeklyTable":
+    def from_file(cls, path: str) -> WeeklyTable:
         return cls(Path(path).read_text(encoding="utf-8"), path=str(path))
 
     def _parse(self, text: str) -> None:
@@ -1060,7 +1060,7 @@ class WeeklyTable:
 
     def totals(self) -> Dict[str, Dict[str, int]]:
         """Return planned minutes by day label, by project, and by category."""
-        by_day: Dict[str, int] = {label: 0 for label in self.day_labels}
+        by_day: Dict[str, int] = dict.fromkeys(self.day_labels, 0)
         by_project: Dict[str, int] = {}
         by_category: Dict[str, int] = {}
         labels = {offset: label for _i, offset, label in self.columns}

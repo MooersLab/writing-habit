@@ -186,8 +186,8 @@ def _trend_x(i: int, n: int) -> int:
 
 def _trend_y(pct: int) -> int:
     plot_h = TREND_H - TREND_MT - TREND_MB
-    p = 0 if pct < 0 else (TREND_TOP_PCT if pct > TREND_TOP_PCT else pct)
-    return TREND_MT + plot_h - _iround(plot_h * p / TREND_TOP_PCT)
+    clamped = max(0, min(pct, TREND_TOP_PCT))
+    return TREND_MT + plot_h - _iround(plot_h * clamped / TREND_TOP_PCT)
 
 
 def _trend(rows) -> list:

@@ -16,10 +16,7 @@ def _bar(planned: int, actual: int, width: int = 20) -> str:
 def render_week(con, week: str) -> str:
     lines: list[str] = []
     proj = queries.week_project(con, week)
-    if proj:
-        week_start = proj[0]["week_start"]
-    else:
-        week_start = week
+    week_start = proj[0]["week_start"] if proj else week
     lines.append(f"Writing week beginning {week_start}")
     lines.append("=" * 52)
 
