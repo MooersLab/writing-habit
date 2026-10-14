@@ -1,0 +1,30 @@
+#+TITLE: Tutorial week, Monday 5 October to Sunday 11 October 2026
+
+| Time <l>                         | M   | Tu  | W   | Th  | F   | Sa  | Su  |
+|----------------------------------+-----+-----+-----+-----+-----+-----+-----|
+| 05:00-06:30                      | gA  | gA  | gB  | gA  | gB  | gC  |     |
+| 06:45-08:15                      | gB  | eA  | gA  | eB  | eA  |     |     |
+| 09:00-10:00                      | eD  | gD  | eD  | gD  |     |     |     |
+| 13:00-13:45                      | E   | E   | E   | E   | E   |     |     |
+| 19:30-20:30                      |     | sB  |     | sA  |     |     |     |
+|----------------------------------+-----+-----+-----+-----+-----+-----+-----|
+| A: 1001grantR01 2026-11-15 :safe:     |  |  |  |  |  |  |  |
+| B: 2002reviewArticle 2026-12-01 :safe: |  |  |  |  |  |  |  |
+| C: 3003methodsNote :risky:            |  |  |  |  |  |  |  |
+| D: 4004dataPaper 2026-10-31 :safe:    |  |  |  |  |  |  |  |
+| E: 9001email @support                 |  |  |  |  |  |  |  |
+
+#+NAME: current-semester-projects
+| A: 1001grantR01 2026-11-15 :safe:      |
+| B: 2002reviewArticle 2026-12-01 :safe: |
+| C: 3003methodsNote :risky:             |
+| D: 4004dataPaper 2026-10-31 :safe:     |
+| E: 9001email @support                  |
+| F: 5005bookChapter 2026-12-20 :safe:   |
+
+#+NAME: next-semester-projects
+| - 6006renewalR01 2027-03-05 :safe:     |
+| - 3003methodsNote 2027-04-30 :risky:   |
+
+#+NAME: next-next-semester-projects
+| - 7007textbook :risky:                 |
