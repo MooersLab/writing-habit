@@ -21,7 +21,7 @@ from .argspec import OptionSpec
 from .qt import QtCore, QtWidgets
 
 #: Flags whose value is a calendar date.
-DATE_FLAGS = {"--week", "--day", "--from", "--to"}
+DATE_FLAGS = {"--week", "--day", "--from", "--to", "--since", "--until"}
 #: Flags whose value is a clock time.
 TIME_FLAGS = {"--start", "--end"}
 #: Flags that name a directory.
@@ -29,7 +29,7 @@ DIR_FLAGS = {"--dir"}
 #: Flags that name a file to write, which may not exist yet.
 SAVE_FLAGS = {"--out", "--plot", "--db"}
 #: Flags and positional dests that name a file to read.
-OPEN_FLAGS = {"--table"}
+OPEN_FLAGS = {"--table", "--legend"}
 OPEN_DESTS = {"path", "table"}
 
 #: Values the schema or the documented vocabulary expects, offered as
@@ -349,6 +349,8 @@ def build(spec: OptionSpec) -> Field:
         return PathField(spec, mode="save", filter="SQLite database (*.db);;All files (*)")
     if flag in SAVE_FLAGS:
         return PathField(spec, mode="save")
+    if spec.positional and spec.dest == "source":
+        return PathField(spec, mode="open", filter="SQLite database (*.db);;All files (*)")
     if flag in OPEN_FLAGS or (spec.positional and spec.dest in OPEN_DESTS):
         return PathField(spec, mode="open", filter="Org and data files (*.org *.csv *.ics);;All files (*)")
     if spec.is_int:

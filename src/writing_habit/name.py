@@ -25,8 +25,22 @@ from pathlib import Path
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 ACT = {"g": "generative", "e": "editing", "s": "support"}
 
-_GROUP = re.compile(r"(\d*)([A-Za-z]+)")
-_LEGEND = re.compile(r"^([A-Z][A-Z0-9]{0,3})\s*:\s*(.*?)\s*$")
+_GROUP = re.compile(r"(\d*)([A-Za-z][A-Za-z0-9]*)")
+
+#: A project code: a capital followed by up to three capitals or digits, or a
+#: single digit 0-9. The digits add ten one-character codes, which a table file
+#: name can carry, so a legend can name 36 projects that fit a file name.
+CODE_PATTERN = r"(?:[A-Z][A-Z0-9]{0,3}|[0-9])"
+_LEGEND = re.compile(r"^(" + CODE_PATTERN + r")\s*:\s*(.*?)\s*$")
+_TIME = re.compile(r"\d{1,2}:\s*\d{2}\s*-+\s*\d{1,2}:\s*\d{2}")
+
+
+def _legend_match(cell: str):
+    """Match a legend cell, but never a time such as ``5:00-06:30``."""
+    m = _LEGEND.match((cell or "").strip())
+    if m and m.group(1).isdigit() and _TIME.search(cell):
+        return None
+    return m
 _RISK = re.compile(
     r"(?:\((safe|risky|support)\)|:(safe|risky|support):)\s*$", re.IGNORECASE
 )
@@ -58,7 +72,7 @@ def split_legend_activity(desc: str):
 
 def legend_activity(cell: str):
     """Return the default activity named in a legend cell, or ``None``."""
-    m = _LEGEND.match((cell or "").strip())
+    m = _legend_match(cell)
     if not m:
         return None
     return split_legend_activity(m.group(2))[1]
@@ -80,7 +94,7 @@ def decode(code: str):
             for ch in pat:
                 if ch in ACT:
                     act = ch
-                elif ch.isupper():
+                elif ch.isupper() or ch.isdigit():
                     if act is None:
                         raise ValueError(f"project {ch!r} before any activity in {grp!r}")
                     blocks.append((ACT[act], ch))
@@ -134,8 +148,10 @@ def encode_day(blocks) -> str:
         short = _ACT_CODE.get(activity, activity if activity in ACT else None)
         if short is None:
             raise ValueError(f"unknown activity {activity!r}")
-        if not (isinstance(project, str) and len(project) == 1 and "A" <= project <= "Z"):
-            raise ValueError(f"project must be one uppercase letter, got {project!r}")
+        if not (isinstance(project, str) and len(project) == 1
+                and ("A" <= project <= "Z" or "0" <= project <= "9")):
+            raise ValueError(
+                f"project must be one uppercase letter or one digit, got {project!r}")
         if (short, project) != current:
             out.append(short)
             current = (short, project)
@@ -214,7 +230,7 @@ def parse_legend_cell(cell: str):
     Callers that hold the table in memory, such as the graphical editor, use
     this rather than re-implementing the pattern, so one rule governs both.
     """
-    m = _LEGEND.match(cell.strip())
+    m = _legend_match(cell)
     if not m:
         return None
     code, desc = m.group(1), m.group(2)
@@ -233,6 +249,8 @@ def parse_legend_cell(cell: str):
 def read_legend(table_path: str) -> dict:
     """Return {code: (description, risk_class or None)} from a weekly org table.
 
+    Only the first org table of the file is read, which is the week itself.
+
     A code defined twice keeps its first definition, which is what the plan
     importer sees, because the scheduler's ``legend_lookup`` returns the first
     matching entry in the manner of elisp ``assoc``. Reading the last definition
@@ -240,9 +258,17 @@ def read_legend(table_path: str) -> dict:
     depending on which command read it.
     """
     legend: dict = {}
+    seen_table = False
     for raw in Path(table_path).read_text(encoding="utf-8").splitlines():
         s = raw.strip()
-        if not s.startswith("|") or set(s) <= set("|-+ "):  # skip non-rows and rules
+        if not s.startswith("|"):
+            # Only the first table is the week, as the scheduler reads it. The
+            # semester project lists that may follow are not its legend.
+            if seen_table:
+                break
+            continue
+        seen_table = True
+        if set(s) <= set("|-+ "):  # skip rules
             continue
         first = s.strip("|").split("|")[0].strip()
         parsed = parse_legend_cell(first)
@@ -283,3 +309,143 @@ def check_against_legend(decoded, legend):
             rows.append((letter, "-", "", None, "unknown"))
             problems.append(letter)
     return rows, problems
+
+
+# -- project name and deadline ---------------------------------------------
+#
+# A legend description holds the project name and, optionally, a deadline as
+# an ISO date at its end, as in ``Z: 1008ToolsForQCrOfRNA 2026-10-05 :safe:``.
+# The scheduler and the Emacs port read the description as free text, so the
+# date travels with it unchanged, and only this package splits it in two.
+
+_ISO_TAIL = re.compile(r"(?:,\s*|\s+)(\d{4}-\d{2}-\d{2})\s*$")
+_PROJECT_TOKEN = re.compile(r"(?<![0-9A-Za-z])[0-9]{4}[A-Za-z][\w\-]*")
+_MONTHS = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7,
+    "aug": 8, "sep": 9, "oc": 10, "nov": 11, "dec": 12,
+}
+_LOOSE_DATE = re.compile(
+    r"(?P<lead>(?:submitted|sent)\s+)?(?:(?:due|by|before)\s*:?\s*)?"
+    r"(?:(?P<iso>\d{4}-\d{2}-\d{2})"
+    r"|(?P<mon>jan|feb|mar|apr|may|jun|jul|aug|sep|oc|nov|dec)[a-z]*\.?\s+"
+    r"(?P<day>\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(?P<year>\d{4})(?![0-9A-Za-z]))?"
+    r"|(?P<m>\d{1,2})/(?P<d>\d{1,2})(?:/(?P<y>\d{2,4}))?)",
+    re.IGNORECASE)
+
+
+def split_deadline(description: str):
+    """Return ``(project, deadline or None)`` for a legend description.
+
+    The deadline is an ISO date ``YYYY-MM-DD`` at the end of the description.
+    Text in any other shape stays in the project name, so nothing is lost.
+    """
+    text = (description or "").strip()
+    match = _ISO_TAIL.search(text)
+    if match:
+        return text[:match.start()].rstrip(" ,"), match.group(1)
+    return text.rstrip(" ,"), None
+
+
+def join_deadline(project: str, deadline) -> str:
+    """Return the description that :func:`split_deadline` splits back apart."""
+    project = (project or "").strip().rstrip(" ,")
+    deadline = (deadline or "").strip()
+    return f"{project} {deadline}".strip() if deadline else project
+
+
+def valid_deadline(text: str) -> bool:
+    """Whether ``text`` is empty or a real calendar date as ``YYYY-MM-DD``."""
+    from datetime import date
+
+    text = (text or "").strip()
+    if not text:
+        return True
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return False
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _resolve(match, reference):
+    """Turn a loose date match into a date, guessing the year from ``reference``.
+
+    A month and day with no year takes the reference year, unless that puts it
+    more than about two months before the reference, in which case it is read
+    as next year. So in October, ``March 1`` means next March and
+    ``Sep 16`` means last month.
+    """
+    from datetime import date, timedelta
+
+    if match.group("iso"):
+        try:
+            return date.fromisoformat(match.group("iso"))
+        except ValueError:
+            return None
+    if match.group("mon"):
+        month = _MONTHS[match.group("mon").lower()[:3] if match.group("mon").lower()[:2] != "oc"
+                        else "oc"]
+        day, year = int(match.group("day")), match.group("year")
+    else:
+        month, day, year = int(match.group("m")), int(match.group("d")), match.group("y")
+        if year and len(year) == 2:
+            year = "20" + year
+    try:
+        if year:
+            return date(int(year), month, day)
+        guess = date(reference.year, month, day)
+    except ValueError:
+        return None
+    if guess < reference - timedelta(days=62):
+        try:
+            guess = date(reference.year + 1, month, day)
+        except ValueError:
+            return None
+    return guess
+
+
+def tidy_description(description: str, reference=None):
+    """Propose ``(project, deadline, dropped)`` for a free-text description.
+
+    The project is every project directory name in the text, such as
+    ``1008ToolsForQCrOfRNA``, joined with ``, `` when there are two. A
+    description that names none keeps its text before the first comma. The
+    deadline is the last date in the text, written as ``YYYY-MM-DD``. A date
+    led by ``submitted`` or ``sent`` records something done, not a deadline,
+    so it is not used. ``dropped`` is the text that fits neither part, returned
+    so a writer can see what the change would remove.
+    """
+    from datetime import date
+
+    reference = reference or date.today()
+    text = (description or "").strip()
+    already = split_deadline(text)
+    if already[1] and not _LOOSE_DATE.search(already[0]) and (
+            _PROJECT_TOKEN.fullmatch(already[0]) or "," not in already[0]):
+        return already[0], already[1], ""
+
+    deadline = None
+    chosen = None
+    rest = text
+    for match in _LOOSE_DATE.finditer(text):
+        if match.group("lead"):
+            continue
+        found = _resolve(match, reference)
+        if found is not None:
+            deadline, chosen = found.isoformat(), match
+    projects = _PROJECT_TOKEN.findall(text)
+    if projects:
+        project = ", ".join(dict.fromkeys(projects))
+        for token in projects:
+            rest = rest.replace(token, " ")
+    else:
+        head = text.split(",")[0]
+        cut = _LOOSE_DATE.search(head)
+        project = (head[:cut.start()] if cut else head).strip()
+        rest = rest[len(project):]
+    if chosen is not None:
+        rest = rest.replace(chosen.group(0), " ")
+    dropped = re.sub(r"\s+", " ", re.sub(r"(?:\s*,\s*)+", ", ", rest)).strip(" ,")
+    return project, deadline, dropped

@@ -1,0 +1,64 @@
+<h1>Import writing effort</h1>
+<p>Your time tracker, <code>mytime.db</code>, logs each block of work in its
+<code>zTimeSpent</code> table. <b>track sync</b> copies those rows into the
+writing-habit database, where they become sessions. It can be run as often as
+you like. A row it has already copied is updated when you edit it, and it is
+never copied twice.</p>
+
+<p><img src="images/track-sync.png" width="680"></p>
+<p class="caption">The Track tab after a sync of the practice week. The report says what was copied and what was left out.</p>
+
+<h2>In the window</h2>
+<ol>
+<li>Import the week's plan first, as in <a href="tutorial:plan">Import the plan</a>.</li>
+<li>Open the <a href="tab:Track">Track</a> tab. The <b>track sync</b> form is the first one.</li>
+<li>Set <b>source</b> to your <code>mytime.db</code> with <b>Browse</b>. The tab remembers it.</li>
+<li>Leave <b>since</b> and <b>until</b> unsent to copy everything from the first planned week, or send them to limit the days.</li>
+<li>Tick <b>dry-run</b> the first time, press <b>Run</b>, and read the report.</li>
+<li>Untick <b>dry-run</b> and press <b>Run</b> again.</li>
+</ol>
+<p>After the first run, two items of the <b>File</b> menu do this with no form.</p>
+<ul>
+<li><b>File &gt; Sync from mytime.db</b>, or Ctrl+Shift+Y, runs the sync with the remembered paths.</li>
+<li><b>File &gt; Sync mytime.db at startup</b> runs it each time the window opens, so every report is current.</li>
+</ul>
+
+<h2>At the command line</h2>
+<pre>writing-habit track sync ~/6003TimeTracking/cb/mytime.db \
+    --db ~/org/writing-habit.db --dry-run
+writing-habit track sync ~/6003TimeTracking/cb/mytime.db --db ~/org/writing-habit.db</pre>
+<p>With the shell function from <a href="tutorial:start">Start here</a>, the same runs are</p>
+<pre>whsync --dry-run
+whsync
+whsync --since 2026-10-05 --until 2026-10-11</pre>
+
+<h2>How a tracker row becomes a session</h2>
+<table border="1" cellspacing="0">
+<tr><th>Tracker column</th><th>Becomes</th></tr>
+<tr><td>ProjectID, or the digits that start ProjectDirectory</td><td>The legend code whose project starts with the same four digits, in the legend of that week's table</td></tr>
+<tr><td>Start and End</td><td>The session's times and minutes. A block that ends after midnight still counts.</td></tr>
+<tr><td>Activity</td><td>g is generative, e or r is editing, s is support. An empty activity takes the activity of the planned block it overlaps.</td></tr>
+<tr><td>Description</td><td>The session's note</td></tr>
+</table>
+
+<h2>Reading the report</h2>
+<ul>
+<li><b>skipped without start and end times</b> counts rows still running. They are copied once you stop the clock.</li>
+<li><b>left out ... not in the week's legend</b> counts rows for projects that neither the legend nor the current semester list names, such as commuting. The list below it gives their minutes.
+If one of them is writing, add it to the current semester list and sync again.</li>
+<li><b>kept ... on the current semester list</b> counts rows for semester projects that were not scheduled this week. They count as unplanned writing.</li>
+<li><b>left out ... in weeks with no legend to read</b> means the plan of that week was never imported. Import it and sync again.</li>
+</ul>
+<p class="note">The <b>scope</b> field decides which projects count. <b>semester</b>, the default, keeps the week's legend and the current semester list. <b>legend</b> keeps only the week's legend. <b>all</b> keeps every project, which gives the full picture of a week.</p>
+
+<h2>Other ways to record effort</h2>
+<h3>A CSV or a calendar file</h3>
+<p>Choose <b>track import</b> on the Track tab. The CSV columns are
+<code>date, start, end, minutes, project_code, category, note</code>.</p>
+<pre>writing-habit track import actuals.csv --format csv --db ~/org/writing-habit.db
+writing-habit track import week.ics --format ics --db ~/org/writing-habit.db</pre>
+<h3>One session by hand</h3>
+<p>Choose <b>track add</b>, then give the day, the project code, and either the minutes or a start and an end.</p>
+<pre>writing-habit track add --day 2026-10-12 --project A --minutes 75 \
+    --category generative --db ~/org/writing-habit.db</pre>
+<p>Next, <a href="tutorial:compare">compare plan and effort</a>.</p>

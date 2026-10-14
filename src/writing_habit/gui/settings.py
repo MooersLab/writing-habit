@@ -26,6 +26,8 @@ DEFAULTS = {
     "out_dir": "",         # where generated files are written
     "timezone": "America/Chicago",
     "week": "",            # the last week worked on, as an ISO date
+    "mytime_db": "",       # the mytime.db time tracker that track sync reads
+    "sync_on_start": "false",  # run track sync when the window opens
 }
 
 

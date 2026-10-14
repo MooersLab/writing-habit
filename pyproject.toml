@@ -30,13 +30,13 @@ dependencies = []
 [project.optional-dependencies]
 # plan import calls the real writing-schedule parser. Until it is on PyPI,
 # install it from its checkout: pip install -e <path>/writing-schedule-py/writing_schedule
-plan = ["writing-schedule>=0.4.0"]
+plan = ["writing-schedule>=0.5.0"]
 ics = ["icalendar>=5"]
 plot = ["matplotlib>=3.5"]
 sheets = ["gspread>=5"]
 # The graphical front end. PyQt5 is distributed under the GPL, so this extra
 # carries GPL terms while the library and the command line stay MIT.
-gui = ["PyQt5>=5.15", "writing-schedule>=0.4.0"]
+gui = ["PyQt5>=5.15", "writing-schedule>=0.5.0"]
 # A faithful in-window preview of the two HTML dashboards. Optional even
 # with the gui extra, because Open outside covers the same need and the web
 # engine is a large dependency. It is also GPL.
@@ -60,4 +60,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-writing_habit = ["schema.sql"]
+writing_habit = ["schema.sql", "gui/tutorials/*.html", "gui/tutorials/images/*.png"]

@@ -1,0 +1,31 @@
+<h1>Calendar and sheets</h1>
+<p>The same weekly table can become a calendar file, a dated schedule, and
+printable time-block sheets. These tabs need the writing-schedule package.</p>
+
+<h2>A calendar for the week</h2>
+<p><img src="images/generate.png" width="680"></p>
+<h3>In the window</h3>
+<ol>
+<li>Open the <a href="tab:Generate">Generate</a> tab and choose <b>generate</b>.</li>
+<li>The <b>table</b> field names the table open in the Schedule tab. Set <b>week</b> and the output <b>dir</b>.</li>
+<li>Press <b>Run</b>. It writes a dated schedule <code>.org</code> and a <code>.ics</code> file.</li>
+<li>Open the <code>.ics</code> in your calendar program to see the blocks there.</li>
+</ol>
+<p>Choose <b>export</b> instead to write only the <code>.ics</code>.</p>
+<h3>At the command line</h3>
+<pre>writing-schedule generate ~/org/writing-schedule/tables/Oct5.org \
+    --week 2026-10-05 --dir ~/org/writing-schedule/out
+writing-schedule export ~/org/writing-schedule/tables/Oct5.org --week 2026-10-05 \
+    --dir ~/org/writing-schedule/out</pre>
+
+<h2>Printable sheets</h2>
+<h3>In the window</h3>
+<p>Open the <a href="tab:Sheets">Sheets</a> tab, set the week and the output
+folder, choose the engine and the format, and press <b>Run</b>. Each sheet
+opens in the Preview pane.</p>
+<h3>At the command line</h3>
+<pre>writing-schedule sheets ~/org/writing-schedule/tables/Oct5.org --week 2026-10-05 \
+    --dir ~/org/writing-schedule/sheets --format both</pre>
+
+<h2>The list of past weeks</h2>
+<pre>writing-schedule weeks --dir ~/org/writing-schedule/out</pre>

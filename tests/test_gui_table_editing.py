@@ -220,7 +220,7 @@ def test_a_week_with_no_canonical_name_cannot_be_renamed(tmp_path):
         "|-------------+----|\n"
         "| EM: email   |    |\n", encoding="utf-8")
     table = WeeklyTable.from_file(str(target))
-    with pytest.raises(ValueError, match="single-letter alias"):
+    with pytest.raises(ValueError, match="one-character alias"):
         table.rename_to_canonical()
 
 

@@ -37,7 +37,7 @@
 
 The filename of a weekly table encodes the entire week of writing blocks in a single compact string, so a folder of schedules is self-documenting and sorts sensibly. A name reads left to right as a run of day-groups. Each day-group states how many consecutive days share a pattern and what that daily pattern is. The days fill the week starting at Monday, so the reader never has to guess which day a group lands on.
 
-The scheme is unambiguous without any separators inside a day because it uses three character classes that never overlap. Lowercase letters name activities, uppercase letters name projects, and digits give a day count. A hyphen marks the boundary where the daily pattern changes.
+The scheme is unambiguous without any separators inside a day because it uses three character classes that never overlap. Lowercase letters name activities, and uppercase letters and single digits name projects. A digit before the first activity letter of a day-group is the day count, and a digit after an activity letter is a project, so =4g12= reads as four days of one block on project 1 and one on project 2. A hyphen marks the boundary where the daily pattern changes.
 
 * The alphabet
 #+INDEX: alphabet
@@ -49,6 +49,7 @@ The scheme is unambiguous without any separators inside a day because it uses th
 | =g=, =e=, =s= (lowercase)  | Activity of the block: generative, editing, support. One activity letter opens a run.   |
 | =A= to =Z= (uppercase)     | Project code. One uppercase letter is one block on that project. Repeat the letter for more blocks. |
 | a digit at the group start | Number of consecutive days the day-pattern repeats. A leading 1 is omitted.             |
+| =0= to =9= after an activity | Project code. A digit names one of ten more projects, after the 26 letters.          |
 | =o=                        | An open day, a catch-up or slack day that carries no blocks.                            |
 | =-= (hyphen)               | Boundary between day-groups, which is a change in the daily pattern.                     |
 
@@ -83,17 +84,17 @@ A file name is only useful when the same week always produces the same name. Six
 - Omit a count of one, so write =gWW= and never =1gWW=.
 - Omit trailing open days because they are implied, and write an interior open day as =o=.
 - Order the blocks within a day by time of day, generative first by convention, then editing, then support.
-- Keep activities lowercase and projects uppercase, and use a digit only as the day count at the start of a group.
+- Keep activities lowercase and projects uppercase or single digits. A digit at the start of a group is the day count, and a digit after an activity letter is a project.
 
 * Project codes with more than one letter
 #+INDEX: project alias
 
-The code assumes a project is a single uppercase letter because a run such as =gAA= depends on each letter being a single block. Several of your legend codes have two letters, for example =EM= for email and =TT= for teaching, and a code that mixed lengths would be ambiguous. Give every multi-letter project a single-letter alias for the file name, and keep the full code in the table legend, for example =E= for email and =T= for teaching. A week has at most a handful of projects, so single letters are ample, and the legend inside the table remains the place of record. Reserve digits for counts, so a project alias never contains a digit.
+The code assumes a project is a single uppercase letter because a run such as =gAA= depends on each letter being a single block. Several of your legend codes have two letters, for example =EM= for email and =TT= for teaching, and a code that mixed lengths would be ambiguous. Give every multi-letter project a single-letter alias for the file name, and keep the full code in the table legend, for example =E= for email and =T= for teaching. A week has at most a handful of projects, so single letters are ample, and the legend inside the table remains the place of record. An alias may be a single digit, which gives 36 one-character codes in all. A digit always follows an activity letter in the name, so it never reads as a day count.
 
 * Constraints and validation
 #+INDEX: validation
 
-A valid name satisfies a few checks. The day counts sum to at most six for a Monday-through-Saturday week, or seven if Sunday is included. Every uppercase letter has a matching entry in the table legend. Every project token is a single letter. A run never places a project block before an activity letter. Digits appear only at the start of a day-group.
+A valid name satisfies a few checks. The day counts sum to at most six for a Monday-through-Saturday week, or seven if Sunday is included. Every uppercase letter has a matching entry in the table legend. Every project token is a single letter or a single digit. A run never places a project block before an activity letter, so a digit before the first activity letter of a group is always the day count.
 
 The blocks encode only scheduled work, so free time is simply the absence of blocks. A day with a light plan, such as a Friday with two morning blocks and an open afternoon, needs no special mark because the two blocks are all that is written and the rest of the day is understood to be open.
 
@@ -154,5 +155,5 @@ count    = digit { digit }            ; consecutive days, >= 1, a leading 1 is o
 pattern  = "o" | run { run }          ; "o" is a fully open day
 run      = activity project { project }
 activity = "g" | "e" | "s"            ; generative, editing, support
-project  = "A" .. "Z"                 ; single-letter code, one letter is one block
+project  = "A" .. "Z" | "0" .. "9"    ; one character is one block
 #+end_example

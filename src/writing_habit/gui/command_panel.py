@@ -93,6 +93,7 @@ class CommandPanel(QtWidgets.QWidget):
             "db": settings.get("db"),
             "week": settings.get("week") or forms.today_iso(),
             "dir": settings.get("out_dir"),
+            "source": settings.get("mytime_db"),
         }
         table = argspec.table_dest(self.spec)
         if table is not None:
@@ -126,6 +127,8 @@ class CommandPanel(QtWidgets.QWidget):
             settings.put("week", str(values["week"]))
         if values.get("dir"):
             settings.put("out_dir", str(values["dir"]))
+        if values.get("source"):
+            settings.put("mytime_db", str(values["source"]))
 
     # -- state -------------------------------------------------------------
     def refresh(self) -> None:

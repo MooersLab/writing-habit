@@ -1,0 +1,41 @@
+<h1>Troubleshooting</h1>
+
+<h2>The sync leaves out nearly every row</h2>
+<p>Read the report. If it says <b>in weeks with no legend to read</b>, the
+plan of that week was never imported. Import it as in
+<a href="tutorial:plan">Import the plan</a>, then sync again. On the Track tab
+the <b>table</b> field also lends the open table's legend to any week without a plan.</p>
+<p>If it says <b>not in the week's legend</b>, the project numbers of those rows
+appear in neither the legend nor the current semester list. Make sure each
+Project entry begins with the four-digit project number, such as
+<code>0374qflip</code>, and that the project is on the current semester list.</p>
+
+<h2>Adherence is empty or zero</h2>
+<p>Adherence divides actual minutes by planned minutes. With no plan imported
+for the week there is nothing to divide by. Import the plan.</p>
+
+<h2>A project shows the wrong name in a report</h2>
+<p>A code such as <code>Z</code> keeps the name it had the first time a plan
+named it, because codes are reused from week to week. The minutes are still
+counted under the right code for each week.</p>
+
+<h2>A deleted block still counts as planned</h2>
+<p>Plan import adds blocks and never removes them. To load a changed week from
+scratch, clear that week's plan and import it again.</p>
+<pre>sqlite3 ~/org/writing-habit.db "DELETE FROM plan_block WHERE week_start = '2026-10-05';"
+writing-habit plan import ~/org/writing-schedule/tables/Oct5.org --week 2026-10-05 \
+    --db ~/org/writing-habit.db</pre>
+
+<h2>A command ran against the wrong database</h2>
+<p>The status bar names the database the last command used. Every form has its
+own <b>db</b> field, seeded from the last one you used, so check it before
+pressing <b>Run</b>.</p>
+
+<h2>The deadline will not save</h2>
+<p>A deadline must be a real date written <code>YYYY-MM-DD</code>, such as
+<code>2026-11-15</code>. Leave the cell empty for no deadline.</p>
+
+<h2>Where to read more</h2>
+<p>The <a href="https://github.com/MooersLab/writing-habit/blob/main/docs/gui.md">guide to the window</a>
+and the <a href="https://github.com/MooersLab/writing-habit/blob/main/docs/tracking-formats.md">tracking formats</a>
+page cover every option in detail.</p>

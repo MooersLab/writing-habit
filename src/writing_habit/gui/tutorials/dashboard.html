@@ -1,0 +1,40 @@
+<h1>Dashboard</h1>
+<p>The dashboard is a single HTML page for one week. It holds the same numbers
+as the compare report, drawn as charts, and it needs no server or network to open.</p>
+
+<p><img src="images/dashboard.png" width="680"></p>
+<p class="caption">The dashboard of the practice week, light theme.</p>
+
+<h2>In the window</h2>
+<ol>
+<li>Import the plan and sync the effort, as in the earlier tutorials.</li>
+<li>Open the <a href="tab:Compare">Compare</a> tab and choose <b>dashboard</b>.</li>
+<li>Set <b>week</b> to any date in the week.</li>
+<li>Set <b>out</b> to the page to write, for example <code>~/org/dashboards/2026-10-05.html</code>.</li>
+<li>Press <b>Run</b>. The page appears in the Preview pane on the right. <b>Open outside</b> opens it in your web browser.</li>
+</ol>
+<p class="note">The Preview pane draws the page roughly unless the optional web engine is installed. Install it with <code>pip install "writing-habit[preview]"</code>, or open the page in your browser.</p>
+
+<h2>At the command line</h2>
+<pre>writing-habit dashboard --week 2026-10-05 \
+    --out ~/org/dashboards/2026-10-05.html --db ~/org/writing-habit.db
+open ~/org/dashboards/2026-10-05.html</pre>
+<p>The whole end-of-week routine is three commands.</p>
+<pre>whsync
+writing-habit compare --week 2026-10-05 --db ~/org/writing-habit.db
+writing-habit dashboard --week 2026-10-05 --out ~/org/dashboards/2026-10-05.html \
+    --db ~/org/writing-habit.db</pre>
+
+<h2>What the page shows</h2>
+<ul>
+<li>Summary tiles with the planned minutes, the actual minutes, adherence, and the streak.</li>
+<li>A trend of overall adherence over recent weeks.</li>
+<li>The week's schedule redrawn as a grid, colored by activity.</li>
+<li>Planned against actual for each project, with an adherence column.</li>
+<li>The balance of generative, editing, and support work.</li>
+<li>The barbell split between safe and risky projects.</li>
+</ul>
+<p>A button in the corner switches between the light and the dark theme. The
+dashboard and the text report round percentages differently, so a share may
+differ by one point between them.</p>
+<p>Next, <a href="tutorial:history">look across weeks</a>.</p>

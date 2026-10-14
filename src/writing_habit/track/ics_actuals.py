@@ -15,7 +15,7 @@ import re
 
 from ..db import get_category_id, get_or_create_project, log_import
 
-_CODE_IN_SUMMARY = re.compile(r"\[([A-Z][A-Z0-9]{0,3})\]")
+_CODE_IN_SUMMARY = re.compile(r"\[([A-Z][A-Z0-9]{0,3}|[0-9])\]")
 
 
 def import_ics(con, path: str) -> int:

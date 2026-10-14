@@ -19,13 +19,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+from .. import name as namemod
 from . import external_editor, settings
 from .legend_model import (ACTIVITY, ACTIVITY_CHOICES, ActivityDelegate, CODE,
-                           DESCRIPTION, LegendModel, RISK, RISK_CHOICES,
-                           RiskDelegate)
+                           DEADLINE, DESCRIPTION, DeadlineDelegate, LegendModel,
+                           RISK, RISK_CHOICES, RiskDelegate)
 from .qt import Qt, QtGui, QtWidgets, pyqtSignal
+from ..project_lists import LISTS
+from .project_list_view import ProjectListPanel
 from .table_model import TIME_COLUMN, CodeDelegate, WeeklyTableModel
 from .weekly_table import BLOCK, PROJECT_CODES, SECTION, WeeklyTable
+
+#: The title of the tab that holds this week's legend, before its count.
+LEGEND_TAB = "This week"
 
 #: The template styles offered by New from template, as (label, style).
 TEMPLATE_CHOICES = [
@@ -114,6 +120,11 @@ class ScheduleEditor(QtWidgets.QWidget):
             "such as gA, so the section rows are no longer needed")
         self.activities_action.triggered.connect(
             lambda: self.move_activities_into_cells())
+        self.tidy_legend_action = more_menu.addAction("Split legend into project and deadline")
+        self.tidy_legend_action.setToolTip(
+            "Rewrite each legend description as a project name and a "
+            "YYYY-MM-DD deadline, after showing what changes")
+        self.tidy_legend_action.triggered.connect(lambda: self.tidy_legend())
         self.more_button.setMenu(more_menu)
         self.path_label = QtWidgets.QLabel("No table open")
         # A long path would otherwise set the window's minimum width.
@@ -178,13 +189,15 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.legend_view.setModel(self.legend_model)
         self.legend_view.setItemDelegateForColumn(RISK, RiskDelegate(self.legend_view))
         self.legend_view.setItemDelegateForColumn(
+            DEADLINE, DeadlineDelegate(self.legend_view))
+        self.legend_view.setItemDelegateForColumn(
             ACTIVITY, ActivityDelegate(self.legend_view))
         self.legend_view.horizontalHeader().setStretchLastSection(False)
         self._fit_legend_columns()
 
         rows = QtWidgets.QSplitter(Qt.Vertical)
         rows.addWidget(splitter)
-        legend_box = QtWidgets.QGroupBox("Legend")
+        legend_box = QtWidgets.QGroupBox("Projects")
         legend_layout = QtWidgets.QVBoxLayout(legend_box)
         legend_bar = QtWidgets.QHBoxLayout()
         self.project_above_button = QtWidgets.QPushButton("Insert project above")
@@ -217,6 +230,13 @@ class ScheduleEditor(QtWidgets.QWidget):
                        self.delete_project_button):
             button.setEnabled(False)
             legend_bar.addWidget(button)
+        self.sort_legend_button = QtWidgets.QPushButton("Sort by number")
+        self.sort_legend_button.setToolTip(
+            "Order this week's projects by the four-digit number that starts "
+            "each name")
+        self.sort_legend_button.setEnabled(False)
+        self.sort_legend_button.clicked.connect(lambda: self.sort_legend())
+        legend_bar.addWidget(self.sort_legend_button)
         legend_bar.addStretch(1)
         # The same keys as the grid. Each shortcut belongs to its own view, so
         # Alt+Up moves a block when the grid has the focus and a project when
@@ -227,8 +247,26 @@ class ScheduleEditor(QtWidgets.QWidget):
             shortcut.activated.connect(lambda up=up: self.move_project(up=up))
         self.legend_view.selectionModel().currentChanged.connect(
             lambda *_args: self._update_project_move_buttons())
-        legend_layout.addLayout(legend_bar)
-        legend_layout.addWidget(self.legend_view)
+        # The week's legend shares the box with the semester project lists,
+        # one tab each, so the legend can stay short.
+        legend_page = QtWidgets.QWidget()
+        page_layout = QtWidgets.QVBoxLayout(legend_page)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.addLayout(legend_bar)
+        page_layout.addWidget(self.legend_view)
+        self.project_tabs = QtWidgets.QTabWidget()
+        self.project_tabs.addTab(legend_page, LEGEND_TAB)
+        self.list_panels = {}
+        for name, title in LISTS:
+            panel = ProjectListPanel(name, title, self)
+            panel.edited.connect(self.on_list_edit)
+            panel.copied.connect(self.on_copied_to_legend)
+            panel.moved.connect(self.on_moved_between_lists)
+            panel.logged.connect(self.logged)
+            self.list_panels[name] = panel
+            self.project_tabs.addTab(panel, title)
+        self.legend_model.modelReset.connect(self._refresh_lists)
+        legend_layout.addWidget(self.project_tabs)
         rows.addWidget(legend_box)
         rows.setSizes([520, 220])
         outer.addWidget(rows, 1)
@@ -243,6 +281,57 @@ class ScheduleEditor(QtWidgets.QWidget):
             "default activity or the section decides.</i>")
         self.note.setWordWrap(True)
         outer.addWidget(self.note)
+
+    # -- semester project lists ---------------------------------------------
+    def _refresh_lists(self) -> None:
+        """Show the open table's lists, and their sizes in the tab titles."""
+        for panel in self.list_panels.values():
+            if panel.table is not self.table:
+                panel.set_table(self.table)
+        self._title_lists()
+
+    def _title_lists(self) -> None:
+        """Put each tab's project count in its title, as in This week (9)."""
+        self.project_tabs.setTabText(0, f"{LEGEND_TAB} ({self.legend_model.rowCount()})")
+        self.sort_legend_button.setEnabled(self.legend_model.rowCount() > 1)
+        for index, (name, title) in enumerate(LISTS, start=1):
+            count = self.list_panels[name].model.rowCount()
+            self.project_tabs.setTabText(index, f"{title} ({count})" if count else title)
+
+    def show_list(self, name: Optional[str] = None) -> None:
+        """Raise the tab of list ``name``, or the legend when ``name`` is ``None``."""
+        panel = self.list_panels.get(name) if name else None
+        self.project_tabs.setCurrentIndex(
+            self.project_tabs.indexOf(panel) if panel is not None else 0)
+
+    def sort_legend(self) -> bool:
+        """Order this week's legend by project number.  Say whether it moved."""
+        if self.table is None or not self.table.sort_legend():
+            return False
+        self._rebuild_views()
+        self.logged.emit("Sorted this week's projects by project number")
+        self.on_edit()
+        return True
+
+    def on_moved_between_lists(self, target: str) -> None:
+        """A project went to list ``target``, so show it there too."""
+        panel = self.list_panels.get(target)
+        if panel is not None:
+            panel.set_table(self.table)
+        self._title_lists()
+
+    def on_list_edit(self) -> None:
+        self._title_lists()
+        self.on_edit()
+
+    def on_copied_to_legend(self, at: int) -> None:
+        """A project came over from a list, so show it in the legend."""
+        self.legend_model.set_table(self.table)
+        self._fit_legend_columns()
+        self.show_list(None)
+        legend_row = self.legend_model._rows.index(at)
+        self.legend_view.setCurrentIndex(self.legend_model.index(legend_row, DESCRIPTION))
+        self.on_edit()
 
     # -- layout ------------------------------------------------------------
     def _fit_columns(self) -> None:
@@ -265,11 +354,12 @@ class ScheduleEditor(QtWidgets.QWidget):
             header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
 
     def _fit_legend_columns(self) -> None:
-        """Give the legend's width to the description, which is the long field."""
+        """Give the legend's width to the project name, which is the long field."""
         header = self.legend_view.horizontalHeader()
         header.setStretchLastSection(False)
         modes = {CODE: QtWidgets.QHeaderView.ResizeToContents,
                  DESCRIPTION: QtWidgets.QHeaderView.Stretch,
+                 DEADLINE: QtWidgets.QHeaderView.ResizeToContents,
                  RISK: QtWidgets.QHeaderView.ResizeToContents,
                  ACTIVITY: QtWidgets.QHeaderView.ResizeToContents}
         for column, mode in modes.items():
@@ -578,7 +668,9 @@ class ScheduleEditor(QtWidgets.QWidget):
         code_edit = QtWidgets.QLineEdit(code)
         code_edit.setMaxLength(4)
         description_edit = QtWidgets.QLineEdit()
-        description_edit.setPlaceholderText("e.g. 0201dusp1, Sept 25")
+        description_edit.setPlaceholderText("e.g. 0201dusp1")
+        deadline_edit = QtWidgets.QLineEdit()
+        deadline_edit.setPlaceholderText("YYYY-MM-DD, or leave empty")
         risk_box = QtWidgets.QComboBox()
         risk_box.addItems([label for label, _class in RISK_CHOICES])
         activity_box = QtWidgets.QComboBox()
@@ -587,7 +679,8 @@ class ScheduleEditor(QtWidgets.QWidget):
             "The activity a bare code takes, so email can always count as "
             "support. A letter in a cell, such as eA, still wins.")
         form.addRow("Code", code_edit)
-        form.addRow("Description", description_edit)
+        form.addRow("Project", description_edit)
+        form.addRow("Deadline", deadline_edit)
         form.addRow("Risk tag", risk_box)
         form.addRow("Default activity", activity_box)
         buttons = QtWidgets.QDialogButtonBox(
@@ -600,7 +693,12 @@ class ScheduleEditor(QtWidgets.QWidget):
             return None
         risk = dict(RISK_CHOICES).get(risk_box.currentText())
         activity = dict(ACTIVITY_CHOICES).get(activity_box.currentText())
-        return code_edit.text(), description_edit.text(), risk, activity
+        deadline = deadline_edit.text().strip()
+        if not namemod.valid_deadline(deadline):
+            self.logged.emit(f"Ignored the deadline {deadline!r}: write it as YYYY-MM-DD")
+            deadline = ""
+        description = namemod.join_deadline(description_edit.text(), deadline)
+        return code_edit.text(), description, risk, activity
 
     def insert_project(self, above: bool, code: Optional[str] = None,
                        description: str = "",
@@ -719,6 +817,59 @@ class ScheduleEditor(QtWidgets.QWidget):
                          + (f" and deleted {removed} section row(s)" if removed else ""))
         self.on_edit()
         return changed
+
+    # -- project and deadline ----------------------------------------------
+    def tidy_legend(self, confirm: Optional[bool] = None, reference=None
+                    ) -> Optional[int]:
+        """Split each legend description into a project and a deadline.
+
+        The changes are listed first, including any text the split would drop,
+        so the writer decides with the whole picture. ``confirm`` answers that
+        question in advance. Return the number of rows rewritten, or ``None``
+        when there is no table or the writer declines.
+        """
+        if self.table is None:
+            return None
+        if reference is None:
+            import datetime as _dt
+            week = settings.get("week")
+            try:
+                reference = _dt.date.fromisoformat(week) if week else _dt.date.today()
+            except ValueError:
+                reference = _dt.date.today()
+        changes = self.table.tidy_legend(reference)
+        if not changes:
+            self.logged.emit("Every legend entry is already a project and a deadline")
+            return 0
+        if confirm is None:
+            lines = []
+            for _row, code, old, project, deadline, dropped in changes:
+                lines.append(f"{code}: {old}")
+                lines.append(f"   project  {project}")
+                lines.append(f"   deadline {deadline or '(none)'}")
+                if dropped:
+                    lines.append(f"   dropped  {dropped}")
+            box = QtWidgets.QMessageBox(self)
+            box.setWindowTitle("Split legend into project and deadline")
+            box.setText(f"{len(changes)} legend entr{'y' if len(changes) == 1 else 'ies'} "
+                        "will change. Open Show Details to read each one, "
+                        "including any text that would be dropped. The file "
+                        "changes only when you save.")
+            box.setDetailedText("\n".join(lines))
+            box.setStandardButtons(QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel)
+            confirm = box.exec_() == QtWidgets.QMessageBox.Ok
+        if not confirm:
+            return None
+        self.table.tidy_legend(reference, apply=True)
+        self.legend_model.set_table(self.table)
+        self._fit_legend_columns()
+        dropped = [f"{c[1]}: {c[5]}" for c in changes if c[5]]
+        self.logged.emit(f"Split {len(changes)} legend entr"
+                         f"{'y' if len(changes) == 1 else 'ies'} into project and deadline")
+        for line in dropped:
+            self.logged.emit(f"  dropped from {line}")
+        self.on_edit()
+        return len(changes)
 
     # -- the external editor -----------------------------------------------
     def _ask_save_before_editing(self) -> str:
@@ -868,7 +1019,11 @@ class ScheduleEditor(QtWidgets.QWidget):
                 self.logged.emit("Starter days need writing-schedule 0.4 or newer")
                 return
             text = template_string(min(projects, 26))
+        previous = self.table
         self.table = WeeklyTable(text)
+        # A new week keeps the semester lists of the week it replaces.
+        if previous is not None and self.table.adopt_lists(previous):
+            self.logged.emit("Kept the semester project lists of the previous table")
         for _extra in range(projects - len(self.table.legend())):
             self.table.add_legend(self.table.next_free_code())
         self.model.set_table(self.table)

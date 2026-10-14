@@ -174,7 +174,7 @@ def test_a_week_without_a_name_says_why(app, blank_settings, tmp_path):
     try:
         text = editor.name_panel.toPlainText()
         assert "no canonical file name" in text
-        assert "single-letter alias" in text
+        assert "one-character alias" in text
     finally:
         editor.close()
 

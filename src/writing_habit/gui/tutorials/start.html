@@ -1,0 +1,49 @@
+<h1>Start here</h1>
+<p>writing-habit compares the week you planned with the week you worked. The
+plan comes from your weekly table. The effort comes from your time tracker. One
+SQLite database holds both, and every report reads that database.</p>
+
+<p><img src="images/workflow-loop.png" width="640"></p>
+<p class="caption">The weekly loop. Plan on Monday, track through the week, and compare at the end.</p>
+
+<h2>The weekly loop</h2>
+<table border="1" cellspacing="0">
+<tr><th>When</th><th>Step</th><th>Tutorial</th><th>Tab</th></tr>
+<tr><td>Before Monday</td><td>Write or adjust the weekly table</td><td><a href="tutorial:schedule">Edit the schedule</a></td><td><a href="tab:Schedule">Schedule</a></td></tr>
+<tr><td>Monday</td><td>Load the table into the database</td><td><a href="tutorial:plan">Import the plan</a></td><td><a href="tab:Plan">Plan</a></td></tr>
+<tr><td>Any day</td><td>Copy your logged time from mytime.db</td><td><a href="tutorial:track">Import writing effort</a></td><td><a href="tab:Track">Track</a></td></tr>
+<tr><td>Any day</td><td>Read planned against actual</td><td><a href="tutorial:compare">Compare plan and effort</a></td><td><a href="tab:Compare">Compare</a></td></tr>
+<tr><td>End of week</td><td>Write the HTML dashboard</td><td><a href="tutorial:dashboard">Dashboard</a></td><td><a href="tab:Compare">Compare</a></td></tr>
+<tr><td>Monthly</td><td>Look across weeks</td><td><a href="tutorial:history">Longer view</a></td><td><a href="tab:History">History</a></td></tr>
+</table>
+<p>Import the plan before you import the effort. The sync reads the week's
+legend to match each tracker row to a project letter, and the legend of a
+week reaches the database at plan import.</p>
+
+<h2>One-time setup</h2>
+<h3>In the window</h3>
+<ol>
+<li>Open the <a href="tab:Plan">Plan</a> tab and choose <b>initdb</b>.</li>
+<li>Set <b>db</b> to the database file, for example <code>~/org/writing-habit.db</code>, and press <b>Run</b>.
+Running it again on an existing database is harmless.</li>
+<li>Every other form starts with this path. The status bar names the database the last command used.</li>
+</ol>
+<h3>At the command line</h3>
+<pre>writing-habit initdb --db ~/org/writing-habit.db</pre>
+<p>To make the sync one word long in any terminal, add this line to <code>~/.zshrc</code>.</p>
+<pre>source ~/6112MooersLabGitHubLabRepos/writing-habit/scripts/whsync.sh</pre>
+<p>The function reads two paths, which you can change with environment variables.</p>
+<pre>export WH_DB=~/org/writing-habit.db
+export WH_MYTIME=~/6003TimeTracking/cb/mytime.db</pre>
+
+<h2>Every form teaches its command</h2>
+<p>Each form shows the shell command it will run on its <b>Command</b> line,
+and the session log at the bottom keeps every command that ran. When you want
+to script a step, copy the line you watched succeed.</p>
+
+<h2>Practice files</h2>
+<p>The folder <code>examples/tutorial</code> of the repository holds a weekly
+table, <code>week.org</code>, and a small time tracker, <code>mytime.db</code>,
+for the week of 5 October 2026. The screenshots in these tutorials come from
+them. Use a scratch database such as <code>/tmp/practice.db</code> while you
+practice, so your real one stays clean.</p>

@@ -138,7 +138,9 @@ def test_each_list_has_a_tab_beside_the_legend(editor):
     tabs = editor.project_tabs
     titles = [tabs.tabText(i) for i in range(tabs.count())]
     assert titles == [f"{LEGEND_TAB} (2)", "Current semester projects (3)",
-                      "Next semester projects (2)", "Next next semester projects"]
+                      "Completed this semester",
+                      "Next semester projects (2)", "Next next semester projects",
+                      "3*Next semester projects", "4*Next semester projects"]
     panel = editor.list_panels[CURRENT]
     assert panel.model.columnCount() == editor.legend_model.columnCount()
     assert panel.model.index(1, 1).data() == "1006AIrxOpt"
@@ -182,3 +184,83 @@ def test_a_new_week_keeps_the_lists(editor):
     assert fresh.adopt_lists(editor.table)
     assert [e.code for e in fresh.lists.entries(CURRENT)] == ["A", "B", "X"]
     assert not fresh.adopt_lists(editor.table)        # never twice
+
+
+def test_sort_by_project_number(editor, table_file):
+    from writing_habit.project_lists import number_key
+    assert number_key("0374qflip") < number_key("1006AIrxOpt") < number_key("email")
+    panel = editor.list_panels[CURRENT]
+    panel.add_project(Entry("E", "email @support"))
+    panel.add_project(Entry("3", "0055early"))
+    assert panel.sort()
+    assert [e.project for e in editor.table.lists.entries(CURRENT)] == [
+        "0055early", "0374qflip", "1006AIrxOpt", "1094RNAstrucDetResearchProgram", "email"]
+    assert not panel.sort()                           # already in order
+    assert editor.sort_legend()                       # B 1006 then X 0374
+    assert list(editor.table.legend()) == ["X", "B"]
+    assert editor.project_tabs.tabText(0) == "This week (2)"
+    assert parse_entry_ok(editor.table.to_text())
+
+
+def parse_entry_ok(text):
+    parse_text = pytest.importorskip("writing_schedule").parse_text
+    return len(parse_text(text).events) == 2
+
+
+def test_five_horizons_and_digit_codes_in_lists(table_file):
+    from writing_habit.project_lists import NAMES
+    assert NAMES[1] == "completed-this-semester"
+    assert NAMES[4:] == ["next-next-next-semester-projects",
+                         "next-next-next-next-semester-projects"]
+    lists = ProjectLists([])
+    lists.insert(NAMES[5], None, Entry("7", "1452PHFSboXt 2027-03-01", "safe"))
+    assert lists.entries(NAMES[5])[0].code == "7"
+
+
+def test_completed_list_reads_a_row_without_a_closing_bar_and_counts_in_sync(tmp_path):
+    from writing_habit.track.mytime_sync import semester_numbers
+    path = tmp_path / "week.org"
+    path.write_text(WEEK.replace(
+        "\n#+NAME: next-semester-projects",
+        "\n#+NAME: completed-this-semester\n"
+        "| Q: 3292ABRF-SC3-2026 2026-10-09 :safe: |\n"
+        "| F: 4072UsersMeeting2026 2026-09-23 :safe:\n"
+        "\n#+NAME: next-semester-projects"), encoding="utf-8")
+    done = read_lists(str(path)).entries("completed-this-semester")
+    assert [(e.code, e.project, e.deadline) for e in done] == [
+        ("Q", "3292ABRF-SC3-2026", "2026-10-09"), ("F", "4072UsersMeeting2026", "2026-09-23")]
+    assert {"3292", "4072", "1094"} <= semester_numbers(str(path))
+
+
+def test_mark_completed_moves_the_project_across(editor, table_file):
+    from writing_habit.project_lists import COMPLETED
+    current = editor.list_panels[CURRENT]
+    assert current.complete_button is not None
+    assert editor.list_panels["next-semester-projects"].complete_button is None
+    current.view.setCurrentIndex(current.model.index(1, 1))     # B 1006AIrxOpt
+    entry = current.mark_completed()
+    assert entry.project == "1006AIrxOpt"
+    assert [e.code for e in editor.table.lists.entries(CURRENT)] == ["A", "X"]
+    done = editor.table.lists.entries(COMPLETED)
+    assert [(e.code, e.description, e.risk) for e in done] == [
+        ("B", "1006AIrxOpt 2026-12-15", "safe")]
+    titles = [editor.project_tabs.tabText(i) for i in range(editor.project_tabs.count())]
+    assert "Current semester projects (2)" in titles
+    assert "Completed this semester (1)" in titles
+    assert editor.list_panels[COMPLETED].model.rowCount() == 1
+    assert editor.table.dirty
+    # The new list sits right after the current one in the file.
+    lines = editor.table.lists.lines
+    assert lines.index("#+NAME: completed-this-semester") < lines.index(
+        "#+NAME: next-semester-projects")
+    assert list(editor.table.legend()) == ["B", "X"]   # this week is untouched
+
+
+def test_marking_a_project_completed_twice_keeps_one_row():
+    from writing_habit.project_lists import COMPLETED
+    lists = ProjectLists([])
+    lists.insert(CURRENT, None, Entry("Q", "3292ABRF 2026-10-09"))
+    lists.insert(COMPLETED, None, Entry("Q", "3292ABRF 2026-10-09"))
+    lists.transfer(CURRENT, 0, COMPLETED)
+    assert lists.entries(CURRENT) == []
+    assert len(lists.entries(COMPLETED)) == 1

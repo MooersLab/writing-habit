@@ -114,7 +114,10 @@ project name in the file, as in `Z: 1008ToolsForQCrOfRNA 2026-10-05 :safe:`, so
 the scheduler and the Emacs port still read the row as before. Five buttons above
 the legend insert a project, move the selected one, or delete it, as described
 below. A project code is a single letter or, once A to Z are taken, two letters
-such as `AB`, so the legend can hold more than 26 projects.
+such as `AB`, so the legend can hold more than 26 projects. The single
+digits `0` to `9` are codes too, offered after `Z` and before `AA`, and a cell
+such as `g3` sets the activity of project 3. The 36 one-character codes, the
+letters and the digits, are the ones a table's file name can carry.
 
 Rows that start at the same time share one shade, and the shade alternates
 between white and light gray from one start time to the next, so the choices
@@ -519,14 +522,18 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src python scripts/make_tutorial_images.py
 
 ## Semester project lists
 
-The box under the grid, titled **Projects**, holds four tabs, each showing its
+The box under the grid, titled **Projects**, holds seven tabs, each showing its
 number of projects in parentheses. **This week** is the week's legend, which
 should name only the projects of the week. **Current
-semester projects**, **Next semester projects**, and **Next next semester
-projects** hold the longer lists, with the same columns as the legend. Each
+semester projects**, **Completed this semester**, **Next semester projects**, **Next next semester
+projects**, **3*Next semester projects**, and **4*Next semester projects** hold
+the longer lists, about two years ahead, with the same columns as the legend.
+**Sort by number**, on every tab, orders the projects by the four-digit number
+that starts each name, with unnumbered projects last. Each
 list has buttons to add, move, and delete a project, and **Copy to this week's
 legend** brings the selected project into the week, keeping its code when the
-legend does not use it yet. A project with no code yet has an empty Code cell.
+legend does not use it yet. A project with no code yet has an empty Code cell. On the current list, **Mark completed** moves the selected project to the end
+of **Completed this semester**, and never adds it there twice.
 
 In the file each list is its own small table after the weekly table, named by
 an org line, with rows in the legend's form and a dash for a missing code:

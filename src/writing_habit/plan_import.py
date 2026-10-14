@@ -22,6 +22,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from .db import get_category_id, get_or_create_project, log_import
+from .name import split_deadline
 
 # writing-schedule section header -> our activity category.
 SECTION_TO_CATEGORY = {
@@ -111,6 +112,8 @@ def import_org(con, path: str, week: str) -> int:
     unknown_sections: set[str] = set()
     for ev in parsed.events:
         desc, risk = _split_risk(parsed.legend_lookup(ev.letter))
+        # The deadline is for the writer, not a part of the project's name.
+        desc = split_deadline(desc)[0] or None if desc else desc
         pid = get_or_create_project(con, ev.letter, desc, risk)
         cat_id = get_category_id(con, _category_for(ev.section, unknown_sections))
         day = (monday + timedelta(days=ev.offset)).isoformat()

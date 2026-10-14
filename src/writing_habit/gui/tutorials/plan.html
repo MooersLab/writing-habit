@@ -1,0 +1,27 @@
+<h1>Import the plan</h1>
+<p>Plan import copies every block of the weekly table into the database, with
+its day, its time, its project, and its activity. It also records which table
+planned the week, which is how the sync later finds that week's legend.</p>
+
+<p><img src="images/plan.png" width="680"></p>
+<p class="caption">The Plan tab after importing the practice week. Twenty-two blocks were loaded.</p>
+
+<h2>In the window</h2>
+<ol>
+<li>Open the <a href="tab:Plan">Plan</a> tab and choose <b>plan import</b>.</li>
+<li>The <b>path</b> field already names the table open in the Schedule tab. Check that it is the right week.</li>
+<li>Set <b>week</b> to any date in that week. The week snaps back to its Monday.</li>
+<li>Press <b>Run</b>. The output names the number of blocks imported.</li>
+</ol>
+
+<h2>At the command line</h2>
+<pre>writing-habit plan import ~/org/writing-schedule/tables/Oct5.org \
+    --week 2026-10-05 --db ~/org/writing-habit.db</pre>
+
+<h2>Things to know</h2>
+<ul>
+<li>Importing the same week again is safe. A block already in the database is not added twice.</li>
+<li>If you add blocks to the table during the week, import it again to add them. A block you delete from the table stays in the database. The <a href="tutorial:troubleshooting">Troubleshooting</a> page shows how to clear a week's plan and import it again.</li>
+<li>Import the plan before the sync, so the sync reads this week's legend.</li>
+</ul>
+<p>Next, <a href="tutorial:track">import your writing effort</a>.</p>

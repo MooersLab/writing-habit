@@ -76,7 +76,7 @@ def test_a_multi_letter_project_has_no_file_name_and_says_why():
     table = WeeklyTable(MULTI_LETTER)
     code, problem = table.code_or_problem()
     assert code is None
-    assert "EM" in problem and "single-letter alias" in problem
+    assert "EM" in problem and "one-character alias" in problem
 
 
 def test_totals_by_day_project_and_activity():

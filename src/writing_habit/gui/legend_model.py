@@ -13,12 +13,15 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from .qt import Qt, QtCore, QtWidgets, pyqtSignal
-from ..name import legend_activity
+from .qt import Qt, QtCore, QtGui, QtWidgets, pyqtSignal
+from ..name import join_deadline, legend_activity, split_deadline, valid_deadline
 from .weekly_table import KEEP, RISK_TO_TAG, WeeklyTable
 
-CODE, DESCRIPTION, RISK, ACTIVITY = 0, 1, 2, 3
-HEADERS = ["Code", "Description", "Risk tag", "Default activity"]
+CODE, PROJECT, DEADLINE, RISK, ACTIVITY = 0, 1, 2, 3, 4
+#: The project name is the long, free part of the description, so code that
+#: asks for the description column gets it.
+DESCRIPTION = PROJECT
+HEADERS = ["Code", "Project", "Deadline", "Risk tag", "Default activity"]
 
 #: The choices of the risk column, from the shown label to the stored class.
 RISK_CHOICES = [("none", None), ("safe", "safe"), ("risky", "speculative")]
@@ -73,8 +76,10 @@ class LegendModel(QtCore.QAbstractTableModel):
         code, description, risk = self.entry(index.row())
         if index.column() == CODE:
             return code
-        if index.column() == DESCRIPTION:
-            return description
+        if index.column() == PROJECT:
+            return split_deadline(description)[0]
+        if index.column() == DEADLINE:
+            return split_deadline(description)[1] or ""
         if index.column() == ACTIVITY:
             return self.activity(index.row()) or "none"
         return RISK_TO_TAG.get(risk or "", "none")
@@ -92,8 +97,12 @@ class LegendModel(QtCore.QAbstractTableModel):
         text = "" if value is None else str(value).strip()
         if index.column() == CODE:
             code = text
-        elif index.column() == DESCRIPTION:
-            description = text
+        elif index.column() == PROJECT:
+            description = join_deadline(text, split_deadline(description)[1])
+        elif index.column() == DEADLINE:
+            if not valid_deadline(text):
+                return False
+            description = join_deadline(split_deadline(description)[0], text)
         elif index.column() == ACTIVITY:
             activity = dict(ACTIVITY_CHOICES).get(text or "none")
         else:
@@ -139,3 +148,23 @@ class RiskDelegate(QtWidgets.QStyledItemDelegate):
 
     def setModelData(self, editor, model, index):
         model.setData(index, editor.currentText(), Qt.EditRole)
+
+
+class DeadlineDelegate(QtWidgets.QStyledItemDelegate):
+    """Accept a deadline only as ``YYYY-MM-DD``, or nothing to clear it."""
+
+    def createEditor(self, parent, option, index):
+        edit = QtWidgets.QLineEdit(parent)
+        edit.setPlaceholderText("YYYY-MM-DD")
+        edit.setValidator(QtGui.QRegularExpressionValidator(
+            QtCore.QRegularExpression(r"^$|^\d{0,4}(-\d{0,2}(-\d{0,2})?)?$"), edit))
+        return edit
+
+    def setEditorData(self, editor, index):
+        editor.setText(index.data(Qt.DisplayRole) or "")
+
+    def setModelData(self, editor, model, index):
+        if not model.setData(index, editor.text(), Qt.EditRole):
+            QtWidgets.QToolTip.showText(
+                editor.mapToGlobal(editor.rect().bottomLeft()),
+                "A deadline is a date written YYYY-MM-DD, such as 2026-11-15.")

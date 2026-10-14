@@ -36,7 +36,7 @@ def test_bad_codes():
     with pytest.raises(ValueError):
         name.decode("gAA-A")        # block before an activity in group two
     with pytest.raises(ValueError):
-        name.decode("g1A")         # digit inside a day-pattern is illegal
+        name.decode("g1x")         # a lowercase letter that is no activity
 
 
 def test_legend_check_exact_and_alias():
@@ -60,3 +60,12 @@ def test_legend_check_unknown():
     legend = name.read_legend(str(TABLE))
     rows, problems = name.check_against_legend(name.decode("gZ"), legend)
     assert problems == ["Z"]
+
+
+def test_digit_project_codes_round_trip():
+    decoded = name.decode("4g12e3-o-gA0")
+    assert decoded[0][1] == [("generative", "1"), ("generative", "2"), ("editing", "3")]
+    assert decoded[5][1] == [("generative", "A"), ("generative", "0")]
+    assert name.decode(name.encode(decoded)) == decoded
+    assert name.parse_legend_cell("3: 0374qflip :risky:") == ("3", "0374qflip", "speculative")
+    assert name.parse_legend_cell("5:00-06:30") is None     # a time, not code 5

@@ -1,0 +1,35 @@
+<h1>Longer view</h1>
+<p>One week says little. Three tools look across weeks, and they become useful
+once a month or so of weeks has been imported.</p>
+
+<h2>History, adherence week by week</h2>
+<p><img src="images/history.png" width="680"></p>
+<h3>In the window</h3>
+<ol>
+<li>Open the <a href="tab:History">History</a> tab.</li>
+<li>Leave <b>from</b> and <b>to</b> unsent for every week, or send them to set a range.</li>
+<li>Send <b>plot</b> with a file name to get the charts in the Preview pane.</li>
+</ol>
+<h3>At the command line</h3>
+<pre>writing-habit history --db ~/org/writing-habit.db
+writing-habit history --from 2026-09-01 --plot trend.png --db ~/org/writing-habit.db</pre>
+
+<h2>Context, why a week went the way it did</h2>
+<p>Tag a week with what shaped it, such as <code>teaching</code>,
+<code>meeting</code>, <code>travel</code>, or <code>data-collection</code>. A tag
+takes one run now and explains a bad week a year from now.</p>
+<h3>In the window</h3>
+<p>Open the <a href="tab:Context">Context</a> tab, choose <b>context set</b>, give the week and the tag, and press <b>Run</b>.</p>
+<h3>At the command line</h3>
+<pre>writing-habit context set --week 2026-10-05 --tag meeting \
+    --note "ABRF short course" --db ~/org/writing-habit.db
+writing-habit context list --db ~/org/writing-habit.db</pre>
+
+<h2>Seasons, weeks grouped three ways</h2>
+<p>The seasons dashboard groups weeks by month, by context tag, and by the
+schedule code in the table's file name, so you can see which kinds of weeks and
+which plan shapes you keep.</p>
+<h3>In the window</h3>
+<p>Open the <a href="tab:Seasons">Seasons</a> tab, choose <b>seasons</b>, set <b>out</b>, and press <b>Run</b>.</p>
+<h3>At the command line</h3>
+<pre>writing-habit seasons --out ~/org/dashboards/seasons.html --db ~/org/writing-habit.db</pre>

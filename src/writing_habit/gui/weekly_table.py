@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .. import name as namemod
 from ..plan_import import SECTION_TO_CATEGORY
+from ..project_lists import Entry as ListEntry, ProjectLists
 
 #: A row of letters and spaces, with an optional trailing colon.  Mirrors the
 #: section rule of the scheduler parser.
@@ -56,7 +57,7 @@ CATEGORY_SECTION = {"generative": "Generative", "editing": "Rewriting",
 #: when it is lowercase and the code starts with a capital, so a cell typed
 #: all in lowercase, such as ``ga``, is the code GA. This is the rule of
 #: ``writing_schedule.parser.split_cell``, and a test holds the two together.
-CELL_RE = re.compile(r"^([ges])([A-Z][A-Z0-9]{0,3})$")
+CELL_RE = re.compile(r"^([ges])(" + namemod.CODE_PATTERN + r")$")
 
 #: Where the activity of a block came from, in the order the rule tries them.
 ACTIVITY_SOURCES = ("cell", "legend", "section", "none")
@@ -100,12 +101,14 @@ DUE_DATE_RE = re.compile(
 RISK_LABEL = {"safe": "safe", "speculative": "risky"}
 
 #: The codes offered to a new project, in order. The 26 single letters come
-#: first, and the two-letter codes ``AA`` to ``ZZ`` follow, as the columns of a
-#: spreadsheet do, so a legend can hold up to 702 projects. Both readers accept
-#: a code of up to four characters, so a two-letter code works in the grid and
-#: in the legend. Only the file name is limited to single letters.
+#: first, then the ten digits ``0`` to ``9``, and then the two-letter codes
+#: ``AA`` to ``ZZ``, as the columns of a spreadsheet do. The 36 one-character
+#: codes are the ones a table file name can carry, so they are used up first.
+#: Both readers accept a code of up to four characters, so a two-letter code
+#: works in the grid and in the legend, but not in the file name.
 PROJECT_CODES: Tuple[str, ...] = tuple(
     [chr(c) for c in range(ord("A"), ord("Z") + 1)]
+    + [str(d) for d in range(10)]
     + [chr(a) + chr(b) for a in range(ord("A"), ord("Z") + 1)
        for b in range(ord("A"), ord("Z") + 1)])
 
@@ -246,6 +249,8 @@ class WeeklyTable:
         #: from the file, stays even while no cell uses it yet.
         self._synced_codes: set = set()
         self._parse(text)
+        #: The semester project lists that follow the week, edited in place.
+        self.lists = ProjectLists(self._after)
 
     # -- reading -----------------------------------------------------------
     @classmethod
@@ -396,6 +401,70 @@ class WeeklyTable:
             row.cells[0] = text
         row.raw = self._render_cell(row, 0)
         row.parsed = namemod.parse_legend_cell(text)
+        self.dirty = True
+        return True
+
+    def tidy_legend(self, reference=None, apply: bool = False):
+        """Split every legend description into a project name and a deadline.
+
+        Return one ``(document row, code, old description, project, deadline,
+        dropped text)`` tuple per entry the change would rewrite. With
+        ``apply`` the rows are rewritten, keeping each risk tag and default
+        activity. See :func:`writing_habit.name.tidy_description` for the rule.
+        """
+        changes = []
+        for index in self.legend_rows():
+            code, description, risk = self.rows[index].parsed
+            project, deadline, dropped = namemod.tidy_description(description, reference)
+            new = namemod.join_deadline(project, deadline)
+            if new == (description or "").strip():
+                continue
+            changes.append((index, code, description, project, deadline, dropped))
+            if apply:
+                self.set_legend(index, code, new, risk)
+        return changes
+
+    def sort_legend(self) -> bool:
+        """Order the legend rows by project number.  Say whether anything moved.
+
+        Only the legend rows trade places, so rules, the grid, and the lines
+        around the table stay where they are.
+        """
+        from ..project_lists import number_key
+        rows = self.legend_rows()
+        current = [self.rows[i] for i in rows]
+        ordered = sorted(current, key=lambda row: number_key(
+            namemod.split_deadline(row.parsed[1])[0]))
+        if ordered == current:
+            return False
+        for index, row in zip(rows, ordered):
+            self.rows[index] = row
+        self.dirty = True
+        return True
+
+    def copy_to_legend(self, entry: ListEntry) -> int:
+        """Add a project from a semester list to this week's legend.
+
+        The entry keeps its code when the legend does not use it yet, and
+        otherwise takes the first free code. Return the new legend row.
+        """
+        for code, (description, _risk) in self.legend().items():
+            if namemod.split_deadline(description)[0] == entry.project:
+                raise ValueError(f"{entry.project} is already in the legend as {code}")
+        code = entry.code if entry.code and entry.code not in self.legend() else (
+            self.next_free_code())
+        return self.add_legend(code, entry.description, entry.risk, entry.activity)
+
+    def adopt_lists(self, other: "WeeklyTable") -> bool:
+        """Give this table the semester lists of ``other``.  Say whether any came."""
+        if self.lists.present() or not other.lists.present():
+            return False
+        while self._after and not self._after[-1].strip():
+            self._after.pop()
+        start = next(i for i, line in enumerate(other._after)
+                     if line.strip().upper().startswith("#+NAME:"))
+        block = list(other._after[start:])
+        self._after.extend([""] + block)
         self.dirty = True
         return True
 
@@ -1044,9 +1113,10 @@ class WeeklyTable:
     def code_or_problem(self) -> Tuple[Optional[str], Optional[str]]:
         """Return ``(code, None)``, or ``(None, reason)`` when the week has no name.
 
-        A file name gives one letter to one block, so a legend code such as
+        A file name gives one character, a letter or a digit, to one block, so a
+        legend code such as
         ``EM`` cannot appear in a cell of a named table. The naming rules answer
-        that with a single-letter alias, and the reason says so, because the
+        that with a one-character alias, and the reason says so, because the
         writer has to choose the alias.
         """
         try:
@@ -1054,8 +1124,9 @@ class WeeklyTable:
         except ValueError as exc:
             reason = str(exc)
             if "one uppercase letter" in reason:
-                reason += (". Give that project a single-letter alias for the "
-                           "file name, and keep its full code in the legend.")
+                reason += (". Give that project a one-character alias, a letter "
+                           "or a digit, for the file name, and keep its full code "
+                           "in the legend.")
             return None, reason
 
     def totals(self) -> Dict[str, Dict[str, int]]:

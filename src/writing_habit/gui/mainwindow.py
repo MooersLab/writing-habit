@@ -36,8 +36,8 @@ TABS: List[Tuple[str, str, Tuple[Tuple[str, str], ...], int]] = [
      ((SCHEDULE, "sheets"),), 3),
     ("Plan", "Create the database and load a weekly table into it.",
      ((HABIT, "initdb"), (HABIT, "plan import")), 2),
-    ("Track", "Import actual sessions, or add one by hand.",
-     ((HABIT, "track import"), (HABIT, "track add")), 2),
+    ("Track", "Sync sessions from mytime.db, import a CSV or ICS file, or add one by hand.",
+     ((HABIT, "track sync"), (HABIT, "track import"), (HABIT, "track add")), 2),
     ("Compare", "Report planned against actual for one week.",
      ((HABIT, "compare"), (HABIT, "dashboard")), 2),
     ("History", "The cross-week adherence series.",
@@ -47,6 +47,9 @@ TABS: List[Tuple[str, str, Tuple[Tuple[str, str], ...], int]] = [
     ("Seasons", "The grouped-adherence dashboard, and the schedule-code reader.",
      ((HABIT, "seasons"), (HABIT, "name")), 2),
 ]
+
+#: The title of the last tab, which holds the tutorials rather than forms.
+TUTORIALS = "Tutorials"
 
 #: Tabs that gain more than generated forms in a later step.
 PENDING = {}
@@ -102,6 +105,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs = QtWidgets.QTabWidget(self)
         for title, purpose, commands, step in TABS:
             self.tabs.addTab(self._page(title, purpose, commands, step), title)
+        # The tutorials come last, after the stages of the loop they describe.
+        from .tutorial_view import TutorialsPage
+        self.tutorials = TutorialsPage(self)
+        self.tutorials.tab_requested.connect(self.show_tab)
+        self.tabs.addTab(self.tutorials, TUTORIALS)
         self.setCentralWidget(self.tabs)
 
         self.log = QtWidgets.QPlainTextEdit(self)
@@ -150,6 +158,10 @@ class MainWindow(QtWidgets.QMainWindow):
         editor = getattr(self, "editor", None)
         if editor is not None:
             editor.open_most_recent()
+
+        # Bring the tracker up to date before the writer looks at a report.
+        if settings.get("sync_on_start") == "true":
+            QtCore.QTimer.singleShot(0, lambda: self.sync_mytime(quiet=True))
 
     # -- construction ------------------------------------------------------
     def _page(self, title, purpose, commands, step) -> QtWidgets.QWidget:
@@ -218,6 +230,22 @@ class MainWindow(QtWidgets.QMainWindow):
         quit_action.triggered.connect(self.close)
         self.quit_action = quit_action
 
+        file_menu.insertSeparator(quit_action)
+        sync_action = QtWidgets.QAction("&Sync from mytime.db", self)
+        sync_action.setShortcut(QtGui.QKeySequence("Ctrl+Shift+Y"))
+        sync_action.setToolTip("Run track sync with the remembered mytime.db and database")
+        sync_action.triggered.connect(lambda: self.sync_mytime())
+        file_menu.insertAction(quit_action, sync_action)
+        auto_action = QtWidgets.QAction("Sync mytime.db at &startup", self)
+        auto_action.setCheckable(True)
+        auto_action.setChecked(settings.get("sync_on_start") == "true")
+        auto_action.toggled.connect(
+            lambda on: settings.put("sync_on_start", "true" if on else "false"))
+        file_menu.insertAction(quit_action, auto_action)
+        file_menu.insertSeparator(quit_action)
+        self.sync_action = sync_action
+        self.sync_on_start_action = auto_action
+
         view_menu = self.menuBar().addMenu("&View")
         view_menu.addAction(self.log_dock.toggleViewAction())
         view_menu.addAction(self.preview_dock.toggleViewAction())
@@ -229,6 +257,9 @@ class MainWindow(QtWidgets.QMainWindow):
         docs_action.triggered.connect(lambda: self.open_web_page(links.DOCS_URL))
         readme_action = help_menu.addAction("&README on GitHub")
         readme_action.triggered.connect(lambda: self.open_web_page(links.README_URL))
+        tutorials_action = help_menu.addAction("&Tutorials")
+        tutorials_action.triggered.connect(lambda: self.show_tab(TUTORIALS))
+        self.tutorials_action = tutorials_action
         help_menu.addSeparator()
         about_action = help_menu.addAction("&About")
         about_action.triggered.connect(self.show_about)
@@ -259,6 +290,37 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.specs[SCHEDULE]:
             head += "   |   writing-schedule not installed"
         return head
+
+    def show_tab(self, title: str) -> bool:
+        """Raise the tab called ``title``.  Say whether there is one."""
+        for index in range(self.tabs.count()):
+            if self.tabs.tabText(index) == title:
+                self.tabs.setCurrentIndex(index)
+                return True
+        return False
+
+    def sync_mytime(self, quiet: bool = False) -> bool:
+        """Run the track sync form with its remembered paths.  Say whether it ran.
+
+        The form is seeded from the settings, so this needs no typing once the
+        mytime.db path and the database have been used once. When a path is
+        missing the Track tab is raised so the writer can fill it in, unless
+        the call came from startup, where a quiet note in the log is enough.
+        """
+        panel = self.panels.get("track sync")
+        if panel is None:
+            return False
+        panel.seed_from_settings()
+        panel.refresh()
+        if panel.run_button.isEnabled():
+            panel.run()
+            return True
+        missing = ", ".join(argspec.missing_required(panel.spec, panel.values()))
+        self.append_log(f"Sync from mytime.db needs {missing or 'a moment'}; "
+                        "fill it in on the Track tab.")
+        if not quiet:
+            self.show_tab("Track")
+        return False
 
     def refresh_status(self) -> None:
         """Name the database the last command used, so a wrong one is visible."""

@@ -1,0 +1,31 @@
+<h1>Compare plan and effort</h1>
+<p>The compare report sets the planned minutes of a week beside the minutes
+you worked. Run it any day of the week to see where you stand.</p>
+
+<p><img src="images/compare.png" width="680"></p>
+<p class="caption">The Compare tab with the report for the practice week.</p>
+
+<h2>In the window</h2>
+<ol>
+<li>Sync first, so the report includes today, as in <a href="tutorial:track">Import writing effort</a>.</li>
+<li>Open the <a href="tab:Compare">Compare</a> tab and choose <b>compare</b>.</li>
+<li>Set <b>week</b> to any date in the week and press <b>Run</b>.</li>
+<li>To also get a bar chart, send <b>plot</b> with a file name such as <code>week.png</code>. The chart opens in the Preview pane. The chart needs matplotlib, which <code>pip install "writing-habit[plot]"</code> adds.</li>
+</ol>
+
+<h2>At the command line</h2>
+<pre>writing-habit compare --week 2026-10-05 --db ~/org/writing-habit.db
+writing-habit compare --week 2026-10-05 --db ~/org/writing-habit.db --plot week.png</pre>
+
+<h2>Reading the report</h2>
+<table border="1" cellspacing="0">
+<tr><th>Section</th><th>Question it answers</th></tr>
+<tr><td>Overall adherence</td><td>What share of the planned minutes did I work?</td></tr>
+<tr><td>By project</td><td>Which projects got their time and which were starved? A value above 1.00 means more time than planned.</td></tr>
+<tr><td>By activity</td><td>Did generative writing give way to easier editing or support?</td></tr>
+<tr><td>By barbell class</td><td>Did the risky projects keep their share, or were they the first to go?</td></tr>
+<tr><td>Streak</td><td>How many days in a row have I written?</td></tr>
+</table>
+<p>A project that shows planned minutes and an actual of zero was either not
+worked or not matched by the sync. The sync report says which.</p>
+<p>Next, <a href="tutorial:dashboard">write the dashboard</a>.</p>

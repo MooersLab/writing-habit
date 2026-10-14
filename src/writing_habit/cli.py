@@ -3,6 +3,7 @@
     writing-habit initdb   --db habit.db
     writing-habit plan      import my-week.org --week 2026-01-19 --db habit.db
     writing-habit track     import actuals.csv --format csv        --db habit.db
+    writing-habit track     sync ~/6003TimeTracking/cb/mytime.db --db habit.db [--since 2026-09-07]
     writing-habit track     add --day 2026-01-19 --project A --minutes 75 --category generative --db habit.db
     writing-habit compare   --week 2026-01-19 --db habit.db [--plot out.png]
     writing-habit dashboard --week 2026-01-19 --out week.html --db habit.db
@@ -59,6 +60,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_track_add.add_argument("--end")
     p_track_add.add_argument("--note")
     _add_db(p_track_add)
+    p_track_sync = track_sub.add_parser(
+        "sync",
+        help="bring sessions in from a mytime.db time-tracking database",
+        description="Copy timed sessions from the zTimeSpent table of a "
+        "mytime.db time-tracking database. Safe to rerun: rows already "
+        "copied are updated, never duplicated.",
+    )
+    p_track_sync.add_argument("source", help="the mytime.db time-tracking database")
+    p_track_sync.add_argument(
+        "--since", help="first day to copy (default: the first planned week)")
+    p_track_sync.add_argument("--until", help="last day to copy (default: no limit)")
+    p_track_sync.add_argument(
+        "--scope", choices=["semester", "legend", "all"], default="semester",
+        help="semester keeps the week's legend and the current semester list; "
+        "legend keeps only the week's legend; all keeps every project",
+    )
+    p_track_sync.add_argument(
+        "--table", help="weekly org table whose legend maps project numbers to "
+        "letters in weeks with no imported plan")
+    p_track_sync.add_argument(
+        "--dry-run", action="store_true", help="report what would change, write nothing")
+    _add_db(p_track_sync)
 
     p_cmp = sub.add_parser("compare", help="print the planned versus actual report")
     p_cmp.add_argument("--week", required=True, help="any date in the target week")
@@ -185,6 +208,16 @@ def main(argv: list[str] | None = None) -> int:
             from .track import ics_actuals
             n = ics_actuals.import_ics(con, args.path)
         print(f"Imported {n} sessions from {args.path}")
+        return 0
+
+    if args.command == "track" and args.track_command == "sync":
+        from .track import mytime_sync
+        result = mytime_sync.sync_mytime(
+            con, args.source, since=args.since, until=args.until,
+            scope=args.scope, table=args.table, dry_run=args.dry_run,
+        )
+        since = args.since or mytime_sync.default_since(con)
+        print(result.render(args.source, since, args.until, args.dry_run))
         return 0
 
     if args.command == "track" and args.track_command == "add":

@@ -1,0 +1,100 @@
+<h1>Edit the schedule</h1>
+<p>The weekly table is an org file with one row per time block and one column
+per day. Each cell holds a project code, optionally led by an activity letter.
+The legend under the grid says what each code means.</p>
+
+<p><img src="images/schedule.png" width="680"></p>
+<p class="caption">The Schedule tab with the practice week open. The legend is below the grid, and the report panels are beside it.</p>
+
+<h2>Open or start a table</h2>
+<h3>In the window</h3>
+<ol>
+<li>Open the <a href="tab:Schedule">Schedule</a> tab.</li>
+<li>Press <b>Open table</b> and choose the week's file, for example <code>Oct5.org</code>.
+The tab reopens the last table at the next start.</li>
+<li>For a new week press <b>New from template</b>. It asks for the number of projects and the shape of a day, morning, evening, or split.</li>
+</ol>
+<h3>At the command line</h3>
+<pre>writing-schedule template 5 --style morning --out ~/org/writing-schedule/tables/Oct12.org
+emacs ~/org/writing-schedule/tables/Oct12.org</pre>
+
+<h2>Fill the cells</h2>
+<p>Click a cell and pick a code from the drop-down, or type one. A letter before
+the code sets the activity of that block.</p>
+<table border="1" cellspacing="0">
+<tr><th>Cell</th><th>Means</th></tr>
+<tr><td><code>gA</code></td><td>generative work on project A</td></tr>
+<tr><td><code>eA</code></td><td>editing work on project A</td></tr>
+<tr><td><code>sA</code></td><td>support work on project A</td></tr>
+<tr><td><code>A</code></td><td>project A, with the project's default activity from the legend</td></tr>
+<tr><td><code>g3</code></td><td>generative work on project 3, a digit code</td></tr>
+</table>
+<p>The buttons above the grid insert, move, and delete rows. A new row offers
+a start time and a length, so the time column stays sorted.</p>
+
+<h2>Edit the legend</h2>
+<p>Each legend row has five columns.</p>
+<p><img src="images/legend.png" width="660"></p>
+<table border="1" cellspacing="0">
+<tr><th>Column</th><th>What to enter</th></tr>
+<tr><td>Code</td><td>A capital letter or a single digit 0 to 9. New projects get A to Z first, then 0 to 9, then AA, AB, and so on. Only the 36 one-character codes can appear in a table's file name.</td></tr>
+<tr><td>Project</td><td>The project directory name, such as <code>1001grantR01</code>. Begin with the four-digit project number, because the sync matches tracker rows by that number.</td></tr>
+<tr><td>Deadline</td><td>A date written <code>YYYY-MM-DD</code>, or empty. Anything else is refused.</td></tr>
+<tr><td>Risk tag</td><td><code>safe</code>, <code>risky</code>, or <code>none</code>. The dashboard compares the two classes.</td></tr>
+<tr><td>Default activity</td><td>The activity a bare code takes, for example <code>support</code> for email.</td></tr>
+</table>
+<p>In the file the deadline follows the project name, as in
+<code>A: 1001grantR01 2026-11-15 :safe:</code>.</p>
+<p class="note">An older legend with free text such as <code>B: 1006AIrxOpt, NSF Dec 15</code>
+can be cleaned up with <b>More &gt; Split legend into project and deadline</b>.
+The dialog lists every change and any text it would drop. Nothing is written until you save.</p>
+
+<h2>Keep the legend short with semester lists</h2>
+<p>The legend should name only the projects of this week. The projects you
+mean to work on this semester, and those that wait for later, live in six
+lists on the tabs beside the legend. Each tab shows its number of projects in parentheses.</p>
+<p><img src="images/semester-lists.png" width="660"></p>
+<table border="1" cellspacing="0">
+<tr><th>Tab</th><th>Holds</th></tr>
+<tr><td>This week</td><td>The legend, which lists the projects scheduled this week. Only these can go in the grid.</td></tr>
+<tr><td>Current semester projects</td><td>Every writing project of this semester. The sync counts time on these even in a week they are not scheduled.</td></tr>
+<tr><td>Completed this semester</td><td>Projects finished this semester, kept as a record. The sync still counts late time on them. <b>Mark completed</b> on the current list moves the selected project here.</td></tr>
+<tr><td>Next semester projects</td><td>Projects that start next semester.</td></tr>
+<tr><td>Next next semester projects</td><td>Projects that start the semester after.</td></tr>
+<tr><td>3*Next semester projects</td><td>Projects that start three semesters ahead.</td></tr>
+<tr><td>4*Next semester projects</td><td>Projects that start four semesters ahead, about two years out.</td></tr>
+</table>
+<p>Each list has the legend's columns. A project with no code yet shows an
+empty Code cell. The buttons add, move, and delete projects.
+<b>Sort by number</b> orders the projects by the four-digit number that starts
+each name, with unnumbered projects such as email last. The legend tab has the
+same button. <b>Copy to this week's legend</b> brings the selected project into the week,
+keeping its code when the legend does not use it yet.</p>
+<p>In the file each list is a small table after the weekly table, named by an
+org line. A row has the legend's form, and a dash stands for a missing code.</p>
+<pre>#+NAME: current-semester-projects
+| B: 1006AIrxOpt 2026-12-15 :safe: |
+| X: 0374qflip 2026-11-21 :risky:  |
+
+#+NAME: next-semester-projects
+| - 1002RNAeditingR01 2027-02-05 :safe: |</pre>
+<p>The schedule generator reads only the first table, so the lists never
+reach the plan, the calendar, or the sheets. <b>New from template</b> carries
+the lists of the open table into the new week.</p>
+
+<h2>Check the week</h2>
+<p>The panels beside the grid update as you type.</p>
+<ul>
+<li><b>Clashes</b> lists overlapping blocks and tints their cells.</li>
+<li><b>Totals</b> gives minutes by day, by project, and by activity.</li>
+<li><b>Legend</b> lists codes that are used but not defined, and codes defined twice.</li>
+<li><b>Name</b> gives the canonical file name, which encodes the week's pattern of blocks.</li>
+</ul>
+<pre>writing-schedule check ~/org/writing-schedule/tables/Oct5.org
+writing-habit name 4gAAeAsA-gWW --table ~/org/writing-schedule/tables/Oct5.org</pre>
+
+<h2>Save</h2>
+<p>Press <b>Save</b>. Each edit rewrites only the line it touched, so the rest
+of the file stays as you wrote it. <b>Open in editor</b> hands the file to
+Emacs, and the tab reloads it when you return.</p>
+<p>Next, <a href="tutorial:plan">import the plan</a>.</p>
