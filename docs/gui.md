@@ -106,9 +106,12 @@ and set the activity of the block, as described in
 [Choosing the activity of each block](#choosing-the-activity-of-each-block). Section rows and the time column refuse edits, because they belong to the
 file rather than to the week. Clicking a time does something else, which
 [Finding the times that do not overlap](#finding-the-times-that-do-not-overlap)
-describes. The legend table below the grid edits the code, the description, the
-risk tag, which is one of `none`, `safe`, and `risky`, and the default activity,
-which is one of `none`, `generative`, `editing`, and `support`. Five buttons above
+describes. The legend table below the grid edits the code, the project name, the
+deadline, the risk tag, which is one of `none`, `safe`, and `risky`, and the
+default activity, which is one of `none`, `generative`, `editing`, and `support`.
+The deadline is a date written `YYYY-MM-DD`, or empty. It is stored after the
+project name in the file, as in `Z: 1008ToolsForQCrOfRNA 2026-10-05 :safe:`, so
+the scheduler and the Emacs port still read the row as before. Five buttons above
 the legend insert a project, move the selected one, or delete it, as described
 below. A project code is a single letter or, once A to Z are taken, two letters
 such as `AB`, so the legend can hold more than 26 projects.
@@ -322,9 +325,14 @@ Code
   and so on to `ZZ`, which makes room for 702 projects. **New from template**
   accepts the same range and adds the two-letter entries after `Z:`.
 
-Description
-: The project name, optionally followed by a due date such as `Sept 25`, which
-  the cell tooltips read.
+Project
+: The project name, such as `0201dusp1`. Begin it with the project's
+  four-digit number, because `track sync` matches time-tracker rows to the
+  legend by that number.
+
+Deadline
+: A date written `YYYY-MM-DD`, or empty. Any other text is ignored, and the log
+  says so.
 
 Risk tag
 : One of `none`, `safe`, and `risky`.
@@ -472,3 +480,63 @@ The `gui` extra installs PyQt5, and the `preview` extra installs PyQtWebEngine,
 both of which are distributed under the GPL. Installing either extra therefore
 brings GPL terms into your environment. The About dialog of the interface states
 the same split.
+
+### Splitting old legend descriptions into project and deadline
+
+Legends written before the Deadline column held free text, such as
+`B: 1006AIrxOpt, NSF Dec 15 :safe:`. **More > Split legend into project and
+deadline** rewrites each such entry as a project name and a `YYYY-MM-DD`
+deadline. A dialog first lists every change. Its details show, for each entry,
+the project, the deadline, and any text that would be dropped, such as `NSF` or
+`submitted October 5`. Nothing reaches the file until you save.
+
+The rules are these. The project is every project directory name in the text,
+such as `1008ToolsForQCrOfRNA`, joined by a comma when there are two. The
+deadline is the last date in the text. A date led by `submitted` or `sent` is
+a record rather than a deadline and is not used. A month and day with no year
+take the year of the week in use, unless that is more than about two months in
+the past, when they take the next year, so `March 1` written in October means
+next March. Risk tags and default activities are kept.
+
+## The Tutorials tab
+
+The last tab holds one tutorial per task of the weekly loop, each in its own
+subtab: Start here, Edit the schedule, Import the plan, Import writing effort,
+Compare plan and effort, Dashboard, Longer view, Calendar and sheets, and
+Troubleshooting. Each page gives the point-and-click route and the matching
+commands, with screenshots of the practice week in `examples/tutorial`. A link
+such as **Track** on a page raises that tab, and **Help > Tutorials** opens the
+tab from anywhere.
+
+![The Tutorials tab, open on Start here.](../src/writing_habit/gui/tutorials/images/tutorials-tab.png)
+
+The pages and their images ship inside the package, so the tab needs no network.
+After a change to the window, regenerate the screenshots from the real program:
+
+```
+QT_QPA_PLATFORM=offscreen PYTHONPATH=src python scripts/make_tutorial_images.py
+```
+
+## Semester project lists
+
+The box under the grid, titled **Projects**, holds four tabs, each showing its
+number of projects in parentheses. **This week** is the week's legend, which
+should name only the projects of the week. **Current
+semester projects**, **Next semester projects**, and **Next next semester
+projects** hold the longer lists, with the same columns as the legend. Each
+list has buttons to add, move, and delete a project, and **Copy to this week's
+legend** brings the selected project into the week, keeping its code when the
+legend does not use it yet. A project with no code yet has an empty Code cell.
+
+In the file each list is its own small table after the weekly table, named by
+an org line, with rows in the legend's form and a dash for a missing code:
+
+```
+#+NAME: current-semester-projects
+| B: 1006AIrxOpt 2026-12-15 :safe: |
+| - 1002RNAeditingR01 2027-02-05 :safe: |
+```
+
+The scheduler reads only the first table of the file, so the lists never reach
+plan import, the calendar, or the sheets. `track sync` reads the current list,
+and **New from template** carries the lists into the new week.

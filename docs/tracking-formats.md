@@ -89,3 +89,41 @@ Inside a table cell `:safe:` is literal text, because org reads `:tag:` syntax
 only on headlines, so the tag does not affect the table or its export. Plan
 import strips the tag before it stores the description, so the project name
 stays clean.
+
+## Sync from mytime.db
+
+`writing-habit track sync` copies timed sessions straight from the `zTimeSpent`
+table of a `mytime.db` time tracker, with no CSV file in between.
+
+```sh
+writing-habit track sync ~/6003TimeTracking/cb/mytime.db --db ~/org/writing-habit.db
+```
+
+| Option | Meaning |
+|---|---|
+| `--since`, `--until` | Days to copy. The default start is the first planned week. |
+| `--scope semester` | Default. Keep the week's legend and the table's current semester project list. A semester project not in the week's legend counts as unplanned work. |
+| `--scope legend` | Keep only projects named in the week's table legend. |
+| `--scope all` | Also keep other projects, under their directory name, as unplanned work. |
+| `--table TABLE` | The table whose legend is read for weeks with no imported plan. The Track tab fills it with the table open in the Schedule tab. |
+| `--dry-run` | Report what would change and write nothing. |
+
+How a row is read:
+
+- The project number (`ProjectID`, or the leading digits of `ProjectDirectory`)
+  is matched against the four-digit numbers in the legend of the table that
+  planned that week, so `1008` becomes the letter whose description begins
+  `1008ToolsForQCrOfRNA`. A week with no imported plan reads the legend of
+  `--table`, or else of the nearest planned week. A week with no legend at all
+  is reported as such, and its rows are left out.
+- `Activity` starting with g, e or r, or s gives generative, editing, or support.
+  Otherwise the session takes the activity of an overlapping planned block.
+- A row without both a start and an end time is skipped until it has them.
+  An end before the start wraps past midnight.
+- Each session stores `mytime.db:zTimeSpent:<id>` in `source_ref`. A rerun
+  updates edited rows and never inserts a row twice.
+
+The Track tab of the desktop app has the same form. It remembers the mytime.db
+path, and **File > Sync from mytime.db** (Ctrl+Shift+Y) runs it with the
+remembered paths. **File > Sync mytime.db at startup** runs it each time the app
+opens. For the shell, `scripts/whsync.sh` defines a `whsync` function.
