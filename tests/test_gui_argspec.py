@@ -14,7 +14,7 @@ from writing_habit.gui import argspec
 SPECS = argspec.commands(cli.build_parser())
 
 EXPECTED = {
-    "initdb", "plan import", "track import", "track add", "compare",
+    "initdb", "plan import", "track import", "track add", "track sync", "compare",
     "dashboard", "history", "context set", "context clear", "context list",
     "seasons", "name",
 }

@@ -37,7 +37,7 @@ def window(app, tmp_path, monkeypatch):
 
 def test_every_loop_stage_has_a_tab(window):
     titles = [window.tabs.tabText(i) for i in range(window.tabs.count())]
-    assert titles == [entry[0] for entry in mainwindow.TABS]
+    assert titles == [entry[0] for entry in mainwindow.TABS] + [mainwindow.TUTORIALS]
     assert titles[0] == "Schedule"          # the loop starts at the table
 
 
