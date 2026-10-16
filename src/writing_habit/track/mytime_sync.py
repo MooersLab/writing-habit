@@ -141,14 +141,15 @@ def _project_number(project_id, directory) -> Optional[str]:
 def semester_numbers(table_path: str) -> set:
     """The project numbers of this semester's lists in a weekly table file.
 
-    A project counts while it is on the current list and after it moves to the
+    A project counts while it is on the current list, while it waits on the
+    Carried over list after a roll forward, and after it moves to the
     completed list, because late work on a finished project is still writing.
     """
-    from ..project_lists import COMPLETED, CURRENT, read_lists
+    from ..project_lists import CARRIED, COMPLETED, CURRENT, read_lists
 
     found = set()
     lists = read_lists(table_path)
-    for name in (CURRENT, COMPLETED):
+    for name in (CURRENT, CARRIED, COMPLETED):
         for entry in lists.entries(name):
             found.update(PROJECT_NUMBER.findall(entry.description))
     return found

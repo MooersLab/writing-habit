@@ -138,9 +138,11 @@ def test_each_list_has_a_tab_beside_the_legend(editor):
     tabs = editor.project_tabs
     titles = [tabs.tabText(i) for i in range(tabs.count())]
     assert titles == [f"{LEGEND_TAB} (2)", "Current semester projects (3)",
-                      "Completed this semester",
+                      "Carried over", "Completed this semester",
                       "Next semester projects (2)", "Next next semester projects",
-                      "3*Next semester projects", "4*Next semester projects"]
+                      "3*Next semester projects", "4*Next semester projects",
+                      "Grasscatcher"]
+    assert not tabs.isTabVisible(2)                   # Carried over is empty
     panel = editor.list_panels[CURRENT]
     assert panel.model.columnCount() == editor.legend_model.columnCount()
     assert panel.model.index(1, 1).data() == "1006AIrxOpt"
@@ -209,9 +211,10 @@ def parse_entry_ok(text):
 
 def test_five_horizons_and_digit_codes_in_lists(table_file):
     from writing_habit.project_lists import NAMES
-    assert NAMES[1] == "completed-this-semester"
-    assert NAMES[4:] == ["next-next-next-semester-projects",
-                         "next-next-next-next-semester-projects"]
+    assert NAMES[1] == "carried-over-projects"
+    assert NAMES[2] == "completed-this-semester"
+    assert NAMES[5:] == ["next-next-next-semester-projects",
+                         "next-next-next-next-semester-projects", "grasscatcher"]
     lists = ProjectLists([])
     lists.insert(NAMES[5], None, Entry("7", "1452PHFSboXt 2027-03-01", "safe"))
     assert lists.entries(NAMES[5])[0].code == "7"

@@ -13,7 +13,7 @@ import re
 from typing import Optional
 
 from ..name import CODE_PATTERN, join_deadline, valid_deadline
-from ..project_lists import COMPLETED, CURRENT, Entry
+from ..project_lists import CARRIED, COMPLETED, CURRENT, GRASSCATCHER, Entry
 from .legend_model import (ACTIVITY, ACTIVITY_CHOICES, ActivityDelegate, CODE,
                            DEADLINE, HEADERS, PROJECT, RISK, RISK_CHOICES,
                            DeadlineDelegate, RiskDelegate)
@@ -50,6 +50,8 @@ class ProjectListModel(QtCore.QAbstractTableModel):
         if role != Qt.DisplayRole:
             return None
         if orientation == Qt.Horizontal:
+            if self.name == GRASSCATCHER and section == PROJECT:
+                return "Task"
             return HEADERS[section]
         return str(section + 1)
 
@@ -111,6 +113,8 @@ class ProjectListPanel(QtWidgets.QWidget):
     copied = pyqtSignal(int)
     #: Emitted with the name of the list a project was moved to.
     moved = pyqtSignal(str)
+    #: Emitted with the position of a grasscatcher task to commit to a block.
+    commit_requested = pyqtSignal(int)
     logged = pyqtSignal(str)
 
     def __init__(self, name: str, title: str, parent=None):
@@ -159,11 +163,45 @@ class ProjectListPanel(QtWidgets.QWidget):
                 "Move the selected project to Completed this semester")
             self.complete_button.clicked.connect(lambda: self.mark_completed())
 
+        # The Carried over list hands a project back to the current list, or
+        # Delete project drops it, so every carried project gets a decision.
+        self.keep_button = None
+        if name == CARRIED:
+            self.keep_button = QtWidgets.QPushButton("Move to current list")
+            self.keep_button.setToolTip(
+                "Keep the selected project: move it to this period's list")
+            self.keep_button.clicked.connect(lambda: self.keep())
+
+        # The grasscatcher holds tasks, so it commits one to a block instead
+        # of copying a project to the legend.
+        self.commit_button = None
+        if name == GRASSCATCHER:
+            self.add_button.setText("Add task")
+            self.add_button.setToolTip(
+                "Add a task to the grasscatcher. Put the project's code in the "
+                "Code column so Commit knows where it belongs.")
+            self.delete_button.setText("Delete task")
+            self.commit_button = QtWidgets.QPushButton("Commit to this block")
+            self.commit_button.setToolTip(
+                "Make the selected task an objective of the block selected in "
+                "the grid, and take it off the grasscatcher")
+            self.commit_button.clicked.connect(
+                lambda: self.commit_requested.emit(self.selected())
+                if self.selected() is not None else None)
+            for column in (RISK, ACTIVITY):
+                self.view.setColumnHidden(column, True)
+
         bar = QtWidgets.QHBoxLayout()
         buttons = [self.add_button, self.up_button, self.down_button,
-                   self.delete_button, self.sort_button, self.copy_button]
+                   self.delete_button]
+        if name != GRASSCATCHER:
+            buttons += [self.sort_button, self.copy_button]
+        else:
+            buttons.append(self.commit_button)
         if self.complete_button is not None:
             buttons.append(self.complete_button)
+        if self.keep_button is not None:
+            buttons.append(self.keep_button)
         for button in buttons:
             bar.addWidget(button)
         bar.addStretch(1)
@@ -195,7 +233,8 @@ class ProjectListPanel(QtWidgets.QWidget):
         count = self.model.rowCount()
         self.add_button.setEnabled(self.table is not None)
         self.sort_button.setEnabled(count > 1)
-        for button in (self.delete_button, self.copy_button, self.complete_button):
+        for button in (self.delete_button, self.copy_button, self.complete_button,
+                       self.keep_button, self.commit_button):
             if button is not None:
                 button.setEnabled(row is not None)
         self.up_button.setEnabled(row is not None and row > 0)
@@ -214,7 +253,8 @@ class ProjectListPanel(QtWidgets.QWidget):
         """Add ``entry``, or a blank row to fill in, below the selection."""
         if self.table is None:
             return None
-        entry = entry or Entry(None, "new project")
+        entry = entry or Entry(None, "new task" if self.name == GRASSCATCHER
+                               else "new project")
         row = self.selected()
         position = self.table.lists.insert(
             self.name, None if row is None else row + 1, entry)
@@ -257,6 +297,20 @@ class ProjectListPanel(QtWidgets.QWidget):
         self.logged.emit(f"Marked {entry.project} completed this semester")
         self._changed()
         self.moved.emit(COMPLETED)
+        return entry
+
+    def keep(self) -> Optional[Entry]:
+        """Move the selected carried project to the current list."""
+        row = self.selected()
+        if row is None or self.keep_button is None:
+            return None
+        entry = self.table.lists.transfer(self.name, row, CURRENT)
+        self.model.set_table(self.table)
+        if self.model.rowCount():
+            self._select(min(row, self.model.rowCount() - 1))
+        self.logged.emit(f"Kept {entry.project} on the current list")
+        self._changed()
+        self.moved.emit(CURRENT)
         return entry
 
     def delete(self) -> Optional[Entry]:

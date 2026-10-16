@@ -310,6 +310,167 @@ clash is the more urgent thing to see. Clicking a day cell or a section header
 removes the tint, and so does opening another table. Hovering over a yellow
 time says that it does not overlap the selected one.
 
+### The hour view and the range picker
+
+**Hour view**, the first button of the bar, folds the table into 24 rows, one
+per hour, with the days as columns. Press it again for the row view. The hour
+view is the default, and the window remembers which view you used last.
+
+![The hour view of a week, with a Saturday run of five hours tinted amber and listed in the Breaks panel.](imgs/gui-hour-view.png)
+
+A cell lists the blocks that start in that hour, such as `gB 04:00-06:00`. The
+hours a longer block runs into show `↓ gB` in the same colour, so a block reads
+as one bar down the column. The activity colours, the red clash tint, and the
+tooltips are the same as in the row view. Hours before and after the hours the
+printed sheet draws are grey.
+
+Double-click a cell, or press Enter on it, to open the range picker for that
+day and hour.
+
+![The picker for Wednesday at 09:00, with the project box, the activity buttons, and the grid of 32 ranges.](imgs/gui-hour-picker.png)
+
+Choose the project, check the activity if the project's default is not the one
+you want, and click one end time. The rows of the grid are the four starts in
+the hour, and the columns are the lengths from 15 minutes to two hours in
+15-minute steps. One click places the block and closes the picker. The range
+you used last for a project is the default button, so a repeated block is the
+Enter key. A range that would run past midnight is greyed out. The blocks that
+already start in the hour are listed below the grid with a **Remove** button
+each.
+
+The table file keeps its format. A block goes into the row for its exact range,
+and when the file has no such row the editor adds one in start-time order. The
+picker always writes the activity letter, as in `eB`, so a new row under a
+section header keeps the activity you chose. Removing a block empties its cell
+and keeps its row.
+
+### Shifting a block earlier or later
+
+The second bar of the Schedule tab shifts the selected block in time. Select a
+block in either view, then press **Earlier 1 h**, **Earlier 15 min**,
+**Later 15 min**, or **Later 1 h**. In the hour view, Alt+Up and Alt+Down shift
+by 15 minutes, and Alt+Shift+Up and Alt+Shift+Down shift by an hour. The
+selection follows the block, so pressing the button again keeps moving it. In
+an hour that a longer block runs into, the shift moves that longer block.
+
+A block keeps its length and its activity. When it moves under a different
+section header, its activity letter is written into the cell, so a shift never
+changes what the block counts as. A shift that would start before midnight or
+end after it is refused, and the reason appears in the log.
+
+**Push later blocks down** decides what happens when the moved block lands on
+a later one. With the box checked, which is the default, a block that starts at
+or after the moved block and overlaps it moves down to start where the moved
+block ends. The block after it moves on the same terms, and the chain stops at
+the first block that is already clear, so a gap you left later in the day
+stays. A block that starts earlier never moves, so shifting a block up into an
+earlier one leaves a red clash for you to settle. With the box unchecked,
+nothing else moves and an overlap shows as a clash.
+
+The range picker carries the same box. Suppose a block is planned at 04:00 and
+you place a two-hour block at 03:00. With the box checked, the 04:00 block moves
+to 05:00 instead of being deleted, and any block it then overlaps moves too.
+
+Each move empties the old cell and keeps its row, as Remove does. A range the
+file lacks gets its own row in start-time order. **More > Drop unused time
+rows** clears away the empty rows that a day of shifting leaves.
+
+### Objectives and review for a block
+
+A planned block answers when you meant to write. Two small records answer what
+the block was for and how it went. Both live in the habit database named in the
+Plan and Track forms, keyed by the block's day, start time, and project code.
+Track sync writes only to the session table, so rerunning it never touches
+them, and when you shift a block its objectives and review move with it.
+
+The picker shows them on its right for every block that starts in, or runs
+into, the hour you opened. **Objectives and review** on the second bar opens
+the same panel for the selected block on its own.
+
+**Objectives for this block** holds one to three things the block is for, such
+as "Draft the second aim paragraph". Type one and press Enter or **Add**. Check
+an objective off when you meet it. Double-click one to reword it. The panel
+warns above three, because a long list turns a good session into a failed one.
+Objectives are saved as soon as they change, because they are the plan.
+
+**Review when the block ends** takes about thirty seconds.
+
+| Field | What to enter |
+|-------|---------------|
+| Objectives met | Filled from the checked objectives. Typed by hand for a block with none. |
+| Focus, 1 to 5 | How absorbed you stayed, from 1 (scattered) to 5 (absorbed). |
+| Interruptions | A tally. **+1** counts one. |
+| Output | Optional, such as 600 words, figure 2, or three papers read. |
+| Next step | One sentence on where to start next time. |
+| Note | Anything else. |
+
+**Save review** writes the review. Closing the picker or the dialog saves a
+changed review too. The next block of the same project shows your last next
+step at the top of the panel, so the session starts warm.
+
+When the week has no date, the panel says so. A file named for its Monday, such
+as `Oct12.org`, gives the date directly. A file renamed to its canonical name
+takes the week that plan import filed it under in the database.
+
+### The grasscatcher list
+
+The **Grasscatcher** tab, after the semester lists, holds the tasks that did not
+make a block's objectives. Capture everything there, then commit a few items to
+each block. Each row is a task, with the code of its project in the Code column
+when it has one.
+
+```org
+#+NAME: grasscatcher
+| A: find three citations for the rigor section |
+| - tidy the bib file |
+```
+
+Select a block in the grid, select a task, and press **Commit to this block**
+to make the task an objective of that block. The task leaves the list. In the
+review panel, **From grasscatcher** offers the same tasks with the block's own
+project first, and **Back to grasscatcher** returns an objective to the list.
+The list lives in the weekly table file beside the semester lists, so it
+travels to next week's file with them. The scheduler reads only the first table
+of the file and never sees it.
+
+### The post-block debrief
+
+**Debrief**, at the bottom of the review panel, writes a short note about the
+block. It leads with what you finished, names one thing that got in the way,
+and suggests a first step for the next block. It never writes your manuscript.
+The note is saved with the review.
+
+With **Ask the local model** unchecked, the default, the note is a plain
+summary written from your review with no model, and nothing leaves the app.
+Checked, the panel sends the review of this one block, meaning the project
+name, the objectives, the counts, and your notes, to a model served on your own
+computer through the Ollama interface. The model and the address are the
+`ai_model` and `ai_url` settings, `llama3.2` at `http://localhost:11434` by
+default. An address that is not on this computer is refused. When the model
+does not answer, the panel falls back to the plain summary and says why.
+
+To try it, install Ollama, run `ollama pull llama3.2`, and check the box.
+
+### The two-hour break rule
+
+The **Breaks** panel lists every run of blocks on one day that lasts more than
+two hours with no gap of at least 15 minutes. Blocks that touch or overlap join
+a run, and so do blocks separated by less than 15 minutes. The cells of each
+run are tinted amber in both views, and a clash keeps its red tint. The rule is
+a warning, and a table with a long run still saves.
+
+### Dropping unused time rows
+
+**More > Drop unused time rows** deletes every time-block row whose day cells
+are all empty, after asking. Section headers, the legend, the filled rows, and
+the canonical name stay as they were. A copy of the file on disk is kept with
+`.bak` added, and nothing else is written until you save.
+
+The printed sheets do not change. The `sheets` command draws every hour from
+the start hour to the end hour as a ruled grid and draws only the filled cells
+as boxes, so the blank space for pen work is there whatever rows the table
+holds.
+
 ### Inserting a project into the legend
 
 Two buttons above the legend table, **Insert project above** and
@@ -474,6 +635,15 @@ without the extra skips the graphical tests rather than failing them.
 | The Totals panel lists blocks counted as generative | those blocks have no letter, no project default, and no section above them |
 | **New from template** offers no starter days | writing-schedule is older than 0.4; upgrade it |
 | A deleted project comes back as a blank entry | a cell of the grid still uses its code, and a grid edit restored the entry; clear those cells and delete it again |
+| **Hour view** is greyed out | no table is open |
+| **Insert above**, **Move up**, and **Delete row** are greyed out in the hour view | they act on a file row; press **Hour view** again for the row view |
+| A picker button is greyed out | that range would run past midnight |
+| A cell is amber | the block is part of a run of more than two hours with no 15-minute break; see the Breaks panel |
+| The picker added a row to the file | the file had no row for that exact range; the row is placed in start-time order |
+| The project tabs read Current semester projects | there is no `periods.org` beside the table, or the date falls outside it; press **Periods** |
+| The tabs name the wrong semester | the file name's date or today's date is outside the period you meant; check the dates in **Periods** |
+| A banner asks which period the lists are for | the file has no `#+PROJECT_PERIOD:` line; choose the period and press **File under this period** |
+| **Roll forward** is offered too early | the new period starts sooner than you want; move its Start date in **Periods** |
 | The Name panel says the week has no canonical name | a cell holds a two-letter code such as `AB`; the file name allows only single letters, so give the project a letter or keep the current name |
 
 ## Licensing
@@ -522,7 +692,8 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src python scripts/make_tutorial_images.py
 
 ## Semester project lists
 
-The box under the grid, titled **Projects**, holds seven tabs, each showing its
+The box under the grid, titled **Projects**, holds seven tabs, and an eighth
+after a roll forward, each showing its
 number of projects in parentheses. **This week** is the week's legend, which
 should name only the projects of the week. **Current
 semester projects**, **Completed this semester**, **Next semester projects**, **Next next semester
@@ -547,3 +718,69 @@ an org line, with rows in the legend's form and a dash for a missing code:
 The scheduler reads only the first table of the file, so the lists never reach
 plan import, the calendar, or the sheets. `track sync` reads the current list,
 and **New from template** carries the lists into the new week.
+
+### Naming the lists by semester, quarter, or fiscal year
+
+The **Periods** button, beside **Sort by number** on the This week tab, edits a
+calendar of named periods. With a calendar, the tabs read **Fall 2026
+projects**, **Completed in Fall 2026**, **Spring 2027 projects**, and so on, in
+place of Current semester projects and 3*Next semester projects. Each tab's
+tooltip gives the period's dates and the list's name in the file. Without a
+calendar, or past its last period, a tab keeps its plain title.
+
+![The Periods dialog, with six semesters and the kind of period that names the lists.](imgs/gui-periods-dialog.png)
+
+The calendar is an org table in `periods.org`, beside the weekly tables, so it
+can be edited in Emacs as well:
+
+```
+#+NAME: periods
+| Kind     | Name        | Start      | End        | Horizon |
+|----------+-------------+------------+------------+---------|
+| semester | Fall 2026   | 2026-08-04 | 2026-12-18 | yes     |
+| semester | Spring 2027 | 2026-12-19 | 2027-05-14 | yes     |
+| semester | Summer 2027 | 2027-05-15 | 2027-08-02 | yes     |
+```
+
+Kind is any word that groups periods, such as semester, quarter, trimester, or
+fiscal. **Kind of period that names the project lists** chooses which kind the
+tabs use. A period whose Horizon box is cleared keeps its name but is not a
+planning step, which suits a summer you do not plan. **Fill a year** adds
+starter rows for semesters, academic quarters, trimesters, calendar quarters,
+or a fiscal year that starts in a chosen month. The starter periods are
+contiguous, so the break before a term counts toward that term. The dialog
+lists overlapping periods, backward dates, repeated names, and long gaps before
+it saves.
+
+The date that decides the current period is the Monday in the file name, such
+as `Oct12.org`, or today when the name carries no date.
+
+### Rolling the lists forward to a new period
+
+The weekly file records the period its lists belong to in one line before the
+first list, such as `#+PROJECT_PERIOD: Fall 2026`. A file without that line
+shows a banner that asks which period the lists are for, with **File under this
+period**.
+
+When the week falls in a later period, the banner offers **Roll forward to
+Spring 2027**. The titles keep the old period's names until you roll.
+
+![The banner offering a roll forward from Fall 2026 to Spring 2027.](imgs/gui-periods-roll.png)
+
+A roll asks first and then:
+
+| List | What happens |
+|------|--------------|
+| Completed | Appended to `completed.org`, beside `periods.org`, under a heading for the period, then emptied |
+| Current | Moved to **Carried over** for review |
+| Each later list | Moves one period nearer |
+| The farthest list | Left empty for the newest period |
+
+![After the roll, the projects of Fall 2026 wait on the Carried over tab.](imgs/gui-periods-carried.png)
+
+On **Carried over**, **Move to current list** keeps a project and **Delete
+project** drops it. The tab hides itself once it is empty. `track sync` counts
+time on carried projects until you decide. A roll across several periods, after
+a long leave, moves the lists one step per period. The weekly grid and the
+legend do not change, and the file is written when you save.
+

@@ -145,6 +145,50 @@ def _interval(start: str, end: str) -> Tuple[int, int]:
     return first, last
 
 
+#: The picker's step and its longest block, in minutes. Two hours at most
+#: forces a break every two hours, which the break check then guards across
+#: blocks placed back to back.
+PICK_STEP = 15
+PICK_MAX = 120
+#: The shortest gap that counts as a break between two blocks, in minutes.
+BREAK_GAP = 15
+
+
+def picker_ranges(hour: int) -> List[List[Optional[Tuple[str, str]]]]:
+    """Return the 4 by 8 grid of ``(start, end)`` ranges offered for ``hour``.
+
+    The rows are the four quarter-hour starts in the hour and the columns are
+    the eight lengths from 15 to 120 minutes. A range that would run past
+    midnight, or end at 24:00, is ``None``, because the picker does not place
+    overnight blocks.
+    """
+    grid: List[List[Optional[Tuple[str, str]]]] = []
+    for offset in range(0, 60, PICK_STEP):
+        start = hour * 60 + offset
+        row: List[Optional[Tuple[str, str]]] = []
+        for length in range(PICK_STEP, PICK_MAX + 1, PICK_STEP):
+            end = start + length
+            row.append(None if end >= 24 * 60
+                       else (_from_minutes(start), _from_minutes(end)))
+        grid.append(row)
+    return grid
+
+
+@dataclass
+class BreakRun:
+    """A run of blocks on one day with no break of ``BREAK_GAP`` minutes."""
+
+    offset: int
+    start: str
+    end: str
+    blocks: List["Block"]
+
+    @property
+    def minutes(self) -> int:
+        first, last = _interval(self.start, self.end)
+        return last - first
+
+
 RULE, HEADER, SECTION, BLOCK, LEGEND, OTHER = (
     "rule", "header", "section", "block", "legend", "other")
 
@@ -1177,6 +1221,285 @@ class WeeklyTable:
             if match:
                 out.append((code, match.group(1) or match.group(2)))
         return out
+
+    # -- the hour view ------------------------------------------------------
+    def column_for(self, offset: int) -> int:
+        """Return the cell index of the day column for ``offset`` (0 is Monday)."""
+        for index, day, _label in self.columns:
+            if day == offset:
+                return index
+        raise ValueError(f"the table has no column for day {offset}")
+
+    def find_block_row(self, start: str, end: str) -> Optional[int]:
+        """Return the first time-block row for exactly ``start``-``end``, or ``None``."""
+        for index in self.block_rows:
+            if tuple(self.rows[index].parsed) == (start, end):
+                return index
+        return None
+
+    def ensure_block_row(self, start: str, end: str) -> Tuple[int, bool]:
+        """Return the row for ``start``-``end``, inserting it if needed.
+
+        The second value says whether a row was inserted. A new row goes after
+        the last block row whose range sorts before it, or above the first
+        block row when none does, so a sorted table stays sorted. Only that one
+        line is added to the file.
+        """
+        found = self.find_block_row(start, end)
+        if found is not None:
+            return found, False
+        blocks = self.block_rows
+        if not blocks:
+            raise ValueError("the table has no time-block row to place a new "
+                             "row beside")
+        key = (_interval(start, end))
+        before = [i for i in blocks if _interval(*self.rows[i].parsed) <= key]
+        if before:
+            near = max(before, key=lambda i: (_interval(*self.rows[i].parsed), i))
+            return self.insert_block(near, above=False, start=start, end=end), True
+        near = min(blocks, key=lambda i: (_interval(*self.rows[i].parsed), i))
+        return self.insert_block(near, above=True, start=start, end=end), True
+
+    def place_block(self, offset: int, start: str, end: str,
+                    value: str, push: bool = False) -> Tuple[int, bool]:
+        """Write ``value`` (such as ``gA``) for day ``offset`` at ``start``-``end``.
+
+        Return ``(row, inserted)``. The value should carry its activity letter,
+        so a row inserted under a section header keeps the activity the writer
+        chose. The range must be within the picker's limits. With ``push``,
+        the later blocks of that day that the new block would overlap move
+        down first, as :meth:`plan_push` describes.
+        """
+        first, last = _interval(start, end)
+        if _to_minutes(end) <= _to_minutes(start):
+            raise ValueError("the block must end after it starts, on the same day")
+        if last - first > PICK_MAX:
+            raise ValueError(f"a block is at most {PICK_MAX} minutes long")
+        if not split_cell(value)[1]:
+            raise ValueError("choose a project code")
+        column = self.column_for(offset)
+        if push:
+            moves = self.plan_push(offset, start, end)
+            if moves:
+                self._check_targets(moves)
+                self.apply_moves(moves)
+        row, inserted = self.ensure_block_row(start, end)
+        self.set_cell(row, column, value)
+        return row, inserted
+
+    def clear_block(self, row_index: int, column_index: int) -> bool:
+        """Empty one cell and keep its row.  Return whether it changed."""
+        return self.set_cell(row_index, column_index, "")
+
+    # -- shifting blocks in time ---------------------------------------------
+    def block_at(self, row_index: int, column_index: int) -> Optional[Block]:
+        """Return the block in one cell, or ``None`` when the cell is empty."""
+        for block in self.blocks():
+            if (block.row, block.column) == (row_index, column_index):
+                return block
+        return None
+
+    def _cell_value(self, block: Block) -> str:
+        """Return the cell text that keeps ``block``'s activity wherever it goes.
+
+        An activity that came from the section header would change when the
+        block lands under another header, so it is written into the cell.
+        """
+        value = self.cell(block.row, block.column)
+        if block.activity_source in ("section", "none"):
+            letter = CATEGORY_LETTER.get(block.category, "")
+            value = letter + block.letter
+        return value
+
+    def plan_push(self, offset: int, start: str, end: str,
+                  exclude=()) -> List[Tuple[Block, str, str]]:
+        """Return the later blocks that ``start``-``end`` would push down.
+
+        A block on day ``offset`` that starts at or after ``start`` and
+        overlaps the range moves down to start where the range ends, keeping
+        its length. The block after it moves on the same terms against the
+        new end, and the chain stops at the first block that is clear, so a
+        gap the writer left later in the day stays. Blocks that start before
+        ``start`` never move, so an overlap with one of them stays a clash.
+        ``exclude`` holds the ``(row, column)`` cells to leave out, such as
+        the block being shifted. Raise :class:`ValueError` when a push would
+        run past midnight.
+        """
+        first, chain_end = _interval(start, end)
+        skip = set(exclude)
+        later = sorted(
+            (b for b in self.blocks()
+             if b.offset == offset and (b.row, b.column) not in skip
+             and _to_minutes(b.start) >= first),
+            key=lambda b: (_interval(b.start, b.end), b.row))
+        moves: List[Tuple[Block, str, str]] = []
+        for block in later:
+            b_first, b_last = _interval(block.start, block.end)
+            if b_first >= chain_end:
+                break
+            length = b_last - b_first
+            new_first, new_last = chain_end, chain_end + length
+            if new_last > 24 * 60:
+                raise ValueError(
+                    f"pushing {block.letter} {block.start}-{block.end} down "
+                    "would run past midnight")
+            moves.append((block, _from_minutes(new_first), _from_minutes(new_last)))
+            chain_end = new_last
+        return moves
+
+    def plan_shift(self, row_index: int, column_index: int, delta: int,
+                   push: bool = True) -> List[Tuple[Block, str, str]]:
+        """Return the moves a shift of ``delta`` minutes would make.
+
+        The first move is the shifted block itself. With ``push``, the later
+        blocks it would overlap follow, as :meth:`plan_push` finds them.
+        Raise :class:`ValueError` when the cell is empty, the block runs
+        overnight, the shift leaves the day, or a move lands on a slot that
+        another block already holds.
+        """
+        block = self.block_at(row_index, column_index)
+        if block is None:
+            raise ValueError("select a block to shift")
+        if _to_minutes(block.end) <= _to_minutes(block.start):
+            raise ValueError("a block that runs past midnight cannot be shifted")
+        first, last = _interval(block.start, block.end)
+        new_first, new_last = first + delta, last + delta
+        if new_first < 0:
+            raise ValueError("the block would start before midnight of the "
+                             "previous day")
+        if new_last > 24 * 60:
+            raise ValueError("the block would run past midnight")
+        start, end = _from_minutes(new_first), _from_minutes(new_last)
+        moves = [(block, start, end)]
+        if push:
+            moves += self.plan_push(block.offset, start, end,
+                                    exclude={(row_index, column_index)})
+        self._check_targets(moves)
+        return moves
+
+    def _check_targets(self, moves) -> None:
+        """Refuse moves that would land on a cell a staying block holds."""
+        moving = {(b.row, b.column) for b, _s, _e in moves}
+        for block, start, end in moves:
+            row = self.find_block_row(start, end)
+            if row is None or (row, block.column) in moving:
+                continue
+            if self.cell(row, block.column):
+                raise ValueError(
+                    f"{start}-{end} on that day already holds "
+                    f"{self.cell(row, block.column)}")
+
+    def apply_moves(self, moves) -> List[Tuple[int, int]]:
+        """Carry out ``moves`` and return the new ``(row, column)`` of each.
+
+        Every old cell is emptied before any new one is written, so a chain
+        of blocks can move down into each other's slots. Rows are kept, as
+        :meth:`clear_block` keeps them, and a range the file lacks gets its
+        row in start-time order.
+        """
+        values = [self._cell_value(block) for block, _s, _e in moves]
+        for block, _start, _end in moves:
+            self.set_cell(block.row, block.column, "")
+        placed: List[Tuple[str, str, int, str]] = []
+        for (block, start, end), value in zip(moves, values):
+            row, _inserted = self.ensure_block_row(start, end)
+            self.set_cell(row, block.column, value)
+            placed.append((start, end, block.column, value))
+        # Inserting a row moves the rows below it, so look every cell up again.
+        return [(self.find_block_row(start, end), column)
+                for start, end, column, _value in placed]
+
+    def shift_block(self, row_index: int, column_index: int, delta: int,
+                    push: bool = True) -> Tuple[Tuple[int, int], list]:
+        """Move one block ``delta`` minutes, later when positive.
+
+        Return the block's new ``(row, column)`` and the moves made, as
+        :meth:`plan_shift` describes them. Nothing changes when the shift is
+        refused with :class:`ValueError`.
+        """
+        moves = self.plan_shift(row_index, column_index, delta, push=push)
+        cells = self.apply_moves(moves)
+        return cells[0], moves
+
+    def hour_blocks(self) -> Dict[Tuple[int, int], List[Block]]:
+        """Return ``{(offset, hour): blocks starting in that hour}``, by start."""
+        out: Dict[Tuple[int, int], List[Block]] = {}
+        for block in sorted(self.blocks(), key=lambda b: (b.start, b.end, b.row)):
+            hour = _to_minutes(block.start) // 60
+            out.setdefault((block.offset, hour), []).append(block)
+        return out
+
+    def hour_spans(self) -> Dict[Tuple[int, int], List[Block]]:
+        """Return ``{(offset, hour): blocks that started earlier and run into it}``.
+
+        These are the hours the hour view shades as the continuation of a
+        longer block. A block that only touches the hour, such as one ending
+        at 10:00 for the 10 o'clock hour, does not run into it.
+        """
+        out: Dict[Tuple[int, int], List[Block]] = {}
+        for block in sorted(self.blocks(), key=lambda b: (b.start, b.end, b.row)):
+            first, last = _interval(block.start, block.end)
+            last = min(last, 24 * 60)
+            for hour in range(first // 60 + 1, 24):
+                if hour * 60 >= last:
+                    break
+                out.setdefault((block.offset, hour), []).append(block)
+        return out
+
+    def break_runs(self, longest: int = PICK_MAX,
+                   gap: int = BREAK_GAP) -> List[BreakRun]:
+        """Return the runs of blocks that go more than ``longest`` minutes without a break.
+
+        On each day the blocks are sorted by start and joined into a run while
+        the next block starts less than ``gap`` minutes after the run ends, so
+        touching and overlapping blocks join too. A run whose span from its
+        first start to its last end exceeds ``longest`` is returned.
+        """
+        by_day: Dict[int, List[Block]] = {}
+        for block in self.blocks():
+            by_day.setdefault(block.offset, []).append(block)
+        runs: List[BreakRun] = []
+        for offset in sorted(by_day):
+            ordered = sorted(by_day[offset],
+                             key=lambda b: (_interval(b.start, b.end), b.row))
+            current: List[Block] = []
+            run_start = run_end = 0
+            for block in ordered + [None]:
+                if block is not None:
+                    first, last = _interval(block.start, block.end)
+                    if current and first - run_end < gap:
+                        current.append(block)
+                        run_end = max(run_end, last)
+                        continue
+                if current and run_end - run_start > longest:
+                    runs.append(BreakRun(offset, _from_minutes(run_start),
+                                         _from_minutes(run_end), current))
+                if block is not None:
+                    current, run_start, run_end = [block], first, last
+        return runs
+
+    def break_cells(self) -> set:
+        """Return ``{(row, column)}`` for every block in a run with no break."""
+        return {(b.row, b.column) for run in self.break_runs() for b in run.blocks}
+
+    def unused_block_rows(self) -> List[int]:
+        """Return the time-block rows whose day cells are all empty."""
+        used = {b.row for b in self.blocks()}
+        return [i for i in self.block_rows if i not in used]
+
+    def drop_unused_block_rows(self) -> int:
+        """Delete every time-block row with no filled cell.  Return how many went.
+
+        Section headers, the legend, and every filled row stay, so the week's
+        plan and its canonical name do not change.
+        """
+        drop = set(self.unused_block_rows())
+        if not drop:
+            return 0
+        self.rows = [row for i, row in enumerate(self.rows) if i not in drop]
+        self._resection()
+        self.dirty = True
+        return len(drop)
 
     def unknown_sections(self) -> List[str]:
         """Return the section names that map to no activity category."""

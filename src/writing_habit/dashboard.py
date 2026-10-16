@@ -24,6 +24,7 @@ Public functions:
 
 from __future__ import annotations
 
+import datetime as _dt
 import math
 
 from .compare import queries
@@ -383,11 +384,108 @@ def _barbell(bar) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Work intensity: personal bests and the done list (build step 5)
+# ---------------------------------------------------------------------------
+
+# The style of the two work-intensity sections. It is emitted with them rather
+# than in STYLE, and the sections appear only when there is something to show,
+# so a database without reviews renders the same bytes as the Emacs Lisp twin.
+INTENSITY_STYLE = """  <style>
+    .best .w { color: var(--muted); font-size: 11px; margin-top: 4px; }
+    .best.now { border-color: var(--actual); }
+    .best.now .w { color: var(--ink2); font-weight: 600; }
+    ul.done { margin: 4px 0 0; padding: 12px 16px 12px 34px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+    ul.done li { margin: 3px 0; font-size: 13px; }
+    tr.missed td, tr.missed th { color: var(--muted); background: color-mix(in srgb, var(--muted) 12%, transparent); }
+    tr.ahead td, tr.ahead th { color: var(--muted); }
+  </style>"""
+
+STATUS_TEXT = {"kept": "kept", "partial": "partly kept", "missed": "missed",
+               "ahead": "still ahead"}
+
+
+def _day_label(day: str, week_start: str) -> str:
+    offset = (_dt.date.fromisoformat(day) - _dt.date.fromisoformat(week_start)).days
+    return DAY_LABELS[offset] if 0 <= offset < 7 else day
+
+
+def _bests(bests) -> list:
+    if not bests:
+        return []
+    out = ["  <h2>Personal bests</h2>", '  <section class="tiles">']
+    for best in bests:
+        cls = "tile best now" if best.this_week else "tile best"
+        when = "set this week" if best.this_week else f"week of {_esc(best.week)}"
+        out.append(f'    <div class="{cls}"><div class="v">{_esc(best.value)}</div>'
+                   f'<div class="k">{_esc(best.label)}</div><div class="w">{when}</div></div>')
+    out.append("  </section>")
+    return out
+
+
+def _done(done, outcomes, week_start: str) -> list:
+    out = ["  <h2>Done this week</h2>"]
+    if done:
+        out.append('  <ul class="done">')
+        for item in done:
+            out.append(f'    <li><span class="time">{_day_label(item["day"], week_start)}'
+                       f' {_esc(item["start"])}</span> <b>{_esc(item["code"])}</b> '
+                       f'{_esc(item["text"])}</li>')
+        out.append("  </ul>")
+    else:
+        out.append('  <p class="sub">No objectives checked off yet. Set one to three '
+                   "for a block, and they gather here as you meet them.</p>")
+    if not outcomes:
+        return out
+    out += ["  <table>",
+            "    <caption>Every planned block. A missed block is grey, as "
+            "information for next week's plan.</caption>",
+            '    <thead><tr><th>Day</th><th>Time</th><th>Code</th>'
+            '<th class="num">Planned</th><th class="num">Actual</th><th>Status</th>'
+            '<th class="num">Objectives</th><th class="num">Focus</th></tr></thead>',
+            "    <tbody>"]
+    for r in outcomes:
+        cls = f' class="{r["status"]}"' if r["status"] in ("missed", "ahead") else ""
+        rev = r.get("review") or {}
+        objectives = (f'{rev["met"]} of {rev["committed"]}'
+                      if rev.get("committed") is not None else "")
+        focus = f'{rev["focus"]} of 5' if rev.get("focus") is not None else ""
+        out.append(
+            f'      <tr{cls}><th class="time">{_day_label(r["day"], week_start)}</th>'
+            f'<td class="time">{_esc(r["start_time"])}-{_esc(r["end_time"])}</td>'
+            f'<td class="cell">{_esc(r["code"])}</td>'
+            f'<td class="num">{r["planned_min"]}</td><td class="num">{r["actual_min"]}</td>'
+            f'<td>{STATUS_TEXT[r["status"]]}</td><td class="num">{objectives}</td>'
+            f'<td class="num">{focus}</td></tr>')
+    out += ["    </tbody>", "  </table>"]
+    return out
+
+
+def _intensity(con, week_start: str, today=None) -> list:
+    """Return the personal bests and the done list, or nothing when there is none."""
+    from . import review
+    bests = (review.personal_bests(con, week_start)
+             if review.planned_weeks(con, week_start) >= 2 else [])
+    records = review.has_records(con, week_start)
+    if not bests and not records:
+        return []
+    out = [INTENSITY_STYLE]
+    out += _bests(bests)
+    if records:
+        out += _done(review.done_list(con, week_start),
+                     review.block_outcomes(con, week_start, today), week_start)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Assembly
 # ---------------------------------------------------------------------------
 
-def dashboard_html(con, week: str) -> str:
-    """Return a self-contained HTML dashboard string for the week containing WEEK."""
+def dashboard_html(con, week: str, today=None) -> str:
+    """Return a self-contained HTML dashboard string for the week containing WEEK.
+
+    ``today`` is the ISO date that separates missed blocks from blocks still
+    ahead in the done list; it defaults to the real date.
+    """
     week_start = queries._monday(week)
     proj = queries.week_project(con, week)
     cat = queries.week_category(con, week)
@@ -418,6 +516,7 @@ def dashboard_html(con, week: str) -> str:
     lines += _projects(proj)
     lines += _activities(cat)
     lines += _barbell(bar)
+    lines += _intensity(con, week_start, today)
     lines += [
         '  <p class="foot">Generated by writing-habit from the shared SQLite'
         " database. Planned versus actual, self-reported effort.</p>",

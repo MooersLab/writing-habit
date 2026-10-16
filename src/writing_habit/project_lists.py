@@ -1,8 +1,10 @@
 """Semester project lists kept beside the weekly table, with no Qt.
 
-A weekly table file may carry up to six lists of projects after the weekly
-table itself: the projects finished this semester, and one list per planning
-horizon, which reaches about two years ahead. Each list is its own small org table,
+A weekly table file may carry up to seven lists of projects after the weekly
+table itself: the projects finished this semester, the projects carried over
+from the last period, and one list per planning horizon, which reaches about
+two years ahead. An eighth list, the grasscatcher, holds tasks rather than
+projects: the to-do items that did not make a block's objectives. Each list is its own small org table,
 named by an org ``#+NAME:`` line so Emacs and this package find it the same way::
 
     #+NAME: current-semester-projects
@@ -30,15 +32,55 @@ from .name import legend_activity, parse_legend_cell, split_deadline
 #: (name in the file, title in the interface), in order of the horizon.
 LISTS: List[Tuple[str, str]] = [
     ("current-semester-projects", "Current semester projects"),
+    ("carried-over-projects", "Carried over"),
     ("completed-this-semester", "Completed this semester"),
     ("next-semester-projects", "Next semester projects"),
     ("next-next-semester-projects", "Next next semester projects"),
     ("next-next-next-semester-projects", "3*Next semester projects"),
     ("next-next-next-next-semester-projects", "4*Next semester projects"),
+    ("grasscatcher", "Grasscatcher"),
 ]
 NAMES = [name for name, _title in LISTS]
 CURRENT = NAMES[0]
 COMPLETED = "completed-this-semester"
+CARRIED = "carried-over-projects"
+#: The tasks that did not make a block's one to three objectives, kept for
+#: later. A row is a task rather than a project, written ``B: find three
+#: citations`` with the code of its project, or ``- tidy the bib file``.
+GRASSCATCHER = "grasscatcher"
+#: The lists that move one step nearer at each roll forward, nearest first.
+HORIZONS = [CURRENT, "next-semester-projects", "next-next-semester-projects",
+            "next-next-next-semester-projects",
+            "next-next-next-next-semester-projects"]
+
+_PERIOD_LINE = re.compile(r"^\s*#\+PROJECT_PERIOD:\s*(.*?)\s*$", re.IGNORECASE)
+
+
+def list_titles(periods) -> dict:
+    """Return ``{list name: title}`` from the periods of the horizons.
+
+    ``periods`` holds the current period and those ahead, nearest first, as
+    objects with a ``name``, or ``None`` past the end of the calendar. A list
+    whose period is unknown keeps its plain title.
+    """
+    titles = dict(LISTS)
+    named = dict(zip(HORIZONS, periods))
+    for name, period in named.items():
+        if period is not None:
+            titles[name] = f"{period.name} projects"
+    current = periods[0] if periods else None
+    if current is not None:
+        titles[COMPLETED] = f"Completed in {current.name}"
+    return titles
+
+
+@dataclass
+class RollResult:
+    """What one roll forward moved."""
+
+    period: str
+    completed: List["Entry"]
+    carried: List["Entry"]
 
 _NAME_LINE = re.compile(r"^\s*#\+NAME:\s*(\S+)\s*$", re.IGNORECASE)
 _RULE = re.compile(r"^\s*\|[-+]")
@@ -265,6 +307,67 @@ class ProjectLists:
         a, b = rows[position], rows[other]
         self.lines[a], self.lines[b] = self.lines[b], self.lines[a]
         return other
+
+
+    # -- the period the lists are filed under --------------------------------
+    def period(self) -> Optional[str]:
+        """Return the period named by ``#+PROJECT_PERIOD:``, or ``None``."""
+        for line in self.lines:
+            m = _PERIOD_LINE.match(line)
+            if m:
+                return m.group(1) or None
+        return None
+
+    def set_period(self, period: str) -> bool:
+        """Write ``#+PROJECT_PERIOD: period``.  Return whether the text changed.
+
+        A new line goes before the first list, or at the end when there is
+        none, so the lists stay together.
+        """
+        text = f"#+PROJECT_PERIOD: {period}"
+        for index, line in enumerate(self.lines):
+            if _PERIOD_LINE.match(line):
+                if line == text:
+                    return False
+                self.lines[index] = text
+                return True
+        first = [self._name_line(n) for n in NAMES]
+        first = [i for i in first if i is not None]
+        if first:
+            at = min(first)
+            while at > 0 and not self.lines[at - 1].strip():
+                at -= 1
+            self.lines[at:at] = ["", text]
+        else:
+            while self.lines and not self.lines[-1].strip():
+                self.lines.pop()
+            self.lines += ["", text]
+        return True
+
+    def _clear(self, name: str) -> List[Entry]:
+        entries = self.entries(name)
+        for index in reversed(self.row_indexes(name)):
+            del self.lines[index]
+        return entries
+
+    def roll_forward(self, period: str) -> RollResult:
+        """Move every list one period nearer and file the lists under ``period``.
+
+        The completed list is emptied and returned, for the archive. The
+        current list goes to the Carried over list, for the writer to review.
+        Each later list becomes the one before it, and the farthest list is
+        left empty. Only the lists and the period line change.
+        """
+        completed = self._clear(COMPLETED)
+        carried = self._clear(CURRENT)
+        for entry in carried:
+            if self.find_project(CARRIED, entry.project) is None:
+                self.insert(CARRIED, None, entry)
+        for near, far in zip(HORIZONS, HORIZONS[1:]):
+            for entry in self._clear(far):
+                self.insert(near, None, entry)
+        self.set_period(period)
+        return RollResult(period, completed, carried)
 
 
 def after_first_table(text: str) -> List[str]:

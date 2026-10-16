@@ -1,0 +1,11 @@
+#+TITLE: Planning periods
+
+#+NAME: periods
+| Kind     | Name        | Start      | End        | Horizon |
+|----------+-------------+------------+------------+---------|
+| semester | Fall 2026   | 2026-08-04 | 2026-12-18 | yes     |
+| semester | Spring 2027 | 2026-12-19 | 2027-05-14 | yes     |
+| semester | Summer 2027 | 2027-05-15 | 2027-08-02 | yes     |
+| semester | Fall 2027   | 2027-08-03 | 2027-12-17 | yes     |
+| semester | Spring 2028 | 2027-12-18 | 2028-05-13 | yes     |
+| semester | Summer 2028 | 2028-05-14 | 2028-08-01 | yes     |

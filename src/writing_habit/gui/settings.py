@@ -28,6 +28,14 @@ DEFAULTS = {
     "week": "",            # the last week worked on, as an ISO date
     "mytime_db": "",       # the mytime.db time tracker that track sync reads
     "sync_on_start": "false",  # run track sync when the window opens
+    "picker_last": "",     # JSON {code: [minutes past the hour, length]}
+    "hour_view": "true",   # show the weekly table as 24 hour rows
+    "push_blocks": "true",  # a placed or shifted block pushes later overlaps down
+    "ai_debrief": "false",  # offer the post-block debrief from a local model
+    "ai_url": "http://localhost:11434",  # the local model server (Ollama API)
+    "ai_model": "llama3.2",  # the model the debrief asks
+    "periods_file": "",    # the calendar of periods; empty means beside the tables
+    "period_kind": "semester",  # the kind of period that names the lists
 }
 
 

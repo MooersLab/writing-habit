@@ -28,6 +28,10 @@ CONFLICT_COLOR = "#ffd7d7"
 #: The tint of a block row that does not overlap the selected time.
 CLEAR_COLOR = "#fff59d"
 
+#: The tint of a block in a run of more than two hours with no 15-minute break.
+#: A clash takes precedence, because it is the more urgent thing to see.
+BREAK_COLOR = "#ffe0b2"
+
 #: The shade of every other group of rows that start at the same time. Rows
 #: sharing a start time are one group, so the eye reads 05:00-05:30,
 #: 05:00-06:00, and 05:00-07:00 as the choices for one slot. The other groups
@@ -56,6 +60,7 @@ class WeeklyTableModel(QtCore.QAbstractTableModel):
         self.table: Optional[WeeklyTable] = None
         self._rows: List[int] = []
         self._conflicts: set = set()
+        self._breaks: set = set()
         #: The document row of the selected Time cell, and the rows clear of it.
         self._anchor: Optional[int] = None
         self._clear: set = set()
@@ -77,6 +82,9 @@ class WeeklyTableModel(QtCore.QAbstractTableModel):
             self._rows = [i for i, row in enumerate(table.rows)
                           if row.kind in (SECTION, BLOCK)]
             self._conflicts = table.conflicting_cells()
+            self._breaks = table.break_cells()
+        else:
+            self._breaks = set()
         self._blocks = self._index_blocks()
         self._banded = self._start_bands()
         self.endResetModel()
@@ -118,6 +126,7 @@ class WeeklyTableModel(QtCore.QAbstractTableModel):
         """Recompute the derived state after an edit."""
         if self.table is not None:
             self._conflicts = self.table.conflicting_cells()
+            self._breaks = self.table.break_cells()
             self._clear = self._clear_rows(self._anchor)
             self._blocks = self._index_blocks()
             self._banded = self._start_bands()
@@ -226,6 +235,8 @@ class WeeklyTableModel(QtCore.QAbstractTableModel):
         cell_index = self.document_cell(row, column)
         if role == Qt.BackgroundRole and (document_row, cell_index) in self._conflicts:
             return QtGui.QBrush(QtGui.QColor(CONFLICT_COLOR))
+        if role == Qt.BackgroundRole and (document_row, cell_index) in self._breaks:
+            return QtGui.QBrush(QtGui.QColor(BREAK_COLOR))
         if role == Qt.BackgroundRole and document_row in self._clear:
             return QtGui.QBrush(QtGui.QColor(CLEAR_COLOR))
         if role == Qt.BackgroundRole:

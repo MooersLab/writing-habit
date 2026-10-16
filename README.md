@@ -124,6 +124,58 @@ or a section header removes the tint.
 
 ![Selecting 05:00-06:00 tints the two later rows yellow, while the red cells mark its clashes on Monday.](assets/images/gui-time-tint.png)
 
+#### The hour view and the range picker
+
+**Hour view**, the first button of the bar and the default view, folds the
+table into 24 rows, one per hour. A cell lists the
+blocks that start in that hour, and the hours a longer block runs into are
+shaded in its colour. Double-click a cell to open a picker with the four starts
+in the hour and eight lengths from 15 minutes to two hours. One click places
+the block. The range used last for a project is the default, so a repeated
+block is the Enter key. The file keeps its rows, and a missing row for a range
+is added in start-time order.
+
+The **Breaks** panel lists runs of blocks longer than two hours with no
+15-minute break, and tints their cells amber. **More > Drop unused time rows**
+deletes the empty time rows after asking and keeps a `.bak` copy. The printed
+sheets are the same either way, because they draw every hour.
+
+![The hour view, with a run with no break tinted amber.](assets/images/gui-hour-view.png)
+
+#### Shifting a block, with later blocks pushed down
+
+The second bar shifts the selected block 15 minutes or an hour earlier or later
+(Alt+Up and Alt+Down in the hour view, with Shift for an hour). With **Push
+later blocks down** checked, a block that the moved or newly placed block
+overlaps moves down to start where it ends, and the chain continues down the
+day until it reaches a gap. A two-hour block placed at 03:00 therefore moves a
+04:00 block to 05:00 instead of deleting it.
+
+#### Objectives, review, and the grasscatcher list
+
+The picker shows a panel on its right for the blocks of the hour. Commit one to
+three objectives to a block before it starts, and check them off as you meet
+them. When the block ends, rate your focus from 1 to 5, tally interruptions, and
+leave a next-step note, which greets the next block of the project. The records
+live in the habit database, keyed by the block's day, start, and code, so track
+sync never overwrites them. Tasks that do not make the cut wait on the
+**Grasscatcher** tab, and **Commit to this block** turns one into an objective.
+**Debrief** writes a short coaching note from the review, either as a plain
+summary or, when you turn it on, from a model served on your own computer
+through Ollama. The weekly dashboard adds **Personal bests** and a **Done this
+week** list, where missed blocks are grey rather than red.
+
+#### Naming the project lists by period
+
+**Periods** edits a calendar of semesters, quarters, or fiscal years kept as an
+org table in `periods.org` beside the weekly tables. The project tabs then read
+**Fall 2026 projects**, **Spring 2027 projects**, and so on. When a new period
+starts, a banner offers **Roll forward**. Completed projects go to
+`completed.org`, the current list goes to **Carried over** for you to keep or
+delete each project, and every later list moves one period nearer.
+
+![The banner offering a roll forward to Spring 2027.](assets/images/gui-periods-roll.png)
+
 #### Inserting a project into the legend
 
 The Legend box below the grid holds the project codes, their descriptions, and

@@ -59,6 +59,30 @@ which sit far apart for colorblind readers. Every value appears as a direct
 label in ink, never by color alone, and the schedule is a labeled table, so the
 page reads without relying on color.
 
+### Personal bests and the done list
+
+Two more sections follow the barbell split when there is something to show.
+
+**Personal bests** appears once the database holds two or more planned weeks.
+Each tile is the best week so far for one measure, namely the share of the plan
+kept, the minutes written, the longest run of writing days, the objectives met,
+and the mean focus over at least three reviews. A tile outlined in orange was
+set in the week on the page. The bests reward the writer for beating their own
+mark rather than a target they missed.
+
+**Done this week** appears once the week has an objective or a review from the
+Schedule tab. It lists the objectives you checked off, in your own words, and
+then every planned block with its actual minutes, its status, its objectives
+met, and its focus. A block counts as kept when the sessions of its project
+that day cover at least half of it, and as partly kept below that. A missed
+block is grey rather than red, because a miss is information for next week's
+plan, not a verdict. Blocks later than today read as still ahead.
+
+Both sections carry their own small style block. A database with no reviews and
+a single week, such as the shared fixture, renders the same bytes as before, so
+the guard against the Emacs Lisp twin below still holds. The twin does not draw
+these two sections yet.
+
 ## The seasons dashboard
 
 A second dashboard groups adherence across many weeks rather than within one.

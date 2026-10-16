@@ -99,3 +99,58 @@ def test_trend_geometry_helpers():
     assert d._trend_y(150) == 14
     assert d._trend_x(0, 1) == 355  # single point centered
     assert (d._trend_x(0, 3), d._trend_x(1, 3), d._trend_x(2, 3)) == (42, 355, 668)
+
+
+# -- work intensity: personal bests and the done list ---------------------------
+def _intensity_db(tmp_path):
+    from writing_habit import review
+    from writing_habit.review import BlockKey, Review
+    from writing_habit.track import manual
+    con = db.connect(str(tmp_path / "intensity.db"))
+    db.init_db(con)
+    pid = db.get_or_create_project(con, "A", "1006AIrxOpt", "safe")
+    gen = db.get_category_id(con, "generative")
+    for day, start, end in (("2026-01-12", "05:00", "06:00"),
+                            ("2026-01-19", "05:00", "06:00"),
+                            ("2026-01-20", "05:00", "06:00"),
+                            ("2026-01-23", "05:00", "06:00")):
+        con.execute("INSERT INTO plan_block(day, start_time, end_time, project_id,"
+                    " category_id) VALUES (?, ?, ?, ?, ?)", (day, start, end, pid, gen))
+    manual.add_session(con, day="2026-01-12", project_code="A", minutes=30,
+                       start="05:00", end="05:30", category="generative")
+    manual.add_session(con, day="2026-01-19", project_code="A", minutes=60,
+                       start="05:00", end="06:00", category="generative")
+    key = BlockKey("2026-01-19", "05:00", "A")
+    review.mark(con, review.add_objective(con, key, "Draft <aim> 2"), True)
+    review.add_objective(con, key, "Find three citations")
+    review.save_review(con, key, Review(focus=4))
+    return con
+
+
+def test_the_intensity_sections_render_with_records(tmp_path):
+    con = _intensity_db(tmp_path)
+    html = dashboard_html(con, "2026-01-19", today="2026-01-21")
+    con.close()
+    assert "<h2>Personal bests</h2>" in html
+    assert "<h2>Done this week</h2>" in html
+    assert "Draft &lt;aim&gt; 2" in html
+    assert "Find three citations" not in html          # not met, so not done
+    # Tuesday's block was missed and shows grey; Friday's is still ahead.
+    assert '<tr class="missed"><th class="time">Tue</th>' in html
+    assert '<tr class="ahead"><th class="time">Fri</th>' in html
+    assert "<td>kept</td><td class=\"num\">1 of 2</td><td class=\"num\">4 of 5</td>" in html
+    # This week holds the adherence and minutes bests over the week before.
+    assert html.count('class="tile best now"') >= 1
+    assert "tr.missed td" in html
+    assert html.endswith("</html>\n")
+
+
+def test_no_records_and_one_week_leave_the_dashboard_unchanged():
+    con = db.connect(str(XPORT_DB))
+    try:
+        html = dashboard_html(con, WEEK, today="2026-01-25")
+    finally:
+        con.close()
+    assert "Personal bests" not in html
+    assert "Done this week" not in html
+    assert html == XPORT_HTML.read_text(encoding="utf-8")

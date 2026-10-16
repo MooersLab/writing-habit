@@ -16,6 +16,7 @@ changed it. Saving offers the canonical file name when the grid has one.
 
 from __future__ import annotations
 
+import datetime as _dt
 from pathlib import Path
 from typing import Optional
 
@@ -25,10 +26,23 @@ from .legend_model import (ACTIVITY, ACTIVITY_CHOICES, ActivityDelegate, CODE,
                            DEADLINE, DESCRIPTION, DeadlineDelegate, LegendModel,
                            RISK, RISK_CHOICES, RiskDelegate)
 from .qt import Qt, QtGui, QtWidgets, pyqtSignal
-from ..project_lists import LISTS
+from .. import periods as periodsmod
+from .. import db as dbmod, review as reviewmod
+from ..project_lists import CARRIED, GRASSCATCHER, HORIZONS, LISTS, list_titles
+from .periods_dialog import PeriodsDialog
 from .project_list_view import ProjectListPanel
+from .review_panel import ReviewDialog
+from .hour_view import HOUR_COLUMN, HourGridModel, HourPicker
 from .table_model import TIME_COLUMN, CodeDelegate, WeeklyTableModel
 from .weekly_table import BLOCK, PROJECT_CODES, SECTION, WeeklyTable
+
+#: The shift buttons, as (minutes, label, hour-view keys), earliest first.
+SHIFT_STEPS = [
+    (-60, "Earlier 1 h", "Alt+Shift+Up"),
+    (-15, "Earlier 15 min", "Alt+Up"),
+    (15, "Later 15 min", "Alt+Down"),
+    (60, "Later 1 h", "Alt+Shift+Down"),
+]
 
 #: The title of the tab that holds this week's legend, before its count.
 LEGEND_TAB = "This week"
@@ -110,6 +124,13 @@ class ScheduleEditor(QtWidgets.QWidget):
             "Delete the selected time block. A section header and the legend "
             "stay.")
         self.delete_row_button.clicked.connect(lambda: self.delete_row())
+        self.hour_button = QtWidgets.QPushButton("Hour view")
+        self.hour_button.setCheckable(True)
+        self.hour_button.setToolTip(
+            "Show the week as 24 hour rows. Double-click a cell, or press "
+            "Enter, to place a block from a grid of ranges. The file keeps its "
+            "rows either way.")
+        self.hour_button.toggled.connect(self.set_hour_view)
         self.more_button = QtWidgets.QToolButton()
         self.more_button.setText("More")
         self.more_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
@@ -125,12 +146,19 @@ class ScheduleEditor(QtWidgets.QWidget):
             "Rewrite each legend description as a project name and a "
             "YYYY-MM-DD deadline, after showing what changes")
         self.tidy_legend_action.triggered.connect(lambda: self.tidy_legend())
+        self.drop_rows_action = more_menu.addAction("Drop unused time rows")
+        self.drop_rows_action.setToolTip(
+            "Delete every time-block row with no filled cell, after asking. "
+            "The printed sheets do not change, because they draw every hour "
+            "whatever rows the table holds.")
+        self.drop_rows_action.triggered.connect(lambda: self.drop_unused_rows())
         self.more_button.setMenu(more_menu)
         self.path_label = QtWidgets.QLabel("No table open")
         # A long path would otherwise set the window's minimum width.
         self.path_label.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
                                       QtWidgets.QSizePolicy.Preferred)
-        for button in (self.open_button, self.new_button, self.save_button,
+        for button in (self.hour_button, self.open_button, self.new_button,
+                       self.save_button,
                        self.save_as_button, self.rename_button, self.reload_button,
                        self.external_button, self.insert_above_button,
                        self.insert_below_button, self.move_up_button,
@@ -139,12 +167,50 @@ class ScheduleEditor(QtWidgets.QWidget):
             bar.addWidget(button)
         bar.addWidget(self.path_label, 1)
         outer.addLayout(bar)
+
+        # A second bar shifts the selected block in time, in either view.
+        shift_bar = QtWidgets.QHBoxLayout()
+        shift_bar.addWidget(QtWidgets.QLabel("Shift the selected block:"))
+        self.shift_buttons = {}
+        for minutes, label, keys in SHIFT_STEPS:
+            button = QtWidgets.QPushButton(label)
+            when = "earlier" if minutes < 0 else "later"
+            size = (f"{abs(minutes) // 60} hour" if abs(minutes) >= 60
+                    else f"{abs(minutes)} minutes")
+            button.setToolTip(
+                f"Move the selected block {size} {when} ({keys} in the hour "
+                "view). With Push checked, the later blocks it would overlap "
+                "move down too.")
+            button.clicked.connect(lambda _c=False, m=minutes: self.shift_selected(m))
+            button.setEnabled(False)
+            self.shift_buttons[minutes] = button
+            shift_bar.addWidget(button)
+        self.push_box = QtWidgets.QCheckBox("Push later blocks down")
+        self.push_box.setToolTip(
+            "When a placed or shifted block overlaps a block that starts after "
+            "it on the same day, move that block down to start where this one "
+            "ends, and so on down the day. Blocks that start earlier never "
+            "move.")
+        self.push_box.setChecked(settings.get("push_blocks") != "false")
+        self.push_box.toggled.connect(
+            lambda on: settings.put("push_blocks", "true" if on else "false"))
+        shift_bar.addWidget(self.push_box)
+        shift_bar.addStretch(1)
+        self.review_button = QtWidgets.QPushButton("Objectives and review")
+        self.review_button.setToolTip(
+            "Set the selected block's objectives before it starts, and rate "
+            "its focus and interruptions when it ends. Stored in the habit "
+            "database, where track sync never writes.")
+        self.review_button.setEnabled(False)
+        self.review_button.clicked.connect(lambda: self.open_review())
+        shift_bar.addWidget(self.review_button)
+        outer.addLayout(shift_bar)
         for button in (self.save_button, self.save_as_button,
                        self.rename_button, self.reload_button,
                        self.external_button, self.insert_above_button,
                        self.insert_below_button, self.move_up_button,
                        self.move_down_button, self.delete_row_button,
-                       self.more_button):
+                       self.hour_button, self.more_button):
             button.setEnabled(False)
 
         #: Starts the external editor.  A test replaces it to run nothing.
@@ -162,7 +228,39 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.model.edited.connect(self.on_grid_edit)
         self.view.selectionModel().currentChanged.connect(
             lambda *_args: self._on_current_changed())
-        splitter.addWidget(self.view)
+        self.hour_model = HourGridModel(parent=self)
+        self.hour_view = QtWidgets.QTableView()
+        self.hour_view.setModel(self.hour_model)
+        self.hour_view.setAlternatingRowColors(False)
+        self.hour_view.setWordWrap(True)
+        self.hour_view.verticalHeader().setVisible(False)
+        self.hour_view.verticalHeader().setSectionResizeMode(
+            QtWidgets.QHeaderView.ResizeToContents)
+        self.hour_view.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)
+        self.hour_view.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.hour_view.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.hour_view.doubleClicked.connect(self.open_picker)
+        for keys in ("Return", "Enter"):
+            shortcut = QtWidgets.QShortcut(QtGui.QKeySequence(keys), self.hour_view)
+            shortcut.setContext(Qt.WidgetShortcut)
+            shortcut.activated.connect(
+                lambda: self.open_picker(self.hour_view.currentIndex()))
+        for minutes, _label, keys in SHIFT_STEPS:
+            shortcut = QtWidgets.QShortcut(QtGui.QKeySequence(keys), self.hour_view)
+            shortcut.setContext(Qt.WidgetShortcut)
+            shortcut.activated.connect(
+                lambda m=minutes: self.shift_selected(m))
+        self.hour_view.selectionModel().currentChanged.connect(
+            lambda *_args: self._update_shift_buttons())
+        #: Runs the review dialog.  A test replaces it.
+        self.run_review = lambda dialog: dialog.exec_()
+        #: Runs the picker dialog and returns whether it was accepted. A test
+        #: replaces it to answer without showing a window.
+        self.run_picker = lambda dialog: dialog.exec_() == QtWidgets.QDialog.Accepted
+        self.grid_stack = QtWidgets.QStackedWidget()
+        self.grid_stack.addWidget(self.view)
+        self.grid_stack.addWidget(self.hour_view)
+        splitter.addWidget(self.grid_stack)
         # Alt+Up and Alt+Down move the selected block, as M-up and M-down move
         # a row of an org table in Emacs. The shortcuts belong to the grid, so
         # they do nothing while the legend or a form has the focus.
@@ -176,8 +274,10 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.clash_panel = _plain()
         self.totals_panel = _plain()
         self.legend_panel = _plain()
+        self.break_panel = _plain()
         self.panels.addTab(self.name_panel, "Name")
         self.panels.addTab(self.clash_panel, "Clashes")
+        self.panels.addTab(self.break_panel, "Breaks")
         self.panels.addTab(self.totals_panel, "Totals")
         self.panels.addTab(self.legend_panel, "Legend")
         splitter.addWidget(self.panels)
@@ -237,6 +337,12 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.sort_legend_button.setEnabled(False)
         self.sort_legend_button.clicked.connect(lambda: self.sort_legend())
         legend_bar.addWidget(self.sort_legend_button)
+        self.periods_button = QtWidgets.QPushButton("Periods")
+        self.periods_button.setToolTip(
+            "Edit the calendar of semesters, quarters, or fiscal years that names "
+            "the project lists, in periods.org beside the tables")
+        self.periods_button.clicked.connect(lambda: self.open_periods())
+        legend_bar.addWidget(self.periods_button)
         legend_bar.addStretch(1)
         # The same keys as the grid. Each shortcut belongs to its own view, so
         # Alt+Up moves a block when the grid has the focus and a project when
@@ -263,10 +369,41 @@ class ScheduleEditor(QtWidgets.QWidget):
             panel.copied.connect(self.on_copied_to_legend)
             panel.moved.connect(self.on_moved_between_lists)
             panel.logged.connect(self.logged)
+            panel.commit_requested.connect(
+                lambda position: self.commit_grasscatcher(position))
             self.list_panels[name] = panel
             self.project_tabs.addTab(panel, title)
         self.legend_model.modelReset.connect(self._refresh_lists)
+        # A banner above the tabs offers to file the lists under a period, or
+        # to roll them forward when a new period has begun.
+        self.period_banner = QtWidgets.QFrame()
+        self.period_banner.setObjectName("periodBanner")
+        self.period_banner.setStyleSheet(
+            "#periodBanner { background: #fff4d6; border: 1px solid #e0c060; }")
+        banner_row = QtWidgets.QHBoxLayout(self.period_banner)
+        banner_row.setContentsMargins(6, 3, 6, 3)
+        self.period_label = QtWidgets.QLabel()
+        self.period_label.setWordWrap(True)
+        self.period_choice = QtWidgets.QComboBox()
+        self.period_file_button = QtWidgets.QPushButton("File under this period")
+        self.period_file_button.clicked.connect(
+            lambda: self.file_lists_under(self.period_choice.currentText()))
+        self.roll_button = QtWidgets.QPushButton("Roll forward")
+        self.roll_button.clicked.connect(lambda: self.roll_forward())
+        banner_row.addWidget(self.period_label, 1)
+        banner_row.addWidget(self.period_choice)
+        banner_row.addWidget(self.period_file_button)
+        banner_row.addWidget(self.roll_button)
+        self.period_banner.setVisible(False)
+        legend_layout.addWidget(self.period_banner)
         legend_layout.addWidget(self.project_tabs)
+        #: The calendar of planning periods, or ``None`` when there is none.
+        self.calendar: Optional[periodsmod.Calendar] = None
+        self.calendar_file: Optional[Path] = None
+        #: Today's date.  A test replaces it.
+        self.today = _dt.date.today
+        #: Runs the Periods dialog.  A test replaces it.
+        self.run_periods = lambda dialog: dialog.exec_() == QtWidgets.QDialog.Accepted
         rows.addWidget(legend_box)
         rows.setSizes([520, 220])
         outer.addWidget(rows, 1)
@@ -278,7 +415,11 @@ class ScheduleEditor(QtWidgets.QWidget):
             "selected block. A code is one letter, or two letters such as AB "
             "once A to Z are taken. A lowercase g, e, or s before a code, as in "
             "eA, sets the activity of that block; otherwise the project's "
-            "default activity or the section decides.</i>")
+            "default activity or the section decides. Hour view shows 24 hour rows; "
+            "double-click a cell there to place a block from a grid of ranges, "
+            "and to set its objectives and review. In the hour view, Alt+Up "
+            "and Alt+Down shift the selected block by 15 minutes, with Shift "
+            "by an hour.</i>")
         self.note.setWordWrap(True)
         outer.addWidget(self.note)
 
@@ -294,9 +435,17 @@ class ScheduleEditor(QtWidgets.QWidget):
         """Put each tab's project count in its title, as in This week (9)."""
         self.project_tabs.setTabText(0, f"{LEGEND_TAB} ({self.legend_model.rowCount()})")
         self.sort_legend_button.setEnabled(self.legend_model.rowCount() > 1)
-        for index, (name, title) in enumerate(LISTS, start=1):
-            count = self.list_panels[name].model.rowCount()
+        titles, tips = self.list_titles()
+        for index, (name, _plain_title) in enumerate(LISTS, start=1):
+            title = titles[name]
+            panel = self.list_panels[name]
+            panel.title = title
+            count = panel.model.rowCount()
             self.project_tabs.setTabText(index, f"{title} ({count})" if count else title)
+            self.project_tabs.setTabToolTip(index, tips.get(name, ""))
+            if name == CARRIED:
+                # The list exists only between a roll forward and its review.
+                self.project_tabs.setTabVisible(index, bool(count))
 
     def show_list(self, name: Optional[str] = None) -> None:
         """Raise the tab of list ``name``, or the legend when ``name`` is ``None``."""
@@ -393,6 +542,7 @@ class ScheduleEditor(QtWidgets.QWidget):
             self.logged.emit(f"Could not open {path}: {exc}")
             return
         self.table = table
+        self.load_calendar(path)
         self.model.set_table(table)
         self.legend_model.set_table(table)
         settings.put("table_dir", str(Path(path).parent))
@@ -400,10 +550,12 @@ class ScheduleEditor(QtWidgets.QWidget):
         self._fit_columns()
         for button in (self.save_button, self.save_as_button, self.reload_button,
                        self.project_above_button, self.project_below_button,
-                       self.more_button):
+                       self.hour_button, self.more_button):
             button.setEnabled(True)
         self._update_insert_buttons()
         self.refresh()
+        if settings.get("hour_view") == "true" and not self.hour_button.isChecked():
+            self.hour_button.setChecked(True)
         self.logged.emit(f"Opened {path}")
         self.opened.emit(path)
 
@@ -464,6 +616,7 @@ class ScheduleEditor(QtWidgets.QWidget):
     def _on_current_changed(self) -> None:
         self._update_insert_buttons()
         self._update_time_tint()
+        self._update_shift_buttons()
 
     def _update_time_tint(self) -> None:
         """Tint the blocks clear of the selected time, or clear the tint."""
@@ -474,6 +627,8 @@ class ScheduleEditor(QtWidgets.QWidget):
             self.model.set_time_anchor(None)
 
     def _update_insert_buttons(self) -> None:
+        if self.hour_view_shown():
+            return
         near = self.selected_document_row()
         ready = near is not None
         self.insert_above_button.setEnabled(ready)
@@ -933,6 +1088,507 @@ class ScheduleEditor(QtWidgets.QWidget):
             self._fit_legend_columns()
         self.on_edit()
 
+    # -- planning periods -------------------------------------------------
+    def load_calendar(self, table_path: Optional[str] = None) -> None:
+        """Read the calendar for the open table, or forget it when there is none."""
+        path = periodsmod.calendar_path(
+            table_path or (self.table.path if self.table else None),
+            settings.get("periods_file"))
+        self.calendar_file = path
+        self.calendar = None
+        if path is not None and path.is_file():
+            try:
+                self.calendar = periodsmod.Calendar.from_file(str(path))
+            except (OSError, UnicodeDecodeError) as exc:
+                self.logged.emit(f"Could not read {path}: {exc}")
+
+    def period_kind(self) -> str:
+        return settings.get("period_kind") or periodsmod.DEFAULT_KIND
+
+    def reference_date(self) -> _dt.date:
+        """Return the Monday the open file is named for, else today."""
+        today = self.today()
+        if self.table is not None and self.table.path:
+            named = periodsmod.week_date(Path(self.table.path).stem, today)
+            if named is not None:
+                return named
+        return today
+
+    def current_period(self):
+        if self.calendar is None:
+            return None
+        return self.calendar.current(self.period_kind(), self.reference_date())
+
+    def list_titles(self):
+        """Return ``({list: title}, {list: tooltip})`` from the calendar."""
+        if self.calendar is None:
+            return dict(LISTS), {}
+        # Until the lists are rolled forward, they still belong to the period
+        # they are filed under, so the titles follow that period.
+        anchor = self.reference_date()
+        now = self.current_period()
+        filed = self.table.lists.period() if self.table is not None else None
+        filed_period = self.calendar.find(self.period_kind(), filed) if filed else None
+        if filed_period is not None and now is not None and filed_period.start < now.start:
+            anchor = filed_period.start
+        ahead = self.calendar.ahead(self.period_kind(), anchor, len(HORIZONS))
+        titles = list_titles(ahead)
+        tips = {}
+        for name, period in zip(HORIZONS, ahead):
+            if period is not None:
+                tips[name] = (f"{period.name}: {period.start} to {period.end}. "
+                              f"Kept in the file as {name}.")
+        if ahead and ahead[0] is not None:
+            tips["completed-this-semester"] = (
+                f"Projects finished in {ahead[0].name}. Kept in the file as "
+                "completed-this-semester.")
+            earlier = [p for p in self.calendar.of_kind(self.period_kind())
+                       if p.start < ahead[0].start and p.horizon]
+            if earlier:
+                titles[CARRIED] = f"Carried over from {earlier[-1].name}"
+        tips[CARRIED] = ("Projects left on the current list at the last roll "
+                         "forward. Move each to the current list or delete it.")
+        return titles, tips
+
+    def update_period_banner(self) -> None:
+        """Show what the lists need: a period to file under, or a roll forward."""
+        self.period_banner.setVisible(False)
+        if self.table is None or self.calendar is None:
+            return
+        now = self.current_period()
+        if now is None:
+            return
+        filed = self.table.lists.period()
+        kind = self.period_kind()
+        if filed is None:
+            self.period_label.setText("Which period are these project lists for?")
+            self.period_choice.clear()
+            names = [p.name for p in self.calendar.of_kind(kind)]
+            self.period_choice.addItems(names)
+            self.period_choice.setCurrentText(now.name)
+            for widget, on in ((self.period_choice, True),
+                               (self.period_file_button, True),
+                               (self.roll_button, False)):
+                widget.setVisible(on)
+            self.period_banner.setVisible(True)
+            return
+        steps = self.calendar.steps_between(kind, filed, now.name)
+        if self.calendar.find(kind, filed) is None:
+            self.period_label.setText(
+                f"The lists are filed under {filed}, which is not in "
+                f"{self.calendar_file.name}.")
+            for widget in (self.period_choice, self.period_file_button,
+                           self.roll_button):
+                widget.setVisible(False)
+            self.period_banner.setVisible(True)
+            return
+        if not steps:
+            return
+        self.period_label.setText(
+            f"The lists are filed under {filed}, and this week falls in "
+            f"{now.name}.")
+        self.roll_button.setText(f"Roll forward to {now.name}")
+        self.period_choice.setVisible(False)
+        self.period_file_button.setVisible(False)
+        self.roll_button.setVisible(True)
+        self.period_banner.setVisible(True)
+
+    def file_lists_under(self, period: str) -> bool:
+        """Record the period the lists belong to, without moving any project."""
+        if self.table is None or not period:
+            return False
+        changed = self.table.lists.set_period(period)
+        if changed:
+            self.table.dirty = True
+            self.logged.emit(f"Filed the project lists under {period}")
+            self._title_lists()
+            self.on_edit()
+        return changed
+
+    def roll_steps(self):
+        """Return the periods a roll forward passes through, nearest first."""
+        now = self.current_period()
+        filed = self.table.lists.period() if self.table else None
+        if now is None or filed is None:
+            return []
+        kind = self.period_kind()
+        start = self.calendar.find(kind, filed)
+        if start is None:
+            return []
+        return [p for p in self.calendar.of_kind(kind)
+                if start.start < p.start <= now.start and p.horizon]
+
+    def roll_forward(self, confirm: bool = True) -> int:
+        """Move the lists forward to the current period.  Return the steps taken."""
+        steps = self.roll_steps()
+        if not steps:
+            return 0
+        lists = self.table.lists
+        filed = lists.period()
+        completed = len(lists.entries("completed-this-semester"))
+        current = len(lists.entries(HORIZONS[0]))
+        archive = periodsmod.archive_path(self.calendar_file)
+        text = (f"Roll the project lists forward from {filed} to "
+                f"{steps[-1].name}"
+                + (f", {len(steps)} periods" if len(steps) > 1 else "") + "?\n\n"
+                f"- {completed} completed project(s) go to {archive}\n"
+                f"- {current} project(s) on the current list go to Carried over, "
+                "for you to keep or delete\n"
+                "- each later list moves one period nearer\n\n"
+                "The weekly grid and the legend do not change. The table is "
+                "written when you save.")
+        if confirm and not self._confirm("Roll forward", text):
+            return 0
+        previous = filed
+        for period in steps:
+            result = lists.roll_forward(period.name)
+            if result.completed:
+                added = periodsmod.archive_completed(
+                    archive, previous, [e.text() for e in result.completed])
+                self.logged.emit(f"Filed {added} completed project(s) of "
+                                 f"{previous} in {archive}")
+            previous = period.name
+        self.table.dirty = True
+        for panel in self.list_panels.values():
+            panel.set_table(self.table)
+        self._title_lists()
+        self.logged.emit(f"Rolled the project lists forward to {steps[-1].name}")
+        self.on_edit()
+        if self.list_panels[CARRIED].model.rowCount():
+            self.show_list(CARRIED)
+        return len(steps)
+
+    def open_periods(self) -> Optional[str]:
+        """Edit the calendar.  Return the file written, or ``None``."""
+        path = self.calendar_file or periodsmod.calendar_path(
+            None, settings.get("periods_file")) or (
+            Path(settings.get("table_dir") or Path.home()) / periodsmod.FILE_NAME)
+        calendar = self.calendar or periodsmod.Calendar([], str(path))
+        dialog = PeriodsDialog(calendar, path, self.period_kind(), parent=self)
+        if not self.run_periods(dialog):
+            return None
+        settings.put("period_kind", dialog.kind())
+        self.calendar, self.calendar_file = calendar, Path(path)
+        self.logged.emit(f"Saved the planning periods to {path}")
+        self._title_lists()
+        self.update_period_banner()
+        return str(path)
+
+    # -- the hour view -----------------------------------------------------
+    def _fit_hour_columns(self) -> None:
+        header = self.hour_view.horizontalHeader()
+        header.setStretchLastSection(False)
+        columns = self.hour_model.columnCount()
+        if not columns:
+            return
+        header.setSectionResizeMode(HOUR_COLUMN, QtWidgets.QHeaderView.ResizeToContents)
+        for column in range(1, columns):
+            header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
+
+    def hour_view_shown(self) -> bool:
+        stack = getattr(self, "grid_stack", None)
+        return stack is not None and stack.currentWidget() is self.hour_view
+
+    def set_hour_view(self, on: bool) -> None:
+        """Show the 24-row hour view, or the row view when ``on`` is false.
+
+        The row buttons act on a selected file row, which the hour view does
+        not have, so they are disabled while it shows.
+        """
+        if self.hour_button.isChecked() != bool(on):
+            self.hour_button.setChecked(bool(on))       # calls back here
+            return
+        self.grid_stack.setCurrentWidget(self.hour_view if on else self.view)
+        settings.put("hour_view", "true" if on else "false")
+        if on:
+            for button in (self.insert_above_button, self.insert_below_button,
+                           self.move_up_button, self.move_down_button,
+                           self.delete_row_button):
+                button.setEnabled(False)
+            self._fit_hour_columns()
+        elif self.table is not None:
+            self._on_current_changed()
+        self._update_shift_buttons()
+
+    def open_picker(self, index=None) -> Optional[tuple]:
+        """Open the range picker for a cell of the hour view.
+
+        Return the ``(start, end, value)`` placed, ``("remove", row, column)``
+        when a block was removed, or ``None`` when nothing changed.
+        """
+        if self.table is None or index is None or not index.isValid():
+            return None
+        if index.column() == HOUR_COLUMN:
+            return None
+        hour = index.row()
+        offset = self.hour_model.offset(index.column())
+        label = self.table.day_labels[index.column() - 1]
+        starts = self.hour_model.blocks_at(hour, index.column())
+        dialog = HourPicker(self.table, offset, label, hour, existing=starts,
+                            parent=self, monday=self.week_monday(),
+                            review_blocks=starts + self.hour_model.spans_at(
+                                hour, index.column()))
+        if dialog.review_panel is not None:
+            dialog.review_panel.table_edited.connect(self._on_review_table_edit)
+            dialog.review_panel.logged.connect(self.logged)
+        removed = []
+        dialog.remove_requested.connect(lambda r, c: removed.append((r, c)))
+        if not self.run_picker(dialog):
+            return None
+        if removed:
+            row, column = removed[0]
+            self.clear_block(row, column)
+            return ("remove", row, column)
+        if dialog.choice is None:
+            return None
+        start, end, value = dialog.choice
+        self.place_block(offset, start, end, value, push=dialog.push())
+        self.hour_view.setCurrentIndex(index)
+        return dialog.choice
+
+    def place_block(self, offset: int, start: str, end: str, value: str,
+                    push: bool = False) -> Optional[int]:
+        """Write a block for one day and range.  Return its document row.
+
+        With ``push``, later blocks that day that the new block overlaps move
+        down first, so they keep their length and order.
+        """
+        try:
+            pushed = self.table.plan_push(offset, start, end) if push else []
+            row, inserted = self.table.place_block(offset, start, end, value,
+                                                   push=push)
+        except ValueError as exc:
+            self.logged.emit(f"Could not place the block: {exc}")
+            return None
+        if pushed:
+            self._rekey(pushed)
+            self.logged.emit("Pushed down " + ", ".join(
+                f"{b.letter} to {s}-{e}" for b, s, e in pushed))
+            inserted = True
+        if inserted:
+            self._rebuild_views()
+            self.logged.emit(f"Added the {start}-{end} row and placed {value}")
+        else:
+            self.logged.emit(f"Placed {value} at {start}-{end}")
+        self.on_grid_edit()
+        return row
+
+    def clear_block(self, row: int, column: int) -> bool:
+        """Empty one cell and keep its row."""
+        start, end = self.table.rows[row].parsed
+        value = self.table.cell(row, column)
+        changed = self.table.clear_block(row, column)
+        if changed:
+            self.logged.emit(f"Removed {value} from {start}-{end}; the row stays")
+            self.on_grid_edit()
+        return changed
+
+    # -- shifting a block in time ------------------------------------------
+    def selected_block(self):
+        """Return the block under the current cell of the shown view, or ``None``.
+
+        In the hour view this is the first block that starts in the hour, or,
+        in an hour a longer block runs into, that block. In the row view it is
+        the block in the current cell.
+        """
+        if self.table is None:
+            return None
+        if self.hour_view_shown():
+            index = self.hour_view.currentIndex()
+            if not index.isValid() or index.column() == HOUR_COLUMN:
+                return None
+            blocks = (self.hour_model.blocks_at(index.row(), index.column())
+                      or self.hour_model.spans_at(index.row(), index.column()))
+            return blocks[0] if blocks else None
+        index = self.view.currentIndex()
+        if not index.isValid() or index.column() == TIME_COLUMN:
+            return None
+        if not 0 <= index.row() < self.model.rowCount():
+            return None
+        row = self.model.document_row(index.row())
+        if self.table.rows[row].kind != BLOCK:
+            return None
+        return self.table.block_at(row, self.model.document_cell(index.row(),
+                                                                 index.column()))
+
+    def _update_shift_buttons(self) -> None:
+        ready = self.selected_block() is not None
+        for button in getattr(self, "shift_buttons", {}).values():
+            button.setEnabled(ready)
+        if hasattr(self, "review_button"):
+            self.review_button.setEnabled(ready)
+        panel = getattr(self, "list_panels", {}).get(GRASSCATCHER)
+        if panel is not None and panel.commit_button is not None:
+            panel.commit_button.setToolTip(
+                "Make the selected task an objective of the block selected in "
+                "the grid, and take it off the grasscatcher"
+                + ("" if ready else ". Select a block in the grid first."))
+
+    # -- objectives and reviews -----------------------------------------------
+    def week_monday(self) -> Optional[_dt.date]:
+        """Return the Monday of the open table's week, or ``None``.
+
+        A dated file name such as ``Oct12`` gives the week directly. A file
+        renamed to its canonical name carries no date, so the week plan import
+        filed it under is looked up in the habit database, and failing that
+        the week last worked on in the command forms is used.
+        """
+        if self.table is None or not self.table.path:
+            return None
+        named = periodsmod.week_date(Path(self.table.path).stem, self.today())
+        if named is not None:
+            return named - _dt.timedelta(days=named.weekday())
+        path = settings.get("db")
+        if path and Path(path).is_file():
+            try:
+                con = dbmod.connect(path)
+                try:
+                    row = con.execute(
+                        "SELECT week_start FROM plan_week WHERE table_path = ?"
+                        " ORDER BY week_start DESC LIMIT 1",
+                        (str(self.table.path),)).fetchone()
+                finally:
+                    con.close()
+                if row is not None:
+                    return _dt.date.fromisoformat(row[0])
+            except Exception:                             # pragma: no cover
+                pass
+        week = settings.get("week")
+        try:
+            day = _dt.date.fromisoformat(week) if week else None
+        except ValueError:
+            day = None
+        return None if day is None else day - _dt.timedelta(days=day.weekday())
+
+    def _block_key(self, block, start: Optional[str] = None):
+        monday = self.week_monday()
+        if monday is None:
+            return None
+        key = reviewmod.BlockKey.for_block(monday, block)
+        return key if start is None else reviewmod.BlockKey(key.day, start, key.code)
+
+    def _rekey(self, moves) -> None:
+        """Carry the objectives and reviews of moved blocks to their new starts."""
+        path = settings.get("db")
+        if not path or not moves or self.week_monday() is None:
+            return
+        try:
+            con = dbmod.connect(path)
+            try:
+                reviewmod.ensure(con)
+                for block, start, _end in moves:
+                    reviewmod.rekey(con, self._block_key(block),
+                                    self._block_key(block, start))
+            finally:
+                con.close()
+        except Exception as exc:                         # pragma: no cover
+            self.logged.emit(f"Could not move the reviews with the blocks: {exc}")
+
+    def _on_review_table_edit(self) -> None:
+        self._refresh_lists()
+        self.on_edit()
+
+    def open_review(self, block=None):
+        """Open the objectives and review of ``block``, or of the selected one."""
+        block = block or self.selected_block()
+        if block is None:
+            self.logged.emit("Select a block before reviewing it")
+            return None
+        dialog = ReviewDialog(self.table, self.week_monday(), [block], parent=self)
+        dialog.panel.table_edited.connect(self._on_review_table_edit)
+        dialog.panel.logged.connect(self.logged)
+        self.run_review(dialog)
+        return dialog
+
+    def commit_grasscatcher(self, position: int, block=None) -> Optional[int]:
+        """Make grasscatcher task ``position`` an objective of the selected block."""
+        block = block or self.selected_block()
+        if block is None:
+            self.logged.emit("Select a block in the grid, then commit a task to it")
+            return None
+        from .review_panel import ReviewPanel
+        panel = ReviewPanel(self.table, self.week_monday(), [block])
+        panel.logged.connect(self.logged)
+        if not panel.ready():
+            self.logged.emit(panel.problem.text())
+            return None
+        objective_id = panel.commit_from_grasscatcher(position)
+        if objective_id is not None:
+            self._on_review_table_edit()
+        return objective_id
+
+    def shift_selected(self, minutes: int, push: Optional[bool] = None):
+        """Move the selected block ``minutes`` later, or earlier when negative.
+
+        The selection follows the block, so pressing the button again keeps
+        moving it. Return the moves made, or ``None`` when nothing moved.
+        """
+        block = self.selected_block()
+        if block is None:
+            self.logged.emit("Select a block before shifting it")
+            return None
+        if push is None:
+            push = self.push_box.isChecked()
+        try:
+            (row, column), moves = self.table.shift_block(
+                block.row, block.column, minutes, push=push)
+        except ValueError as exc:
+            self.logged.emit(f"Cannot shift the block: {exc}")
+            return None
+        self._rekey(moves)
+        self._rebuild_views()
+        self.on_grid_edit()
+        start = self.table.rows[row].parsed[0]
+        if self.hour_view_shown():
+            hour = int(start[:2])
+            grid_column = 1 + [c for c, _o, _l in self.table.columns].index(column)
+            self.hour_view.setCurrentIndex(self.hour_model.index(hour, grid_column))
+        else:
+            grid_row = self.model._rows.index(row)
+            grid_column = [c for c, _o, _l in self.table.columns].index(column) + 1
+            self.view.setCurrentIndex(self.model.index(grid_row, grid_column))
+        first, rest = moves[0], moves[1:]
+        text = (f"Shifted {first[0].letter} from {first[0].start}-{first[0].end} "
+                f"to {first[1]}-{first[2]}")
+        if rest:
+            text += "; pushed down " + ", ".join(
+                f"{b.letter} to {s}-{e}" for b, s, e in rest)
+        self.logged.emit(text)
+        self._update_shift_buttons()
+        return moves
+
+    def drop_unused_rows(self, confirm: bool = True) -> int:
+        """Delete the time-block rows with no filled cell, after asking.
+
+        A copy of the file as it is on disk is kept beside it with ``.bak``
+        added, and nothing else is written until the writer saves. Return the
+        number of rows deleted.
+        """
+        if self.table is None:
+            return 0
+        unused = self.table.unused_block_rows()
+        if not unused:
+            self.logged.emit("Every time-block row holds at least one block")
+            return 0
+        keep = len(self.table.block_rows) - len(unused)
+        if confirm and not self._confirm(
+                "Drop unused time rows",
+                f"Delete {len(unused)} empty time-block row(s) and keep the "
+                f"{keep} that hold blocks?\n\nThe printed sheets do not "
+                "change, because they draw every hour whatever rows the table "
+                "holds. A .bak copy of the file on disk is kept, and nothing "
+                "else is written until you save."):
+            return 0
+        if self.table.path and Path(self.table.path).is_file():
+            backup = Path(self.table.path + ".bak")
+            backup.write_bytes(Path(self.table.path).read_bytes())
+            self.logged.emit(f"Kept a copy at {backup}")
+        dropped = self.table.drop_unused_block_rows()
+        self._rebuild_views()
+        self.logged.emit(f"Dropped {dropped} unused time row(s)")
+        self.on_grid_edit()
+        return dropped
+
     def save(self) -> Optional[str]:
         """Write the table back to the file it came from."""
         if self.table is None:
@@ -1031,7 +1687,7 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.table.dirty = True
         for button in (self.save_button, self.save_as_button,
                        self.project_above_button, self.project_below_button,
-                       self.more_button):
+                       self.hour_button, self.more_button):
             button.setEnabled(True)
         self.reload_button.setEnabled(False)
         self._update_insert_buttons()
@@ -1054,13 +1710,22 @@ class ScheduleEditor(QtWidgets.QWidget):
             bool(self.table.path) and not self.table.dirty
             and not self.table.name_matches_code())
         self.model.refresh()
+        if self.hour_model.table is not self.table:
+            self.hour_model.set_table(self.table)
+            self._fit_hour_columns()
+        else:
+            self.hour_model.refresh()
         self._update_project_move_buttons()
         self.name_panel.setPlainText(self._name_text())
         self.clash_panel.setPlainText(self._clash_text())
         self.totals_panel.setPlainText(self._totals_text())
         self.legend_panel.setPlainText(self._legend_text())
+        self.break_panel.setPlainText(self._break_text())
+        self.update_period_banner()
         clashes = len(self.table.overlaps())
         self.panels.setTabText(1, "Clashes" if not clashes else f"Clashes ({clashes})")
+        runs = len(self.table.break_runs())
+        self.panels.setTabText(2, "Breaks" if not runs else f"Breaks ({runs})")
 
     def _name_text(self) -> str:
         code, problem = self.table.code_or_problem()
@@ -1092,6 +1757,23 @@ class ScheduleEditor(QtWidgets.QWidget):
             return "No overlapping time blocks."
         head = [f"{len(conflicts)} overlapping pair(s). The cells are tinted.", ""]
         return "\n".join(head + list(overlap_lines(conflicts)))
+
+    def _break_text(self) -> str:
+        from .weekly_table import BREAK_GAP, PICK_MAX
+        runs = self.table.break_runs()
+        if not runs:
+            return (f"Every day has a break of at least {BREAK_GAP} minutes "
+                    f"within each {PICK_MAX // 60} hours of blocks.")
+        labels = {offset: label for _i, offset, label in self.table.columns}
+        lines = [f"{len(runs)} run(s) of blocks go more than {PICK_MAX // 60} "
+                 f"hours without a {BREAK_GAP}-minute break. The cells are "
+                 "tinted amber.", ""]
+        for run in runs:
+            hours, minutes = divmod(run.minutes, 60)
+            codes = ", ".join(f"{b.letter} {b.start}-{b.end}" for b in run.blocks)
+            lines.append(f"{labels.get(run.offset, run.offset)}  {run.start}-{run.end}"
+                         f"  ({hours}:{minutes:02d})  {codes}")
+        return "\n".join(lines)
 
     def _totals_text(self) -> str:
         totals = self.table.totals()

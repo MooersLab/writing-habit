@@ -32,6 +32,15 @@ the code sets the activity of that block.</p>
 <p>The buttons above the grid insert, move, and delete rows. A new row offers
 a start time and a length, so the time column stays sorted.</p>
 
+<h2>Place blocks by the hour</h2>
+<p>Press <b>Hour view</b> to see the week as 24 hour rows. Double-click a cell
+to open the range picker. Choose the project and click an end time in the grid.
+The rows of the grid are the starts at :00, :15, :30, and :45, and the columns
+are lengths from 15 minutes to two hours. One click places the block, and the
+range you used last for that project is the default.</p>
+<p>The <b>Breaks</b> panel lists any run of blocks longer than two hours with no
+15-minute break, and tints those cells amber.</p>
+
 <h2>Edit the legend</h2>
 <p>Each legend row has five columns.</p>
 <p><img src="images/legend.png" width="660"></p>
@@ -82,10 +91,21 @@ org line. A row has the legend's form, and a dash stands for a missing code.</p>
 reach the plan, the calendar, or the sheets. <b>New from template</b> carries
 the lists of the open table into the new week.</p>
 
+<h2>Name the lists by semester</h2>
+<p>Press <b>Periods</b> on the This week tab and enter your semesters, or use
+<b>Fill a year</b>. The tabs then read <i>Fall 2026 projects</i>,
+<i>Spring 2027 projects</i>, and so on. The calendar is an org table in
+<code>periods.org</code> beside the tables.</p>
+<p>When a new semester starts, a banner offers <b>Roll forward</b>. Completed
+projects go to <code>completed.org</code>. The current list goes to
+<b>Carried over</b>, where <b>Move to current list</b> keeps a project and
+<b>Delete project</b> drops it. Every later list moves one semester nearer.</p>
+
 <h2>Check the week</h2>
 <p>The panels beside the grid update as you type.</p>
 <ul>
 <li><b>Clashes</b> lists overlapping blocks and tints their cells.</li>
+<li><b>Breaks</b> lists runs longer than two hours with no 15-minute break.</li>
 <li><b>Totals</b> gives minutes by day, by project, and by activity.</li>
 <li><b>Legend</b> lists codes that are used but not defined, and codes defined twice.</li>
 <li><b>Name</b> gives the canonical file name, which encodes the week's pattern of blocks.</li>
