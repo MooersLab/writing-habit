@@ -115,6 +115,8 @@ class ProjectListPanel(QtWidgets.QWidget):
     moved = pyqtSignal(str)
     #: Emitted with the position of a grasscatcher task to commit to a block.
     commit_requested = pyqtSignal(int)
+    #: Emitted when the writer asks the coach to rank the grasscatcher.
+    rank_requested = pyqtSignal()
     logged = pyqtSignal(str)
 
     def __init__(self, name: str, title: str, parent=None):
@@ -175,6 +177,7 @@ class ProjectListPanel(QtWidgets.QWidget):
         # The grasscatcher holds tasks, so it commits one to a block instead
         # of copying a project to the legend.
         self.commit_button = None
+        self.rank_button = None
         if name == GRASSCATCHER:
             self.add_button.setText("Add task")
             self.add_button.setToolTip(
@@ -188,6 +191,12 @@ class ProjectListPanel(QtWidgets.QWidget):
             self.commit_button.clicked.connect(
                 lambda: self.commit_requested.emit(self.selected())
                 if self.selected() is not None else None)
+            self.rank_button = QtWidgets.QPushButton("Rank")
+            self.rank_button.setToolTip(
+                "Ask the coach to order the tasks by the nearest deadlines and "
+                "this week's planned projects, with a reason for each. You "
+                "accept or discard the order.")
+            self.rank_button.clicked.connect(self.rank_requested)
             for column in (RISK, ACTIVITY):
                 self.view.setColumnHidden(column, True)
 
@@ -197,7 +206,7 @@ class ProjectListPanel(QtWidgets.QWidget):
         if name != GRASSCATCHER:
             buttons += [self.sort_button, self.copy_button]
         else:
-            buttons.append(self.commit_button)
+            buttons += [self.commit_button, self.rank_button]
         if self.complete_button is not None:
             buttons.append(self.complete_button)
         if self.keep_button is not None:
@@ -233,6 +242,8 @@ class ProjectListPanel(QtWidgets.QWidget):
         count = self.model.rowCount()
         self.add_button.setEnabled(self.table is not None)
         self.sort_button.setEnabled(count > 1)
+        if self.rank_button is not None:
+            self.rank_button.setEnabled(count > 1)
         for button in (self.delete_button, self.copy_button, self.complete_button,
                        self.keep_button, self.commit_button):
             if button is not None:

@@ -60,4 +60,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-writing_habit = ["schema.sql", "gui/tutorials/*.html", "gui/tutorials/images/*.png"]
+writing_habit = ["schema.sql", "coach_prompts.json", "gui/tutorials/*.html", "gui/tutorials/images/*.png"]

@@ -27,10 +27,11 @@ from .legend_model import (ACTIVITY, ACTIVITY_CHOICES, ActivityDelegate, CODE,
                            RISK, RISK_CHOICES, RiskDelegate)
 from .qt import Qt, QtGui, QtWidgets, pyqtSignal
 from .. import periods as periodsmod
-from .. import db as dbmod, review as reviewmod
+from .. import coach as coachmod, db as dbmod, review as reviewmod
 from ..project_lists import CARRIED, GRASSCATCHER, HORIZONS, LISTS, list_titles
 from .periods_dialog import PeriodsDialog
 from .project_list_view import ProjectListPanel
+from . import coach_runner
 from .review_panel import ReviewDialog
 from .hour_view import HOUR_COLUMN, HourGridModel, HourPicker
 from .table_model import TIME_COLUMN, CodeDelegate, WeeklyTableModel
@@ -196,6 +197,13 @@ class ScheduleEditor(QtWidgets.QWidget):
             lambda on: settings.put("push_blocks", "true" if on else "false"))
         shift_bar.addWidget(self.push_box)
         shift_bar.addStretch(1)
+        from .block_timer import BlockTimerButton
+        self.block_timer = BlockTimerButton(
+            lambda: self.table.blocks() if self.table is not None else [],
+            self.week_monday, self)
+        self.block_timer.select_requested.connect(self.select_block)
+        self.block_timer.review_requested.connect(lambda b: self.open_review(b))
+        shift_bar.addWidget(self.block_timer)
         self.review_button = QtWidgets.QPushButton("Objectives and review")
         self.review_button.setToolTip(
             "Set the selected block's objectives before it starts, and rate "
@@ -204,6 +212,44 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.review_button.setEnabled(False)
         self.review_button.clicked.connect(lambda: self.open_review())
         shift_bar.addWidget(self.review_button)
+        # The coach: Rule 7 readings and the Rule 10 switches.
+        self.coach_button = QtWidgets.QToolButton()
+        self.coach_button.setText("Coach")
+        self.coach_button.setToolTip(
+            "Readings of your record from the coach, and its switches. The "
+            "coach uses a model on this computer when it is turned on, and "
+            "plain summaries otherwise.")
+        self.coach_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        coach_menu = QtWidgets.QMenu(self.coach_button)
+        self.read_weeks_action = coach_menu.addAction("Read my weeks")
+        self.read_weeks_action.setToolTip(
+            "The two strongest patterns in how you keep your plan, by weekday, "
+            "schedule shape, event, and month, and one change to try")
+        self.read_weeks_action.triggered.connect(lambda: self.read_weeks())
+        self.size_week_action = coach_menu.addAction("Size this week's plan")
+        self.size_week_action.setToolTip(
+            "A plan size drawn from the minutes you actually wrote in recent "
+            "weeks like this one")
+        self.size_week_action.triggered.connect(lambda: self.size_week())
+        coach_menu.addSeparator()
+        self.coach_settings_action = coach_menu.addAction("Settings...")
+        self.coach_settings_action.setToolTip(
+            "Choose the local model from the ones the server has installed, "
+            "and the server's address and interface")
+        self.coach_settings_action.triggered.connect(lambda: self.open_coach_settings())
+        self.model_action = coach_menu.addAction("Use the local model")
+        self.model_action.setCheckable(True)
+        self.model_action.setChecked(settings.get("ai_debrief") == "true")
+        self.model_action.toggled.connect(
+            lambda on: settings.put("ai_debrief", "true" if on else "false"))
+        self.ai_off_action = coach_menu.addAction("AI off this week")
+        self.ai_off_action.setCheckable(True)
+        self.ai_off_action.setToolTip(
+            "Run this week without the coach, to check that the habit holds "
+            "on its own (Rule 10)")
+        self.ai_off_action.toggled.connect(lambda on: self.set_ai_off(on))
+        self.coach_button.setMenu(coach_menu)
+        shift_bar.addWidget(self.coach_button)
         outer.addLayout(shift_bar)
         for button in (self.save_button, self.save_as_button,
                        self.rename_button, self.reload_button,
@@ -252,6 +298,19 @@ class ScheduleEditor(QtWidgets.QWidget):
                 lambda m=minutes: self.shift_selected(m))
         self.hour_view.selectionModel().currentChanged.connect(
             lambda *_args: self._update_shift_buttons())
+        #: Runs coach work off the window's thread, and checks Rule 10 first.
+        self.coach_runner = coach_runner.Runner(self)
+        self.coach_guard = coach_runner.Guard(
+            lambda: self.table.blocks() if self.table is not None else [],
+            self.week_monday, self)
+        #: Shows a coach reply and returns whether it was accepted.
+        self.run_coach_dialog = (
+            lambda dialog: dialog.exec_() == QtWidgets.QDialog.Accepted)
+        #: Lists a server's models, and runs the Coach settings dialog.  Tests
+        #: replace both.
+        self.list_models = coachmod.list_models
+        self.run_coach_settings = (
+            lambda dialog: dialog.exec_() == QtWidgets.QDialog.Accepted)
         #: Runs the review dialog.  A test replaces it.
         self.run_review = lambda dialog: dialog.exec_()
         #: Runs the picker dialog and returns whether it was accepted. A test
@@ -371,6 +430,7 @@ class ScheduleEditor(QtWidgets.QWidget):
             panel.logged.connect(self.logged)
             panel.commit_requested.connect(
                 lambda position: self.commit_grasscatcher(position))
+            panel.rank_requested.connect(lambda: self.rank_grasscatcher())
             self.list_panels[name] = panel
             self.project_tabs.addTab(panel, title)
         self.legend_model.modelReset.connect(self._refresh_lists)
@@ -554,6 +614,8 @@ class ScheduleEditor(QtWidgets.QWidget):
             button.setEnabled(True)
         self._update_insert_buttons()
         self.refresh()
+        self._sync_coach_menu()
+        self.block_timer.update_state()
         if settings.get("hour_view") == "true" and not self.hour_button.isChecked():
             self.hour_button.setChecked(True)
         self.logged.emit(f"Opened {path}")
@@ -1074,6 +1136,8 @@ class ScheduleEditor(QtWidgets.QWidget):
     def on_edit(self) -> None:
         """Refresh the readings after an edit reaches the document."""
         self.refresh()
+        if hasattr(self, "block_timer"):
+            self.block_timer.update_state()
         self.edited.emit()
 
     def on_grid_edit(self) -> None:
@@ -1424,7 +1488,28 @@ class ScheduleEditor(QtWidgets.QWidget):
                 "the grid, and take it off the grasscatcher"
                 + ("" if ready else ". Select a block in the grid first."))
 
+    def select_block(self, block) -> None:
+        """Select ``block`` in the shown view, scrolled into sight."""
+        if self.table is None or block is None:
+            return
+        grid_column = [c for c, _o, _l in self.table.columns].index(block.column) + 1
+        if self.hour_view_shown():
+            index = self.hour_model.index(int(block.start[:2]), grid_column)
+            self.hour_view.setCurrentIndex(index)
+            self.hour_view.scrollTo(index)
+        else:
+            index = self.model.index(self.model._rows.index(block.row), grid_column)
+            self.view.setCurrentIndex(index)
+            self.view.scrollTo(index)
+
     # -- objectives and reviews -----------------------------------------------
+    def _sync_coach_menu(self) -> None:
+        if hasattr(self, "ai_off_action"):
+            off = settings.get("ai_off_week") == coachmod.monday_of(self.today()).isoformat()
+            self.ai_off_action.blockSignals(True)
+            self.ai_off_action.setChecked(off)
+            self.ai_off_action.blockSignals(False)
+
     def week_monday(self) -> Optional[_dt.date]:
         """Return the Monday of the open table's week, or ``None``.
 
@@ -1484,8 +1569,20 @@ class ScheduleEditor(QtWidgets.QWidget):
         except Exception as exc:                         # pragma: no cover
             self.logged.emit(f"Could not move the reviews with the blocks: {exc}")
 
+    def _reload_list(self, name: str) -> None:
+        """Redraw one list after a change made outside its own panel.
+
+        A list panel's view counts its rows when its model is reset, and
+        :meth:`_refresh_lists` resets a panel only when the table changes, so
+        rows the review panel or the coach added would stay out of sight.
+        """
+        panel = self.list_panels.get(name)
+        if panel is not None:
+            panel.set_table(self.table)
+        self._title_lists()
+
     def _on_review_table_edit(self) -> None:
-        self._refresh_lists()
+        self._reload_list(GRASSCATCHER)
         self.on_edit()
 
     def open_review(self, block=None):
@@ -1499,6 +1596,173 @@ class ScheduleEditor(QtWidgets.QWidget):
         dialog.panel.logged.connect(self.logged)
         self.run_review(dialog)
         return dialog
+
+    # -- the coach -------------------------------------------------------------
+    def set_ai_off(self, on: bool) -> None:
+        """Mark the calendar week of today as a week without the coach, or clear it."""
+        monday = coachmod.monday_of(self.today())
+        settings.put("ai_off_week", monday.isoformat() if on else "")
+        self.logged.emit("The coach is off for the week of "
+                         f"{monday.isoformat()}" if on else "The coach is back on")
+
+    def open_coach_settings(self):
+        """Open the Coach settings dialog with the server's models listed."""
+        from .coach_settings import CoachSettingsDialog
+        dialog = CoachSettingsDialog(self)
+        dialog.lister = self.list_models
+        dialog.refresh()
+        saved = self.run_coach_settings(dialog)
+        if saved:
+            self.model_action.blockSignals(True)
+            self.model_action.setChecked(settings.get("ai_debrief") == "true")
+            self.model_action.blockSignals(False)
+            state = "on" if settings.get("ai_debrief") == "true" else "off"
+            self.logged.emit(f"Coach settings saved: local model {state}, "
+                             f"{settings.get('ai_model')} at {settings.get('ai_url')}")
+        return dialog
+
+    def _coach_ready(self, needs_db: bool = True) -> Optional[str]:
+        """Return the database path, or ``None`` after saying why the coach waits."""
+        path = settings.get("db")
+        if needs_db and not path:
+            self.logged.emit("The coach reads the habit database. Choose it in "
+                             "the Plan or Track form first.")
+            return None
+        refused = self.coach_guard.allows()
+        if refused:
+            self.logged.emit(f"The coach stayed quiet, because {refused}")
+            return None
+        return path or ""
+
+    def _ask_coach(self, path: str, task, show) -> None:
+        """Run ``task(con)`` off the window's thread, then ``show(answer)``."""
+        def work():
+            con = coach_runner.connect(path)
+            try:
+                return task(con)
+            finally:
+                con.close()
+
+        def failed(exc):
+            self.logged.emit(f"The coach could not answer: {exc}")
+
+        self.coach_runner.run(work, show, failed)
+
+    def _settle(self, path: str, answer, accepted: bool) -> None:
+        con = coach_runner.connect(path)
+        try:
+            coachmod.mark_accepted(con, answer.log_id, accepted)
+        finally:
+            con.close()
+
+    def rank_grasscatcher(self):
+        """Ask the coach to order the grasscatcher, and reorder it on Accept."""
+        if self.table is None:
+            return None
+        entries = self.table.lists.entries(GRASSCATCHER)
+        if len(entries) < 2:
+            self.logged.emit("The grasscatcher needs two tasks to rank")
+            return None
+        path = self._coach_ready()
+        if path is None:
+            return None
+        tasks = [(e.code, e.description) for e in entries]
+        deadlines = {e.code: (self.table.project_info(e.code) or {}).get("due")
+                     for e in entries if e.code}
+        planned = self.table.totals()["project"]
+        monday = self.week_monday()
+        week = monday.isoformat() if monday else None
+        model = coach_runner.client()
+        result = {}
+
+        def show(answer):
+            dialog = coach_runner.SuggestionDialog(
+                "Ranked grasscatcher", answer,
+                accept_text="Use this order", parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            if accepted:
+                order = [item["index"] for item in answer.data]
+                if self.table.lists.reorder(GRASSCATCHER, order):
+                    self.table.dirty = True
+                    self._reload_list(GRASSCATCHER)
+                    self.on_edit()
+                self.logged.emit("Put the grasscatcher in the coach's order")
+            self._settle(path, answer, accepted)
+            result["answer"] = answer
+
+        self._ask_coach(path, lambda con: coachmod.rank_grasscatcher(
+            model, tasks, deadlines, planned, con=con, week_start=week), show)
+        return result.get("answer")
+
+    def read_weeks(self):
+        """Show the two strongest patterns in the record and one change to try."""
+        path = self._coach_ready()
+        if path is None:
+            return None
+        monday = self.week_monday()
+        end = monday.isoformat() if monday else None
+        model = coach_runner.client()
+        result = {}
+
+        def show(answer):
+            rows = answer.data.get("rows") or []
+            numbers = "\n".join(
+                f"{r['kind']} {r['group']}: {round(r['adherence'] * 100)}% kept over "
+                f"{r['weeks']} weeks" for r in rows)
+            if rows:
+                numbers += f"\nall weeks: {round(answer.data['overall'] * 100)}% kept"
+            dialog = coach_runner.SuggestionDialog(
+                "Patterns in your weeks", answer,
+                intro=("The numbers behind the reading:\n" + numbers) if rows else "",
+                accept_text="Keep the suggestion", parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            if answer.log_id is not None:
+                self._settle(path, answer, accepted)
+            result["answer"] = answer
+
+        self._ask_coach(path, lambda con: coachmod.read_weeks(model, con, end), show)
+        return result.get("answer")
+
+    def size_week(self):
+        """Suggest how many minutes to plan for the open week."""
+        if self.table is None:
+            return None
+        path = self._coach_ready()
+        if path is None:
+            return None
+        monday = self.week_monday()
+        if monday is None:
+            self.logged.emit("The table has no week date, so there is no week to size")
+            return None
+        week = monday.isoformat()
+        code, _problem = self.table.code_or_problem()
+        current = sum(self.table.totals()["project"].values())
+        model = coach_runner.client()
+        result = {}
+
+        def task(con):
+            tags = [r[0] for r in con.execute(
+                "SELECT tag FROM week_context WHERE week_start = ?", (week,))]
+            size = coachmod.size_next_week(con, week, schedule_code=code, tags=tags)
+            if size is None:
+                return None
+            size["current"] = current
+            return coachmod.explain_size(model, size, con=con, week_start=week)
+
+        def show(answer):
+            if answer is None:
+                self.logged.emit("There are no earlier planned weeks to size this "
+                                 "week from yet")
+                return
+            dialog = coach_runner.SuggestionDialog(
+                "A plan size for this week", answer, accept_text="Keep this size",
+                parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            self._settle(path, answer, accepted)
+            result["answer"] = answer
+
+        self._ask_coach(path, task, show)
+        return result.get("answer")
 
     def commit_grasscatcher(self, position: int, block=None) -> Optional[int]:
         """Make grasscatcher task ``position`` an objective of the selected block."""

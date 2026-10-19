@@ -298,6 +298,22 @@ class ProjectLists:
             self.insert(target, None, entry)
         return entry
 
+    def reorder(self, name: str, order: List[int]) -> bool:
+        """Put list ``name`` in ``order``, a permutation of its positions.
+
+        Return whether anything moved.
+        """
+        rows = self.row_indexes(name)
+        if sorted(order) != list(range(len(rows))):
+            raise ValueError("the order must name every row of the list once")
+        lines = [self.lines[i] for i in rows]
+        ordered = [lines[p] for p in order]
+        if ordered == lines:
+            return False
+        for index, line in zip(rows, ordered):
+            self.lines[index] = line
+        return True
+
     def move(self, name: str, position: int, up: bool) -> int:
         """Swap a row with its neighbour.  Return its new position."""
         rows = self.row_indexes(name)

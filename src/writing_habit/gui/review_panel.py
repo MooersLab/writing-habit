@@ -26,12 +26,12 @@ from __future__ import annotations
 
 import datetime as _dt
 from contextlib import contextmanager
-from typing import Optional
+from typing import List, Optional
 
-from .. import db, debrief as debriefmod, review
+from .. import coach, db, debrief as debriefmod, review
 from ..project_lists import GRASSCATCHER, Entry
-from . import settings
-from .qt import Qt, QtGui, QtWidgets, pyqtSignal
+from . import coach_runner, settings
+from .qt import Qt, QtWidgets, pyqtSignal
 
 #: The text a spin box shows for a field left blank.
 BLANK = "not rated"
@@ -62,6 +62,14 @@ class ReviewPanel(QtWidgets.QWidget):
         self.db_path = db_path if db_path is not None else settings.get("db")
         #: Asks the model.  A test replaces it to answer without a server.
         self.ask = debriefmod.debrief
+        #: Runs coach work on a worker thread.  A test makes it run at once.
+        self.runner = coach_runner.Runner(self)
+        #: Rule 10 before every request.
+        self.guard = coach_runner.Guard(
+            lambda: self.table.blocks() if self.table is not None else [],
+            lambda: self.monday, self)
+        #: Shows a suggestion dialog and returns whether it was accepted.
+        self.run_dialog = lambda dialog: dialog.exec_() == QtWidgets.QDialog.Accepted
         self._loading = False
         self._shown: Optional[review.Review] = None
 
@@ -106,8 +114,16 @@ class ReviewPanel(QtWidgets.QWidget):
         self.add_button = QtWidgets.QPushButton("Add")
         self.add_button.setAutoDefault(False)
         self.add_button.clicked.connect(lambda: self.add_objective())
+        self.suggest_button = QtWidgets.QPushButton("Suggest")
+        self.suggest_button.setAutoDefault(False)
+        self.suggest_button.setToolTip(
+            "Type a vague task in the box, such as work on the R01, and the "
+            "coach drafts one to three objectives and an if-then plan. You "
+            "choose which to keep.")
+        self.suggest_button.clicked.connect(lambda: self.suggest_objectives())
         add_row.addWidget(self.objective_edit, 1)
         add_row.addWidget(self.add_button)
+        add_row.addWidget(self.suggest_button)
         objectives.addLayout(add_row)
         tools = QtWidgets.QHBoxLayout()
         self.park_button = QtWidgets.QPushButton("Back to grasscatcher")
@@ -279,13 +295,7 @@ class ReviewPanel(QtWidgets.QWidget):
             stored = review.review(con, key)
             last = review.last_next_step(con, key.code, key)
         self._loading = True
-        self.objective_list.clear()
-        for item in items:
-            row = QtWidgets.QListWidgetItem(item.text)
-            row.setFlags(row.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable)
-            row.setCheckState(Qt.Checked if item.done else Qt.Unchecked)
-            row.setData(Qt.UserRole, item.objective_id)
-            self.objective_list.addItem(row)
+        self._show_objectives(items)
         self.committed_spin.setValue(-1 if stored.objectives_committed is None
                                      else stored.objectives_committed)
         self.met_spin.setValue(-1 if stored.objectives_met is None
@@ -305,6 +315,30 @@ class ReviewPanel(QtWidgets.QWidget):
         self._loading = False
         self._shown = self.current()
         self._sync_counts()
+        self._update_buttons()
+
+    def _show_objectives(self, items) -> None:
+        self.objective_list.clear()
+        for item in items:
+            row = QtWidgets.QListWidgetItem(item.text)
+            row.setFlags(row.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable)
+            row.setCheckState(Qt.Checked if item.done else Qt.Unchecked)
+            row.setData(Qt.UserRole, item.objective_id)
+            if item.origin == "ai":
+                row.setToolTip("Drafted by the coach and kept by you")
+            self.objective_list.addItem(row)
+
+    def reload_objectives(self) -> None:
+        """Refresh the objective list alone, so review fields being typed survive."""
+        if not self.ready():
+            return
+        with self.connection() as con:
+            items = review.objectives(con, self.key())
+        was, self._loading = self._loading, True
+        self._show_objectives(items)
+        self._loading = was
+        self._sync_counts()
+        self._fill_grasscatcher()
         self._update_buttons()
 
     def _fill_grasscatcher(self) -> None:
@@ -354,7 +388,7 @@ class ReviewPanel(QtWidgets.QWidget):
             objective_id = review.add_objective(con, self.key(), text, origin)
         if origin == "typed":
             self.objective_edit.clear()
-        self.load()
+        self.reload_objectives()
         return objective_id
 
     def _selected_id(self) -> Optional[int]:
@@ -378,7 +412,7 @@ class ReviewPanel(QtWidgets.QWidget):
             return None
         with self.connection() as con:
             gone = review.remove_objective(con, objective_id)
-        self.load()
+        self.reload_objectives()
         return gone
 
     def park_objective(self) -> Optional[int]:
@@ -411,7 +445,7 @@ class ReviewPanel(QtWidgets.QWidget):
         self.table_edited.emit()
         self.logged.emit(f"Committed “{entry.description}” to {self.key().code} "
                          f"{self.key().start}")
-        self.load()
+        self.reload_objectives()
         return objective_id
 
     # -- review ----------------------------------------------------------------
@@ -469,21 +503,111 @@ class ReviewPanel(QtWidgets.QWidget):
             interruptions=value.interruptions, output_units=value.output_units,
             next_step=value.next_step, note=value.note)
 
+    def _log(self, task: str, answer_text: str, source: str, facts: str):
+        try:
+            with self.connection() as con:
+                return coach.log_call(con, task, source, facts, answer_text,
+                                      self.monday.isoformat() if self.monday else None)
+        except Exception:                                # pragma: no cover
+            return None
+
     def run_debrief(self) -> Optional[str]:
         """Write the debrief into the panel and save it with the review."""
         if not self.ready():
             return None
-        QtWidgets.QApplication.setOverrideCursor(QtGui.QCursor(Qt.WaitCursor))
-        try:
-            text, source = self.ask(self.facts(), self.model_box.isChecked(),
-                                    model=settings.get("ai_model"),
-                                    url=settings.get("ai_url"))
-        finally:
-            QtWidgets.QApplication.restoreOverrideCursor()
-        self.debrief_view.setPlainText(text)
-        self.source_label.setText(f"Written by the {source}.")
-        self.save()
-        return text
+        refused = self.guard.allows()
+        if refused:
+            self.source_label.setText(f"The coach stayed quiet, because {refused}.")
+            return None
+        facts = self.facts()
+        use_model = self.model_box.isChecked()
+
+        def work():
+            return self.ask(facts, use_model, model=settings.get("ai_model"),
+                            url=settings.get("ai_url"),
+                            api=settings.get("ai_api") or "ollama")
+
+        result = {}
+
+        def done(reply):
+            text, source = reply
+            result["text"] = text
+            self.debrief_view.setPlainText(text)
+            self.source_label.setText(coach_runner.source_line(source))
+            self._log("debrief", text, source, debriefmod.prompt(facts))
+            self.save()
+
+        self.runner.run(work, done)
+        return result.get("text")
+
+    def suggest_objectives(self) -> Optional[List[int]]:
+        """Ask the coach to draft objectives from the task typed in the box.
+
+        Return the ids of the objectives added, or ``None`` when nothing was.
+        """
+        if not self.ready():
+            return None
+        task = self.objective_edit.text().strip()
+        if not task:
+            self.limit_label.setText("Type the task in the box first, such as "
+                                     "work on the R01, then press Suggest.")
+            self.limit_label.setVisible(True)
+            return None
+        refused = self.guard.allows()
+        if refused:
+            self.limit_label.setText(f"The coach stayed quiet, because {refused}.")
+            self.limit_label.setVisible(True)
+            return None
+        block = self.block()
+        info = (self.table.project_info(block.letter) or {}) if self.table else {}
+        waiting = [e.description for e in self.table.lists.entries(GRASSCATCHER)
+                   if e.code == block.letter] if self.table is not None else []
+        with self.connection() as con:
+            last = review.last_next_step(con, block.letter, self.key())
+        facts = coach.objective_facts(task, info.get("name") or block.letter,
+                                      block.minutes, info.get("due"),
+                                      waiting, last)
+        model = coach_runner.client()
+        week = self.monday.isoformat() if self.monday else None
+        added: dict = {}
+
+        def work():
+            con = coach_runner.connect(self.db_path)
+            try:
+                return coach.suggest_objectives(model, facts, con=con, week_start=week)
+            finally:
+                con.close()
+
+        def done(answer):
+            added["ids"] = self._offer_objectives(answer)
+
+        self.runner.run(work, done)
+        return added.get("ids")
+
+    def _offer_objectives(self, answer) -> Optional[List[int]]:
+        items = list(answer.data.get("objectives", []))
+        if_then = answer.data.get("if_then") or ""
+        lines = items + ([f"Note: {if_then}"] if if_then and items else [])
+        intro = ("Check the objectives to keep. You can reword them in the list "
+                 "afterwards." if items else if_then)
+        dialog = coach_runner.SuggestionDialog(
+            "Suggested objectives", answer, lines, intro=intro,
+            accept_text="Add the checked ones", parent=self)
+        accepted = self.run_dialog(dialog)
+        ids: List[int] = []
+        if accepted and items:
+            chosen = dialog.chosen()
+            for position in chosen:
+                if position < len(items):
+                    ids.append(self.add_objective(items[position], origin="ai"))
+                elif if_then:
+                    note = self.note_edit.text().strip()
+                    self.note_edit.setText((note + " " if note else "") + if_then)
+            self.objective_edit.clear()
+        with self.connection() as con:
+            coach.mark_accepted(con, answer.log_id, bool(ids))
+        self.reload_objectives()
+        return ids or None
 
 
 class ReviewDialog(QtWidgets.QDialog):

@@ -355,7 +355,7 @@ CREATE TABLE IF NOT EXISTS block_objective (
     done         INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0,1)),
     done_at      TEXT,
     origin       TEXT    NOT NULL DEFAULT 'typed'
-                  CHECK (origin IN ('typed','grasscatcher')),
+                  CHECK (origin IN ('typed','grasscatcher','ai')),
     created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
     week_start   TEXT GENERATED ALWAYS AS (
         date(day, '-' || ((CAST(strftime('%w', day) AS INTEGER) + 6) % 7) || ' days')
@@ -402,3 +402,24 @@ SELECT  week_start,
 FROM session_review
 GROUP BY week_start
 ORDER BY week_start;
+
+-- ---------------------------------------------------------------------------
+-- The coach (build step 6). Every request to the local language model, with
+-- the facts sent and the reply, so the writer can see exactly what left the
+-- database. accepted is 1 when the writer took the suggestion, 0 when they
+-- discarded it, and null when they did neither. week_start is the planning
+-- week the call served, which lets the dashboard compare weeks with and
+-- without the coach.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ai_log (
+    log_id     INTEGER PRIMARY KEY,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    task       TEXT    NOT NULL,                  -- objectives, grasscatcher, debrief, weeks, size
+    source     TEXT    NOT NULL,                  -- the model, or the plain summary and why
+    facts      TEXT    NOT NULL,
+    reply      TEXT,
+    accepted   INTEGER CHECK (accepted IN (0,1)),
+    week_start TEXT
+);
+
+CREATE INDEX IF NOT EXISTS ix_ai_log_week ON ai_log(week_start);

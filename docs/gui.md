@@ -375,6 +375,16 @@ Each move empties the old cell and keeps its row, as Remove does. A range the
 file lacks gets its own row in start-time order. **More > Drop unused time
 rows** clears away the empty rows that a day of shifting leaves.
 
+### The block timer
+
+The button on the right of the second bar counts down the block under way, as
+in `A 05:00-06:30, 42 min left`. It turns orange in the last five minutes. For
+fifteen minutes after a block ends it reads `A block ended. Review it`, and
+pressing it opens that block's objectives and review. Between blocks it names
+the next block of the day and how soon it starts, and pressing it selects that
+block in the grid. It rereads the clock every fifteen seconds, counts only the
+week of the open table, and never sounds an alarm.
+
 ### Objectives and review for a block
 
 A planned block answers when you meant to write. Two small records answer what
@@ -433,23 +443,66 @@ The list lives in the weekly table file beside the semester lists, so it
 travels to next week's file with them. The scheduler reads only the first table
 of the file and never sees it.
 
-### The post-block debrief
+### The coach
 
-**Debrief**, at the bottom of the review panel, writes a short note about the
-block. It leads with what you finished, names one thing that got in the way,
-and suggests a first step for the next block. It never writes your manuscript.
-The note is saved with the review.
+The coach is an optional helper for four of the Ten Simple Rules. It drafts a
+block's objectives and ranks the grasscatcher (Rule 4), writes a debrief after
+a block (Rule 5), and reads patterns across weeks and sizes the week's plan
+(Rule 7). It never writes your manuscript, and every task has a plain answer
+written without a model, so nothing depends on it.
 
-With **Ask the local model** unchecked, the default, the note is a plain
-summary written from your review with no model, and nothing leaves the app.
-Checked, the panel sends the review of this one block, meaning the project
-name, the objectives, the counts, and your notes, to a model served on your own
-computer through the Ollama interface. The model and the address are the
-`ai_model` and `ai_url` settings, `llama3.2` at `http://localhost:11434` by
-default. An address that is not on this computer is refused. When the model
-does not answer, the panel falls back to the plain summary and says why.
+| Where | Button | What it does |
+|-------|--------|--------------|
+| Review panel | **Suggest** | Type a vague task in the objective box, such as "work on the R01", and press Suggest. The coach drafts one to three objectives and an if-then plan for the likely distraction. Check the ones to keep. They are added with the origin `ai`, and the if-then plan goes into the note. |
+| Review panel | **Debrief** | A short note on the block. It leads with what you finished, names one obstacle at most, and suggests a first step for next time. It is saved with the review. |
+| Grasscatcher tab | **Rank** | Orders the tasks by the nearest deadlines and this week's planned projects, with a reason for each. **Use this order** rewrites the list. |
+| Coach menu | **Read my weeks** | The two strongest patterns in how you keep your plan, by weekday, schedule shape, event tag, and month, and one change to try. |
+| Coach menu | **Size this week's plan** | A plan size for the open week, the median of what you actually wrote in up to eight recent planned weeks, or in earlier weeks with the same schedule code or event tag. |
 
-To try it, install Ollama, run `ollama pull llama3.2`, and check the box.
+The software computes every number before the model sees it, and the model only
+puts the numbers into words. A pattern needs at least four weeks behind it. A
+sentence from the model that carries a number the facts do not hold is replaced
+by the plain sentence, and a plan-size note keeps the computed number however
+the model words it. Each dialog has **Show what was sent**, which lists the
+exact facts that left the database.
+
+**The local model.** Open **Coach > Settings...** to choose the server, its
+address, and the model. The model picker lists the models the server has
+installed, from Ollama's `/api/tags` or an OpenAI-style server's `/v1/models`,
+and **Refresh** asks again. A name can also be typed for a model you are about
+to pull. Check **Use the local model** there, or **Coach > Use the local
+model**, or **Ask the local model** in the review panel, which are one setting. The coach then asks a
+model served on your own computer. The settings are `ai_model` (`llama3.2` by
+default), `ai_url` (`http://localhost:11434`), and `ai_api`, which is `ollama`
+for Ollama or `openai` for the OpenAI-style interface of LM Studio, llama.cpp,
+and Ollama. An address that is not on this computer is refused unless
+`ai_allow_remote` is `true`. When the model does not answer, the coach falls
+back to the plain answer and says why. The request runs on a worker thread, so
+the window stays usable while the model thinks.
+
+**The guardrails of Rule 10.**
+
+- The coach stays silent during deep work. If the clock is inside a planned
+  block of the open week, it asks before answering.
+- **Coach > AI off this week** silences the coach for the calendar week, so
+  you can check that the habit holds without it.
+- Every request is written to the `ai_log` table with the facts sent, the
+  reply, who wrote it, and whether you accepted it. Once two or more weeks with
+  the coach and two or more without it have plans, the weekly dashboard
+  compares their adherence. The note says plainly that a few weeks describe
+  your record and do not prove the coach helped.
+- The coach reads only what you typed or imported. It never reads the screen,
+  other apps, or your manuscript files.
+
+To try it, install Ollama, run `ollama pull llama3.2`, and check **Use the
+local model**. To compare models before choosing one, run
+`python scripts/try_coach_prompts.py llama3.2 qwen2.5:7b --out coach-trial.org`
+on the same computer. The script sends fixed sample facts, never your records,
+and writes an org report of each model's replies with a verdict on each.
+
+The prompts live in `src/writing_habit/coach_prompts.json`. The Emacs Lisp twin
+reads its own copy of the same file in `writing-habit-coach.el`, so the two
+ports give the same advice.
 
 ### The two-hour break rule
 

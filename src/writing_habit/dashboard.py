@@ -466,10 +466,20 @@ def _intensity(con, week_start: str, today=None) -> list:
     bests = (review.personal_bests(con, week_start)
              if review.planned_weeks(con, week_start) >= 2 else [])
     records = review.has_records(con, week_start)
-    if not bests and not records:
+    from .coach import ai_week_comparison
+    compared = ai_week_comparison(con, week_start)
+    if not bests and not records and compared is None:
         return []
     out = [INTENSITY_STYLE]
     out += _bests(bests)
+    if compared is not None:
+        out.append(
+            f'  <p class="sub">Weeks with the coach: {compared["with_ai"]}, '
+            f'{round(compared["with_ai_kept"] * 100)}% of the plan kept. Weeks '
+            f'without it: {compared["without_ai"]}, '
+            f'{round(compared["without_ai_kept"] * 100)}% kept. A few weeks on '
+            "each side describe your record. They do not prove that the coach "
+            "helped.</p>")
     if records:
         out += _done(review.done_list(con, week_start),
                      review.block_outcomes(con, week_start, today), week_start)

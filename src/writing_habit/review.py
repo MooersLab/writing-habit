@@ -89,11 +89,33 @@ class Review:
         return all(getattr(self, name) in (None, "") for name in REVIEW_FIELDS)
 
 
+#: The columns of block_objective a rebuild copies, without the generated one.
+_OBJECTIVE_COLUMNS = ("objective_id, day, start_time, code, position, text, done,"
+                      " done_at, origin, created_at")
+
+
 def ensure(con: sqlite3.Connection) -> None:
-    """Create the work-intensity tables in an older database.  Safe to repeat."""
+    """Create or upgrade the work-intensity and coach tables.  Safe to repeat.
+
+    A block_objective table made before the coach accepts only the origins
+    typed and grasscatcher, and SQLite cannot widen a CHECK in place, so the
+    table is rebuilt with its rows when the ai origin is missing.
+    """
     have = {r[0] for r in con.execute(
         "SELECT name FROM sqlite_master WHERE type IN ('table','view')")}
-    if not {"block_objective", "session_review", "v_week_review"} <= have:
+    if "block_objective" in have:
+        sql = con.execute("SELECT sql FROM sqlite_master WHERE name = 'block_objective'"
+                          ).fetchone()[0]
+        if "'ai'" not in sql:
+            con.execute("ALTER TABLE block_objective RENAME TO block_objective_old")
+            con.execute("DROP INDEX IF EXISTS ix_objective_block")
+            db.init_db(con)
+            con.execute(f"INSERT INTO block_objective({_OBJECTIVE_COLUMNS})"
+                        f" SELECT {_OBJECTIVE_COLUMNS} FROM block_objective_old")
+            con.execute("DROP TABLE block_objective_old")
+            con.commit()
+            return
+    if not {"block_objective", "session_review", "v_week_review", "ai_log"} <= have:
         db.init_db(con)
 
 

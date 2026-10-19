@@ -160,9 +160,12 @@ leave a next-step note, which greets the next block of the project. The records
 live in the habit database, keyed by the block's day, start, and code, so track
 sync never overwrites them. Tasks that do not make the cut wait on the
 **Grasscatcher** tab, and **Commit to this block** turns one into an objective.
-**Debrief** writes a short coaching note from the review, either as a plain
-summary or, when you turn it on, from a model served on your own computer
-through Ollama. The weekly dashboard adds **Personal bests** and a **Done this
+A **Coach** drafts objectives, ranks the grasscatcher, writes a debrief after
+a block, reads patterns across weeks, and sizes the week's plan. It uses a
+model served on your own computer through Ollama, LM Studio, or llama.cpp when
+you turn it on, and plain summaries otherwise. The software computes every
+number itself, the coach stays quiet during a block and in an AI-off week, and
+every request is logged with the facts sent. The weekly dashboard adds **Personal bests** and a **Done this
 week** list, where missed blocks are grey rather than red.
 
 #### Naming the project lists by period

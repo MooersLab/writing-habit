@@ -73,7 +73,16 @@ def _picker(editor, hour=5, column=1):
 
     editor.run_picker = keep
     editor.open_picker(editor.hour_model.index(hour, column))
+    quiet(seen["dialog"].review_panel)
     return seen["dialog"]
+
+
+def quiet(panel, now=dt.datetime(2026, 10, 14, 12, 0)):
+    """Run the panel's coach work at once, at a time outside every block."""
+    if panel is not None:
+        panel.runner.background = False
+        panel.guard.now = lambda: now
+    return panel
 
 
 def test_the_week_comes_from_the_file_name(editor):
@@ -207,6 +216,7 @@ def test_the_review_button_opens_the_selected_block(editor):
     assert editor.review_button.isEnabled()
     editor.run_review = lambda dialog: None
     dialog = editor.open_review()
+    quiet(dialog.panel)
     assert dialog.panel.block().letter == "B"
 
 
@@ -217,7 +227,7 @@ def test_the_debrief_without_a_model_is_a_local_summary(editor, store):
     panel.objective_list.item(0).setCheckState(Qt.Checked)
     panel.model_box.setChecked(False)
     text = panel.run_debrief()
-    assert "Draft aim 2" in text
+    assert "draft aim 2" in text
     assert "without a model" in panel.source_label.text()
     con = _con(store)
     assert review.review(con, KEY_A).debrief == text
@@ -228,7 +238,7 @@ def test_the_debrief_asks_the_model_when_it_is_on(editor, store):
     panel = _picker(editor).review_panel
     calls = []
 
-    def fake(facts, use_model, model, url):
+    def fake(facts, use_model, model, url, api="ollama"):
         calls.append((facts.project, use_model, model, url))
         return "Good block.", f"local model {model}"
 
@@ -265,3 +275,24 @@ def test_a_canonical_name_finds_its_week_in_the_database(editor, store, tmp_path
     con.close()
     editor.open(str(path))
     assert editor.week_monday() == dt.date(2026, 10, 19)
+
+
+def test_parked_objectives_show_in_the_grasscatcher_view(editor):
+    """Four objectives sent back from the review window appear in the tab's
+    table at once, not only in the file."""
+    from writing_habit.project_lists import GRASSCATCHER
+    view = editor.list_panels[GRASSCATCHER].view
+    before = view.verticalHeader().count()
+    editor.hour_view.setCurrentIndex(editor.hour_model.index(5, 1))
+    editor.run_review = lambda dialog: None
+    panel = quiet(editor.open_review().panel)
+    for text in ("one", "two", "three", "four"):
+        panel.add_objective(text)
+    for _ in range(4):
+        panel.objective_list.setCurrentRow(0)
+        panel.park_objective()
+    assert view.verticalHeader().count() == before + 4
+    texts = [view.model().index(r, 1).data() for r in range(view.model().rowCount())]
+    assert texts[-4:] == ["one", "two", "three", "four"]
+    assert editor.project_tabs.tabText(
+        editor.project_tabs.indexOf(editor.list_panels[GRASSCATCHER])) == f"Grasscatcher ({before + 4})"

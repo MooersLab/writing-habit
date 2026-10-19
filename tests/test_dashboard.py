@@ -154,3 +154,23 @@ def test_no_records_and_one_week_leave_the_dashboard_unchanged():
     assert "Personal bests" not in html
     assert "Done this week" not in html
     assert html == XPORT_HTML.read_text(encoding="utf-8")
+
+
+def test_the_dashboard_compares_weeks_with_and_without_the_coach(tmp_path):
+    from writing_habit import coach
+    from writing_habit.track import manual
+    con = db.connect(str(tmp_path / "ai.db"))
+    db.init_db(con)
+    pid = db.get_or_create_project(con, "A", "A project", "safe")
+    for week, actual in (("2026-01-05", 30), ("2026-01-12", 30),
+                         ("2026-01-19", 60), ("2026-01-26", 60)):
+        con.execute("INSERT INTO plan_block(day, start_time, end_time, project_id,"
+                    " category_id) VALUES (?, '05:00', '06:00', ?, 1)", (week, pid))
+        manual.add_session(con, day=week, project_code="A", minutes=actual,
+                           category="generative")
+    for week in ("2026-01-19", "2026-01-26"):
+        coach.log_call(con, "size", "plain", "f", "r", week)
+    html = dashboard_html(con, "2026-01-26", today="2026-02-01")
+    con.close()
+    assert "Weeks with the coach: 2, 100% of the plan kept" in html
+    assert "without it: 2, 50% kept" in html

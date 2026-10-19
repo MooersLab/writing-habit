@@ -1,0 +1,68 @@
+#+TITLE: Coach prompts tried on local models
+#+LaTeX_HEADER: \usepackage[margin=0.5in]{geometry}
+
+#+CAPTION: Verdicts and seconds per reply.
+#+ATTR_LATEX: :booktabs t
+| Model | Task | Verdict | Seconds |
+|-
+| llama3.2 | objectives | 3 objectives | 0.6 |
+| llama3.2 | grasscatcher | every task once | 0.4 |
+| llama3.2 | debrief | 76 words | 0.5 |
+| llama3.2 | weeks | numbers match the facts | 0.3 |
+| llama3.2 | size | keeps 285 | 0.4 |
+
+* Replies
+
+** llama3.2, objectives
+#+begin_example
+{
+  "objectives": [
+    "Find three citations for the rigor section",
+    "Draft second aim's rationale paragraph",
+    "Create a figure legend for the RNA editing results"
+  ],
+  "if_then": "If I get distracted by social media, then I will close the browser and take a 5-minute break"
+}
+#+end_example
+
+** llama3.2, grasscatcher
+#+begin_example
+{
+  "order": [
+    {
+      "index": 1,
+      "reason": "earlier deadline and more time planned"
+    },
+    {
+      "index": 2,
+      "reason": "earlier deadline"
+    },
+    {
+      "index": 0,
+      "reason": "later deadline and less time planned"
+    }
+  ]
+}
+#+end_example
+
+** llama3.2, debrief
+#+begin_example
+This block went well in terms of meeting the objective of drafting the second aim paragraph. The writer's self-rated focus was 4 of 5, indicating a good level of concentration. Two interruptions occurred, but the writer notes that the phone rang twice, which may have been a minor distraction. The writer can start the next block by reviewing the draft of the second aim paragraph and identifying three relevant citations to add to support the argument.
+#+end_example
+
+** llama3.2, weeks
+#+begin_example
+{
+  "patterns": [
+    "Wednesday",
+    "gAeB"
+  ],
+  "change": "Consider adding a buffer day to the schedule shape gAeB to account for potential variability in keeping planned minutes on non-workdays."
+}
+#+end_example
+
+** llama3.2, size
+#+begin_example
+The suggested plan size for next week is 285 minutes, which is a reduction from the typical minutes planned in the previous 8 weeks. This reduction is based on the writer's past performance, where they kept 59% of the planned minutes from those weeks, and the current plan of 540 minutes.
+#+end_example
+

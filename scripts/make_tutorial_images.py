@@ -8,6 +8,9 @@ so the tutorials keep showing the program as it is.
 
     QT_QPA_PLATFORM=offscreen PYTHONPATH=src python scripts/make_tutorial_images.py
 
+Add ``--coach`` to redraw only the hour view, the review panel, and the coach
+dialogs.
+
 The dashboard is a web page, so it is drawn by a headless Chromium through
 Playwright when that is installed, and skipped with a note otherwise.
 """
@@ -67,6 +70,126 @@ def save(widget, name):
     print(f"Wrote {path}")
 
 
+#: Replies llama3.2 gave in a trial run of scripts/try_coach_prompts.py, used
+#: so the screenshots show a real model's words without needing a server.
+LLAMA_OBJECTIVES = {
+    "objectives": ["Find three citations for the rigor section",
+                   "Draft second aim's rationale paragraph",
+                   "Create a figure legend for the results"],
+    "if_then": "If I get distracted by social media, then I will close the "
+               "browser and take a 5-minute break",
+}
+
+
+def compose(base, overlay, x, y):
+    """Paint ``overlay`` onto a copy of ``base`` at (x, y) and return it."""
+    from writing_habit.gui.qt import QtGui
+    image = base.toImage().copy()
+    painter = QtGui.QPainter(image)
+    painter.drawPixmap(x, y, overlay)
+    painter.end()
+    return QtGui.QPixmap.fromImage(image)
+
+
+def coach_images(app, window, store):
+    """Photograph the shift bar, the review panel, and the coach dialogs."""
+    import datetime as dt
+    import json
+    from writing_habit import coach
+    from writing_habit.gui import coach_runner
+    from writing_habit.gui.coach_settings import CoachSettingsDialog
+    from writing_habit.gui.hour_view import HourPicker
+    from writing_habit.gui.qt import QtCore, QtWidgets
+
+    editor = window.editor
+    # Wide enough for both button bars, so the Coach menu and the timer show.
+    window.resize(1760, 1060)
+    editor.set_hour_view(True)
+    # Monday at 05:48, inside the A block, so the timer counts down.
+    editor.block_timer.now = lambda: dt.datetime(2026, 10, 5, 5, 48)
+    editor.block_timer.update_state()
+    # Monday's 05:00-06:30 block of project A.
+    editor.hour_view.setCurrentIndex(editor.hour_model.index(5, 1))
+    editor.hour_view.scrollTo(editor.hour_model.index(4, 1),
+                              QtWidgets.QAbstractItemView.PositionAtTop)
+    app.processEvents()
+    save(window, "hour-view.png")
+
+    # The Coach menu open under its button, over the shift bar.
+    bar = editor.coach_button.parentWidget()
+    top = editor.shift_buttons[-60].mapTo(editor, QtCore.QPoint(0, 0))
+    strip = editor.grab(QtCore.QRect(0, max(top.y() - 6, 0), editor.width(), 300))
+    menu = editor.coach_button.menu()
+    menu.popup(editor.coach_button.mapToGlobal(
+        QtCore.QPoint(0, editor.coach_button.height())))
+    app.processEvents()
+    corner = editor.coach_button.mapTo(editor, QtCore.QPoint(0, editor.coach_button.height()))
+    shot = compose(strip, menu.grab(),
+                   min(corner.x(), editor.width() - menu.width() - 4),
+                   corner.y() - max(top.y() - 6, 0))
+    menu.hide()
+    shot = shot.copy(QtCore.QRect(max(shot.width() - 760, 0), 0, 760,
+                                  menu.height() + 60))
+    OUT.mkdir(parents=True, exist_ok=True)
+    shot.save(str(OUT / "coach-menu.png"))
+    print(f"Wrote {OUT / 'coach-menu.png'}")
+    del bar
+
+    # The picker with the review panel, as a block ends.
+    starts = editor.hour_model.blocks_at(5, 1)
+    dialog = HourPicker(editor.table, 0, editor.table.day_labels[0], 5,
+                        existing=starts, parent=window,
+                        monday=editor.week_monday(), review_blocks=starts)
+    panel = dialog.review_panel
+    panel.runner.background = False
+    panel.guard.now = lambda: dt.datetime(2026, 10, 5, 11, 0)
+    panel.guard.confirm = lambda text: True
+    for text in LLAMA_OBJECTIVES["objectives"]:
+        panel.add_objective(text, origin="ai")
+    panel.objective_list.item(0).setCheckState(QtCore.Qt.Checked)
+    panel.objective_list.item(1).setCheckState(QtCore.Qt.Checked)
+    panel.focus_spin.setValue(4)
+    panel.interruption_spin.setValue(2)
+    panel.output_edit.setText("one paragraph, three citations")
+    panel.next_edit.setText("Start the figure legend from the panel notes")
+    panel.model_box.setChecked(False)
+    panel.run_debrief()
+    dialog.show()
+    dialog.adjustSize()
+    app.processEvents()
+    save(dialog, "hour-review.png")
+    dialog.reject()
+
+    # The Suggest dialog with llama3.2's objectives.
+    answer = coach.Answer(
+        data=LLAMA_OBJECTIVES, text="", source="local model llama3.2",
+        facts=coach.objective_facts("work on the R01", "1001grantR01", 90,
+                                    "2026-11-15"))
+    lines = LLAMA_OBJECTIVES["objectives"] + [f"Note: {LLAMA_OBJECTIVES['if_then']}"]
+    suggest = coach_runner.SuggestionDialog(
+        "Suggested objectives", answer, lines,
+        intro="Check the objectives to keep. You can reword them in the list "
+              "afterwards.", accept_text="Add the checked ones", parent=window)
+    suggest.show()
+    suggest.adjustSize()
+    app.processEvents()
+    save(suggest, "coach-suggest.png")
+    suggest.reject()
+
+    # The settings dialog with the models a server reported.
+    settings_dialog = CoachSettingsDialog(window)
+    settings_dialog.lister = lambda url, api, allow_remote=False: [
+        "llama3.2:latest", "qwen2.5:7b"]
+    settings_dialog.use_box.setChecked(True)
+    settings_dialog.refresh()
+    settings_dialog.show()
+    settings_dialog.adjustSize()
+    app.processEvents()
+    save(settings_dialog, "coach-settings.png")
+    settings_dialog.reject()
+    del json
+
+
 def main() -> int:
     from writing_habit import db
     from writing_habit.gui import settings
@@ -78,6 +201,10 @@ def main() -> int:
     work.mkdir(parents=True)
     table = work / "week.org"
     shutil.copy(EXAMPLE / "week.org", table)
+    # Two waiting tasks, so the review panel's grasscatcher has something to offer.
+    with open(table, "a", encoding="utf-8") as fh:
+        fh.write("\n#+NAME: grasscatcher\n| A: tidy the budget justification |\n"
+                 "| B: reread the reviewer comments |\n")
     mytime = work / "mytime.db"
     shutil.copy(EXAMPLE / "mytime.db", mytime)
     habit = work / "writing-habit.db"
@@ -103,6 +230,12 @@ def main() -> int:
 
     window.show_tab("Schedule")
     window.editor.open(str(table))
+    app.processEvents()
+    if "--coach" in sys.argv:
+        coach_images(app, window, store)
+        window.close()
+        return 0
+    window.editor.set_hour_view(False)
     app.processEvents()
     save(window, "schedule.png")
     # Give the legend room for every row, then photograph the legend alone.
@@ -150,6 +283,9 @@ def main() -> int:
             panel.fields[dest].set_value(value)
         panel.refresh()
         save(window, "generate.png")
+
+    window.show_tab("Schedule")
+    coach_images(app, window, store)
 
     window.show_tab("Tutorials")
     app.processEvents()

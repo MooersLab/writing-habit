@@ -31,9 +31,12 @@ DEFAULTS = {
     "picker_last": "",     # JSON {code: [minutes past the hour, length]}
     "hour_view": "true",   # show the weekly table as 24 hour rows
     "push_blocks": "true",  # a placed or shifted block pushes later overlaps down
-    "ai_debrief": "false",  # offer the post-block debrief from a local model
+    "ai_debrief": "false",  # ask the local model (debrief and every coach task)
     "ai_url": "http://localhost:11434",  # the local model server (Ollama API)
-    "ai_model": "llama3.2",  # the model the debrief asks
+    "ai_model": "llama3.2",  # the model the coach asks
+    "ai_api": "ollama",    # the server's interface: ollama, or openai for LM Studio and llama.cpp
+    "ai_allow_remote": "false",  # allow a model server that is not on this computer
+    "ai_off_week": "",     # the Monday of a week the writer runs without the coach
     "periods_file": "",    # the calendar of periods; empty means beside the tables
     "period_kind": "semester",  # the kind of period that names the lists
 }

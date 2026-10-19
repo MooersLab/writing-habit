@@ -33,9 +33,9 @@ def test_the_prompt_carries_only_the_review():
 
 def test_the_local_summary_leads_with_the_win_and_suggests_a_next_step():
     text = debrief.local_debrief(FACTS)
-    assert text.startswith("You finished Draft aim 2.")
+    assert text.startswith("You finished draft aim 2.")
     assert "2 interruptions" in text
-    assert "Find three citations" in text
+    assert "find three citations" in text
     assert "—" not in text and ":" not in text.replace("note:", "")
 
 
@@ -50,14 +50,16 @@ def test_ask_model_posts_to_the_local_server():
     def opener(request, timeout):
         sent["url"] = request.full_url
         sent["body"] = json.loads(request.data.decode())
-        return _Reply(json.dumps({"response": " Well done. "}).encode())
+        return _Reply(json.dumps({"message": {"content": " Well done. "}}).encode())
 
     text = debrief.ask_model(FACTS, "llama3.2", "http://localhost:11434", opener=opener)
     assert text == "Well done."
-    assert sent["url"] == "http://localhost:11434/api/generate"
+    assert sent["url"] == "http://localhost:11434/api/chat"
     assert sent["body"]["model"] == "llama3.2"
     assert sent["body"]["stream"] is False
-    assert "never write" in sent["body"]["system"]
+    system = sent["body"]["messages"][0]["content"]
+    assert "never write" in system
+    assert "[met] Draft aim 2" in sent["body"]["messages"][1]["content"]
 
 
 def test_a_remote_server_is_refused_unless_allowed():
@@ -80,4 +82,4 @@ def test_model_off_never_calls_out():
         raise AssertionError("must not be called")
 
     text, source = debrief.debrief(FACTS, False, "llama3.2", opener=opener)
-    assert source == "summary without a model"
+    assert source == "plain summary written without a model"

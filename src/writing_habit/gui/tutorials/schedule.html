@@ -41,6 +41,98 @@ range you used last for that project is the default.</p>
 <p>The <b>Breaks</b> panel lists any run of blocks longer than two hours with no
 15-minute break, and tints those cells amber.</p>
 
+<p><img src="images/hour-view.png" width="680"></p>
+<p class="caption">The hour view with Monday's A block selected. The second bar shifts the
+selected block, counts down the block under way, and holds the coach.</p>
+
+<h2>Shift a block and keep track of the time</h2>
+<p>Select a block in the hour view, then press <b>Earlier 1 h</b>, <b>Earlier 15 min</b>,
+<b>Later 15 min</b>, or <b>Later 1 h</b>. Alt+Up and Alt+Down shift by 15 minutes, and
+Alt+Shift+Up and Alt+Shift+Down by an hour. With <b>Push later blocks down</b>
+checked, a later block that the moved block overlaps moves down to start where it
+ends, so placing a two-hour block at 03:00 moves a 04:00 block to 05:00 instead of
+deleting it.</p>
+<p>The <b>block timer</b> button beside the coach shows the time left in the block
+under way, such as <i>A 05:00-06:30, 42 min left</i>. It turns orange in the last
+five minutes. For fifteen minutes after a block ends it reads <i>A block ended.
+Review it</i>, and pressing it opens that block's review. Between blocks it names
+the next one, and pressing it selects that block. It counts only the week of the
+open table, and it never sounds an alarm.</p>
+
+<h2>Set objectives and review a block</h2>
+<h3>In the window</h3>
+<ol>
+<li>In the hour view, double-click a block, or select it and press
+<b>Objectives and review</b>. The picker shows the review panel on its right.</li>
+<li>Before the block starts, type one to three objectives and press <b>Add</b>. Each
+should name a result you could show someone, such as a drafted paragraph. The panel
+warns above three. Tasks that do not fit go to the grasscatcher with <b>Back to
+grasscatcher</b>, and <b>From grasscatcher</b> brings one back.</li>
+<li>When the block ends, check the objectives you met, rate your focus from 1 to 5,
+count interruptions with <b>+1</b>, and write a next-step note. Press
+<b>Save review</b>. Closing the window saves a changed review too.</li>
+<li>The next block of the same project shows your last next-step note at the top of
+the panel.</li>
+</ol>
+<p><img src="images/hour-review.png" width="680"></p>
+<p class="caption">The picker with the review panel. Two of three objectives are met,
+and the debrief below was written as a plain summary, with the model off.</p>
+<p>Objectives and reviews live in the habit database chosen in the Plan and Track
+forms, keyed by the block's day, start, and project code. Track sync never writes
+them, and a shifted block takes them along.</p>
+
+<h2>Ask the local model</h2>
+<p>The coach can use a language model that runs on your own computer. Nothing
+leaves the computer, and every coach button also works without a model.</p>
+<h3>Set it up once</h3>
+<ol>
+<li>Install Ollama from ollama.com, then pull a small model in a terminal.</li>
+<li>In the Schedule tab, open <b>Coach &gt; Settings...</b>. The model picker lists
+the models the server has installed. Choose one, check <b>Use the local model</b>,
+and press <b>Save</b>. LM Studio and llama.cpp work too; choose the OpenAI-style
+server in the same dialog.</li>
+</ol>
+<pre>ollama pull llama3.2
+ollama list</pre>
+<p><img src="images/coach-settings.png" width="340"></p>
+<p class="caption">Coach settings with the two models a server reported. Refresh asks
+the server again.</p>
+<p><img src="images/coach-menu.png" width="560"></p>
+<p class="caption">The Coach menu. <b>Use the local model</b> is the same switch as
+<b>Ask the local model</b> in the review panel.</p>
+
+<h3>Draft objectives with Suggest</h3>
+<ol>
+<li>In the review panel, type the vague task in the objective box, such as
+<i>work on the R01</i>.</li>
+<li>Press <b>Suggest</b>. The model drafts up to three objectives and an if-then plan
+for the distraction you are most likely to meet.</li>
+<li>Check the ones to keep and press <b>Add the checked ones</b>. They join the list,
+marked as drafted by the coach, and the if-then plan goes into the note.
+<b>Show what was sent</b> lists the exact facts the model saw.</li>
+</ol>
+<p><img src="images/coach-suggest.png" width="560"></p>
+<p class="caption">Objectives and an if-then plan drafted by llama3.2 in a trial run.</p>
+
+<h3>Write the debrief</h3>
+<p>After the review, press <b>Debrief</b>. With the model on, it writes three or four
+sentences that lead with what you finished, name one obstacle at most, and suggest
+a first step for next time. With the model off, the panel writes a plain summary
+from your review. The debrief is saved with the review.</p>
+
+<h3>What the coach will not do</h3>
+<ul>
+<li>It never writes your manuscript and never reads your manuscript files.</li>
+<li>Inside a planned block it asks before answering, because deep work comes first.</li>
+<li><b>Coach &gt; AI off this week</b> silences it for the week, so you can check
+that the habit holds without it.</li>
+<li>Every request is written to the <code>ai_log</code> table in the habit database,
+with the facts sent and the reply.</li>
+</ul>
+<p>The Coach menu also has <b>Read my weeks</b>, which names the two strongest patterns
+in how you keep your plan, and <b>Size this week's plan</b>, which suggests a plan size
+from the minutes you actually wrote in recent weeks like this one.</p>
+
 <h2>Edit the legend</h2>
 <p>Each legend row has five columns.</p>
 <p><img src="images/legend.png" width="660"></p>

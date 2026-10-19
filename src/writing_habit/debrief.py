@@ -22,7 +22,6 @@ The module needs only the standard library.
 
 from __future__ import annotations
 
-import json
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -35,6 +34,8 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]"}
 #: Seconds to wait for the model. A small local model answers in a few.
 TIMEOUT = 60
 
+#: The debrief's instructions now live in ``coach_prompts.json``; this copy is
+#: kept for readers of the earlier interface.
 SYSTEM = (
     "You are a supportive writing coach for an academic scientist. You help "
     "the writer reflect on one writing block that just ended. You never write "
@@ -118,15 +119,23 @@ def local_debrief(facts: BlockFacts) -> str:
         parts.append("Start the next block where your own note points, "
                      f"{facts.next_step.rstrip('.')}.")
     elif left:
-        parts.append(f"A good first step next time is {left[0]}.")
+        parts.append(f"A good first step next time is "
+                     f"{_lower_first(left[0].rstrip('.'))}.")
     else:
         parts.append("Before you close the file, write one sentence on where "
                      "to start next time.")
     return " ".join(parts)
 
 
+def _lower_first(text: str) -> str:
+    """Lowercase an objective's first letter for use mid-sentence, unless it starts an acronym."""
+    if len(text) > 1 and text[0].isupper() and not text[1].isupper():
+        return text[0].lower() + text[1:]
+    return text
+
+
 def _join(items: List[str]) -> str:
-    items = [i.rstrip(".") for i in items]
+    items = [_lower_first(i.rstrip(".")) for i in items]
     if len(items) <= 1:
         return "".join(items)
     return ", ".join(items[:-1]) + " and " + items[-1]
@@ -139,34 +148,17 @@ def is_local(url: str) -> bool:
 
 def ask_model(facts: BlockFacts, model: str, url: str = "http://localhost:11434",
               timeout: float = TIMEOUT, allow_remote: bool = False,
-              opener=urllib.request.urlopen) -> str:
+              opener=urllib.request.urlopen, api: str = "ollama") -> str:
     """Ask the local model for a debrief.  Raise :class:`RuntimeError` on failure.
 
-    ``opener`` is the function that sends the request; a test replaces it.
+    The request goes through :class:`writing_habit.coach.Client` with the
+    shared debrief prompt, so the Python and Emacs ports ask alike. ``opener``
+    is the function that sends the request; a test replaces it.
     """
-    if not model:
-        raise RuntimeError("no model is named for the debrief")
-    if not allow_remote and not is_local(url):
-        raise RuntimeError(f"{url} is not on this computer, so the review stays here")
-    body = json.dumps({
-        "model": model,
-        "system": SYSTEM,
-        "prompt": prompt(facts),
-        "stream": False,
-        "options": {"temperature": 0.4},
-    }).encode("utf-8")
-    request = urllib.request.Request(
-        url.rstrip("/") + "/api/generate", data=body,
-        headers={"Content-Type": "application/json"})
-    try:
-        with opener(request, timeout=timeout) as response:
-            reply = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        raise RuntimeError(f"the local model at {url} did not answer ({exc})") from exc
-    text = (reply.get("response") or "").strip()
-    if not text:
-        raise RuntimeError("the local model sent an empty reply")
-    return text
+    from .coach import Client
+    client = Client(model=model, url=url, api=api, allow_remote=allow_remote,
+                    timeout=timeout, opener=opener)
+    return client.ask("debrief", prompt(facts))
 
 
 def debrief(facts: BlockFacts, use_model: bool, model: str = "",
@@ -180,5 +172,5 @@ def debrief(facts: BlockFacts, use_model: bool, model: str = "",
         try:
             return ask_model(facts, model, url, **kwargs), f"local model {model}"
         except RuntimeError as exc:
-            return local_debrief(facts), f"summary without a model, because {exc}"
-    return local_debrief(facts), "summary without a model"
+            return local_debrief(facts), f"plain summary written without a model, because {exc}"
+    return local_debrief(facts), "plain summary written without a model"
