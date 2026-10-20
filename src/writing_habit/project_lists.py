@@ -82,7 +82,30 @@ class RollResult:
     completed: List["Entry"]
     carried: List["Entry"]
 
-_NAME_LINE = re.compile(r"^\s*#\+NAME:\s*(\S+)\s*$", re.IGNORECASE)
+#: A table name may contain spaces, as in ``#+NAME: Fall 2026 projects``.
+_NAME_LINE = re.compile(r"^\s*#\+NAME:\s*(.*?)\s*$", re.IGNORECASE)
+
+
+def normalize_title(text: str) -> str:
+    """Return a table name or tab title in a form two spellings can be compared in.
+
+    Case, repeated spaces, a final colon, and a trailing count such as
+    ``(26)`` or ``(1 of 3)`` are ignored, so ``Fall 2026 projects (26)`` and
+    ``fall  2026 Projects`` match.
+    """
+    text = re.sub(r"\s*\((?:\d+(?:\s+of\s+\d+)?)\)\s*$", "", text or "")
+    text = re.sub(r"\s+", " ", text).strip().rstrip(":").strip()
+    return text.lower()
+
+
+def default_title_map() -> dict:
+    """Return ``{normalized title: list name}`` for the plain tab titles."""
+    out = {normalize_title(title): name for name, title in LISTS}
+    out.update({normalize_title(name): name for name in NAMES})
+    out[normalize_title("Completed")] = "completed-this-semester"
+    out[normalize_title("Current semester")] = "current-semester-projects"
+    out[normalize_title("Next semester")] = "next-semester-projects"
+    return out
 _RULE = re.compile(r"^\s*\|[-+]")
 _TAG_TO_RISK_TEXT = {"safe": "safe", "speculative": "risky"}
 
@@ -180,7 +203,7 @@ class ProjectLists:
         """
         for index, line in enumerate(self.lines):
             m = _NAME_LINE.match(line)
-            if not m or m.group(1).lower() != name:
+            if not m or normalize_title(m.group(1)) != name:
                 continue
             start = index + 1
             while start < len(self.lines) and self.lines[start].lstrip().startswith("#+"):
@@ -194,9 +217,77 @@ class ProjectLists:
     def _name_line(self, name: str) -> Optional[int]:
         for index, line in enumerate(self.lines):
             m = _NAME_LINE.match(line)
-            if m and m.group(1).lower() == name:
+            if m and normalize_title(m.group(1)) == name:
                 return index
         return None
+
+    def _block(self, name_line: int) -> Tuple[int, int]:
+        """Return ``(first, end)`` of the lines of the table named on ``name_line``.
+
+        ``first`` takes in one blank line before the name, so removing the
+        block leaves the spacing of the file as it was.
+        """
+        end = name_line + 1
+        while end < len(self.lines) and self.lines[end].lstrip().startswith("#+") \
+                and not _NAME_LINE.match(self.lines[end]):
+            end += 1
+        while end < len(self.lines) and self.lines[end].lstrip().startswith("|"):
+            end += 1
+        first = name_line
+        if first > 0 and not self.lines[first - 1].strip():
+            first -= 1
+        return first, end
+
+    def tidy_names(self, titles: Optional[dict] = None) -> List[str]:
+        """Give every list its standard name, and merge a list named twice.
+
+        ``titles`` maps a normalized title, such as ``"fall 2026 projects"``,
+        to the list name it stands for, such as ``current-semester-projects``.
+        The plain tab titles are always understood. A list written under a tab
+        title is renamed, and a second table with the same name is merged into
+        the first, keeping each project once. Return one line per change, for
+        the writer to read; an empty list means the file already used the
+        standard names.
+        """
+        mapping = default_title_map()
+        mapping.update(titles or {})
+        notes: List[str] = []
+        for index, line in enumerate(self.lines):
+            m = _NAME_LINE.match(line)
+            if not m:
+                continue
+            written = m.group(1)
+            key = mapping.get(normalize_title(written))
+            if key is None:
+                continue
+            canonical = f"#+NAME: {key}"
+            if line != canonical:
+                self.lines[index] = canonical
+                if normalize_title(written) != key:
+                    notes.append(f"Read the list “{written}” as {key}")
+        for key in NAMES:
+            while True:
+                found = [i for i, line in enumerate(self.lines)
+                         if (_NAME_LINE.match(line) and
+                             normalize_title(_NAME_LINE.match(line).group(1)) == key)]
+                if len(found) < 2:
+                    break
+                later = found[1]
+                first, end = self._block(later)
+                rows = [line for line in self.lines[later + 1:end]
+                        if line.lstrip().startswith("|") and not _RULE.match(line)
+                        and parse_entry(_cells(line)[0]) is not None]
+                del self.lines[first:end]
+                added = 0
+                for line in rows:
+                    entry = parse_entry(_cells(line)[0])
+                    if self.find_project(key, entry.project) is None:
+                        self.insert(key, None, entry)
+                        added += 1
+                notes.append(f"Merged a second {key} table into the first "
+                             f"({added} project(s) added, {len(rows) - added} "
+                             "already there)")
+        return notes
 
     def present(self) -> List[str]:
         """The names of the lists the file carries, in horizon order."""

@@ -769,6 +769,8 @@ without the extra skips the graphical tests rather than failing them.
 | **Sync to-dos** lists several logs | more than one folder starts with the project's number; rename the legend entry to match the folder name |
 | New to-dos vanished from a log | Emacs had the log open and saved its old buffer; recover them from `logNNNN.org~` and revert the buffer before the next sync |
 | A tab shows (0 of 12) | the Find box still holds text; press Esc in it |
+| A blue note says the file was read with changes | the file used another layout; save to write it in the standard one |
+| The This week tab holds every project of the semester | the file is in the older layout; use **More > Move extra legend blocks into the lists** |
 | The Name panel says the week has no canonical name | a cell holds a two-letter code such as `AB`; the file name allows only single letters, so give the project a letter or keep the current name |
 
 ## Licensing
@@ -843,6 +845,29 @@ an org line, with rows in the legend's form and a dash for a missing code:
 The scheduler reads only the first table of the file, so the lists never reach
 plan import, the calendar, or the sheets. `track sync` reads the current list,
 and **New from template** carries the lists into the new week.
+
+
+### Files in other layouts
+
+The editor reads three other layouts and brings each to the standard one. A
+blue note above the project tabs lists what it changed, and the file on disk
+is not touched until you save.
+
+| The file has | What the editor does |
+|--------------|----------------------|
+| The legend in its own table, named `#+NAME: This week`, after the time blocks | Moves its rows under the time blocks, where the scheduler, plan import, and the sheets read the legend |
+| Lists named by their tab titles, such as `#+NAME: Fall 2026 projects` or `#+NAME: 3*Next semester projects` | Gives each its standard name, such as `current-semester-projects`, using the calendar for the period names |
+| One list named twice | Merges the second table into the first, keeping each project once |
+
+A file in the older layout kept the semester lists inside the legend, one
+block after another with a rule between them, so every project read as a
+project of the week. The note says so, and **More > Move extra legend blocks
+into the lists** keeps the first block as the week's legend and moves the next
+blocks to the current, next, and later semester lists, after showing the moves.
+
+The standard names stay relative to the current period, so a file keeps
+meaning the same thing after a roll forward. The tab titles are only how the
+window shows them.
 
 ### Naming the lists by semester, quarter, or fiscal year
 

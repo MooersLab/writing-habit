@@ -34,7 +34,7 @@ FILE_NAME = "periods.org"
 #: The archive of completed projects, beside the calendar.
 ARCHIVE_NAME = "completed.org"
 
-_NAME_LINE = re.compile(r"^\s*#\+NAME:\s*(\S+)\s*$", re.IGNORECASE)
+_NAME_LINE = re.compile(r"^\s*#\+NAME:\s*(.*?)\s*$", re.IGNORECASE)
 _RULE = re.compile(r"^\s*\|[-+]")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 

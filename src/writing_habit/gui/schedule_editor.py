@@ -142,6 +142,13 @@ class ScheduleEditor(QtWidgets.QWidget):
             "such as gA, so the section rows are no longer needed")
         self.activities_action.triggered.connect(
             lambda: self.move_activities_into_cells())
+        self.split_blocks_action = more_menu.addAction("Move extra legend blocks into the lists")
+        self.split_blocks_action.setToolTip(
+            "For a table in the older layout, where the semester lists sat in "
+            "the legend separated by rules: keep the first block as this week's "
+            "legend and move the next blocks to the current, next, and later "
+            "semester lists, after showing the moves")
+        self.split_blocks_action.triggered.connect(lambda: self.split_legend_blocks())
         self.tidy_legend_action = more_menu.addAction("Split legend into project and deadline")
         self.tidy_legend_action.setToolTip(
             "Rewrite each legend description as a project name and a "
@@ -456,6 +463,16 @@ class ScheduleEditor(QtWidgets.QWidget):
         banner_row.addWidget(self.period_file_button)
         banner_row.addWidget(self.roll_button)
         self.period_banner.setVisible(False)
+        # A note above the tabs says what the reader changed to bring a file
+        # in another layout to the standard one, so nothing changes unseen.
+        self.layout_banner = QtWidgets.QLabel()
+        self.layout_banner.setObjectName("layoutBanner")
+        self.layout_banner.setWordWrap(True)
+        self.layout_banner.setStyleSheet(
+            "#layoutBanner { background: #e8f1fb; border: 1px solid #8fb3dc; "
+            "padding: 4px; }")
+        self.layout_banner.setVisible(False)
+        legend_layout.addWidget(self.layout_banner)
         # The search box filters every project tab and tints the matching
         # projects' cells in the grid, so a name is found without scrolling.
         search_row = QtWidgets.QHBoxLayout()
@@ -716,6 +733,7 @@ class ScheduleEditor(QtWidgets.QWidget):
             return
         self.table = table
         self.load_calendar(path)
+        self.layout_notes = self._standardize_layout()
         self.model.set_table(table)
         self.legend_model.set_table(table)
         settings.put("table_dir", str(Path(path).parent))
@@ -1264,6 +1282,93 @@ class ScheduleEditor(QtWidgets.QWidget):
             self.legend_model.set_table(self.table)
             self._fit_legend_columns()
         self.on_edit()
+
+    # -- reading files in other layouts --------------------------------------
+    def _standardize_layout(self) -> list:
+        """Bring the open table to the standard layout, and say what changed.
+
+        The table has already moved a legend kept in its own ``This week``
+        table back into the week. Here the lists named by their tab titles,
+        such as ``Fall 2026 projects``, get their standard names, which the
+        calendar makes possible, and a list named twice is merged. The file
+        is marked changed, so a save writes the standard layout; nothing is
+        written until then.
+        """
+        from ..project_lists import normalize_title
+        table = self.table
+        notes = list(getattr(table, "layout_notes", []))
+        titles, _tips = self.list_titles()
+        mapping = {normalize_title(title): name for name, title in titles.items()}
+        if self.calendar is not None:
+            earlier = [p for p in self.calendar.of_kind(self.period_kind())]
+            for period in earlier:
+                mapping.setdefault(normalize_title(f"Carried over from {period.name}"),
+                                   CARRIED)
+                mapping.setdefault(normalize_title(f"Completed in {period.name}"),
+                                   "completed-this-semester")
+        renamed = table.lists.tidy_names(mapping)
+        if renamed:
+            table.dirty = True
+            notes += renamed
+        blocks = table.legend_blocks()
+        if len(blocks) > 1:
+            notes.append(
+                f"The legend holds {len(blocks)} blocks separated by rules, "
+                f"{sum(len(b) for b in blocks)} rows in all, as in the older layout "
+                "that kept the semester lists inside the legend. More > Move extra "
+                "legend blocks into the lists moves all but the first block to "
+                "the lists.")
+        self._show_layout_notes(notes)
+        for note in notes:
+            self.logged.emit(note)
+        return notes
+
+    def _show_layout_notes(self, notes) -> None:
+        if not notes:
+            self.layout_banner.setVisible(False)
+            return
+        changed = self.table is not None and self.table.dirty
+        tail = ("<br><i>Save to keep these changes; the file on disk is not "
+                "touched until then.</i>" if changed else "")
+        self.layout_banner.setText(
+            "<b>This file was read with changes:</b><br>"
+            + "<br>".join(f"• {n}" for n in notes) + tail)
+        self.layout_banner.setVisible(True)
+
+    def split_legend_blocks(self, confirm: bool = True):
+        """Move the legend blocks after the first into the semester lists."""
+        from ..project_lists import HORIZONS
+        if self.table is None:
+            return None
+        blocks = self.table.legend_blocks()
+        if len(blocks) < 2:
+            self.logged.emit("The legend has one block, so there is nothing to move")
+            return None
+        titles, _tips = self.list_titles()
+        lines = [f"Keep the first block ({len(blocks[0])} projects) as this week's legend."]
+        for target, block in zip(HORIZONS, blocks[1:]):
+            lines.append(f"Move block {blocks.index(block) + 1} "
+                         f"({len(block)} projects) to {titles[target]}.")
+        if len(blocks) - 1 > len(HORIZONS):
+            lines.append(f"There are only {len(HORIZONS)} lists, so this cannot run.")
+        if confirm and not self._confirm(
+                "Move legend blocks", "\n".join(lines)
+                + "\n\nA project already on a list is not added twice. The file "
+                "is written when you save."):
+            return None
+        try:
+            moved = self.table.split_legend_blocks()
+        except ValueError as exc:
+            self.logged.emit(f"Could not move the blocks: {exc}")
+            return None
+        self._rebuild_views()
+        for panel in self.list_panels.values():
+            panel.set_table(self.table)
+        self.layout_banner.setVisible(False)
+        for target, added in moved:
+            self.logged.emit(f"Moved {added} project(s) to {titles[target]}")
+        self.on_grid_edit()
+        return moved
 
     # -- planning periods -------------------------------------------------
     def load_calendar(self, table_path: Optional[str] = None) -> None:

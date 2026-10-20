@@ -293,6 +293,9 @@ class WeeklyTable:
         #: from the file, stays even while no cell uses it yet.
         self._synced_codes: set = set()
         self._parse(text)
+        #: What the reader changed to bring a file to the standard layout, one
+        #: line each. Such a file is marked changed, so a save writes it out.
+        self.layout_notes: List[str] = self._absorb_legend_table()
         #: The semester project lists that follow the week, edited in place.
         self.lists = ProjectLists(self._after)
 
@@ -350,6 +353,66 @@ class WeeklyTable:
                 continue
 
             self.rows.append(Row(OTHER, line, cells))
+
+    #: Names under which a writer may keep the week's legend as its own table.
+    LEGEND_TABLE_NAMES = {"this week", "legend", "this week's legend",
+                          "week legend", "key"}
+
+    def _absorb_legend_table(self) -> List[str]:
+        """Move a legend kept in its own named table back into the week.
+
+        The scheduler, plan import, and the sheets read the legend from the
+        first table of the file, below the time blocks. A file whose legend
+        sits in a later table named ``This week`` would leave all of them
+        without project names, so its rows are moved under the time blocks
+        and the named table is removed. A code the week already defines keeps
+        that definition. Return a note for each change.
+        """
+        from writing_schedule.orgtable import split_row
+        from ..project_lists import _NAME_LINE, normalize_title
+
+        notes: List[str] = []
+        index = 0
+        while index < len(self._after):
+            m = _NAME_LINE.match(self._after[index])
+            if not m or normalize_title(m.group(1)) not in self.LEGEND_TABLE_NAMES:
+                index += 1
+                continue
+            written = m.group(1)
+            end = index + 1
+            while end < len(self._after) and self._after[end].lstrip().startswith("|"):
+                end += 1
+            first = index - 1 if index > 0 and not self._after[index - 1].strip() else index
+            block = self._after[index + 1:end]
+            del self._after[first:end]
+            index = first
+            have = set(self.legend())
+            moved = skipped = 0
+            if self.rows and self.rows[-1].kind != RULE:
+                rule = next((r.raw for r in self.rows if r.kind == RULE), None)
+                if rule is not None:
+                    self.rows.append(Row(RULE, rule))
+            for line in block:
+                if re.match(r"^[ \t]*\|[-+]", line):
+                    continue
+                cells = split_row(line)
+                parsed = namemod.parse_legend_cell(cells[0] if cells else "")
+                if parsed is None:
+                    continue
+                if parsed[0] in have:
+                    skipped += 1
+                    continue
+                self.rows.append(Row(LEGEND, line, cells, parsed=parsed))
+                have.add(parsed[0])
+                moved += 1
+            note = (f"Moved the {moved} project(s) of the table “{written}” into "
+                    "the week's legend, below the time blocks, where the "
+                    "scheduler and plan import read it")
+            if skipped:
+                note += f"; {skipped} code(s) the legend already had were left out"
+            notes.append(note)
+            self.dirty = True
+        return notes
 
     # -- writing -----------------------------------------------------------
     def to_text(self) -> str:
@@ -505,8 +568,11 @@ class WeeklyTable:
             return False
         while self._after and not self._after[-1].strip():
             self._after.pop()
+        # The #+PROJECT_PERIOD: line sits just before the first list, and it
+        # must travel with them, or the new week asks again which period its
+        # lists belong to.
         start = next(i for i, line in enumerate(other._after)
-                     if line.strip().upper().startswith("#+NAME:"))
+                     if line.strip().upper().startswith(("#+NAME:", "#+PROJECT_PERIOD:")))
         block = list(other._after[start:])
         self._after.extend([""] + block)
         self.dirty = True
@@ -927,6 +993,67 @@ class WeeklyTable:
                 self._synced_codes.discard(code)
                 changed = True
         return changed
+
+    def legend_blocks(self) -> List[List[int]]:
+        """Return the legend rows grouped by the rules between them.
+
+        A table in the older layout kept the semester lists inside the week's
+        legend, one block after another with a rule between them, so every
+        project of every semester read as a project of the week.
+        """
+        from ..project_lists import parse_entry
+        blocks: List[List[int]] = []
+        current: List[int] = []
+        seen_legend = False
+        for index, row in enumerate(self.rows):
+            # A row such as "- 1452PHFSboXt 2027-03-01" has no code yet, so it
+            # is not a legend row, but it belongs to its block all the same.
+            listed = (row.kind == OTHER and seen_legend and row.cells
+                      and parse_entry(row.cells[0]) is not None)
+            if row.kind == LEGEND or listed:
+                current.append(index)
+                seen_legend = True
+            elif row.kind == RULE and seen_legend and current:
+                blocks.append(current)
+                current = []
+        if current:
+            blocks.append(current)
+        return blocks
+
+    def split_legend_blocks(self) -> List[Tuple[str, int]]:
+        """Move every legend block after the first into the semester lists.
+
+        The second block goes to the current semester's list, the third to
+        the next semester's, and so on, as the older layout kept them. A
+        project already on a list is not added twice. The rules between the
+        blocks go too. Return ``(list name, projects added)`` for each block.
+        """
+        from ..project_lists import HORIZONS, parse_entry
+        blocks = self.legend_blocks()
+        if len(blocks) < 2:
+            return []
+        out: List[Tuple[str, int]] = []
+        drop = set()
+        for target, block in zip(HORIZONS, blocks[1:]):
+            added = 0
+            for index in block:
+                entry = parse_entry(self.rows[index].cells[0])
+                if self.lists.find_project(target, entry.project) is None:
+                    self.lists.insert(target, None, entry)
+                    added += 1
+                drop.add(index)
+            out.append((target, added))
+        extra = blocks[len(HORIZONS) + 1:]
+        if extra:
+            raise ValueError(f"the legend has {len(blocks)} blocks, more than the "
+                             f"{len(HORIZONS)} semester lists can take")
+        first_block_end = blocks[0][-1]
+        for index in range(first_block_end + 1, blocks[-1][-1] + 1):
+            if self.rows[index].kind == RULE:
+                drop.add(index)
+        self.rows = [row for i, row in enumerate(self.rows) if i not in drop]
+        self.dirty = True
+        return out
 
     def legend_rows(self) -> List[int]:
         """Return the indexes of the legend rows, in file order."""
