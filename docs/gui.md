@@ -422,6 +422,21 @@ When the week has no date, the panel says so. A file named for its Monday, such
 as `Oct12.org`, gives the date directly. A file renamed to its canonical name
 takes the week that plan import filed it under in the database.
 
+### Finding a project
+
+The **Find** box above the project tabs filters every tab at once. Type part of
+a project's name or task, or its code. A query that equals a code, such as `x`,
+also matches that code. Each tab title then shows its matches, as
+**This week (1 of 9)**, and the cells of the matching legend projects are
+tinted blue and bold in the grid, in both the hour and the row view. A clash
+keeps its red tint.
+
+Press Ctrl+F to reach the box, Enter to go to the next tab with a match and
+select it, and Esc to clear it. Rows are hidden, not removed, so every button
+still acts on the row it shows.
+
+![Typing qflip filters the tabs and tints that project's blocks in the hour view.](imgs/gui-project-search.png)
+
 ### The grasscatcher list
 
 The **Grasscatcher** tab, after the semester lists, holds the tasks that did not
@@ -442,6 +457,59 @@ project first, and **Back to grasscatcher** returns an objective to the list.
 The list lives in the weekly table file beside the semester lists, so it
 travels to next week's file with them. The scheduler reads only the first table
 of the file and never sees it.
+
+### Priority cookies and syncing with a project's log
+
+A task may start with an org-mode priority cookie: a letter (`[#A]`), a number
+(`[#1]`), or a letter and a number (`[#A1]`). **Sort by priority** orders the
+list as `[#A]`, `[#A1]`, `[#A2]`, `[#B]`, then numbers alone, then tasks with no
+cookie, keeping the order of tasks with the same cookie.
+
+```org
+#+NAME: grasscatcher
+| 1: [#A1] Read the key review articles on covalent docking. |
+| 1: [#B2] Run GNINA with the covalent option |
+```
+
+**Sync to-dos** compares the grasscatcher with the to-dos of each project in
+this week's legend. The to-dos live under a top-level `* Project TODOS` heading
+of the project's log file:
+
+```org
+* Project TODOS
+
+** TODO [#A1] Read the key review articles on covalent docking.
+** DONE [#B] Measure the cysteine distances in 7JU6
+```
+
+The log is found from the project's name in the legend. A legend entry
+`1: 0142RETKinaseCovalentInhibitors` reads `~/0142RETKinaseCovalentInhibitors/log0142.org`.
+When no folder has exactly that name, a single folder whose name starts with
+`0142` and holds `log0142.org` is used. Several such folders are listed rather
+than guessed between. The setting `projects_root` moves the search from the
+home folder to another folder.
+
+Tasks are matched by their text, ignoring the cookie, capital letters, and a
+final full stop. The sync shows every change before it makes any:
+
+| Found | What happens |
+|-------|--------------|
+| An open to-do in the log, not on the grasscatcher | Added to the grasscatcher with the project's code |
+| A grasscatcher task not in the log | Added to the end of the log's Project TODOS as `** TODO` |
+| A grasscatcher task the log marks DONE or CANCELED | Taken off the grasscatcher |
+| The same task with different cookies | The log's cookie wins |
+
+Open keywords are TODO, NEXT, STARTED, WAITING, and HOLD. Headings at any depth
+under Project TODOS count, and org tags at the end of a heading are ignored. A
+log is changed only by new lines at the end of its Project TODOS section, and a
+copy of the old file is kept beside it with `~` added, as Emacs does. The
+grasscatcher reaches the weekly file when you save the table.
+
+If the log is open in Emacs, its lock or autosave file shows, and the preview
+says so. Run `M-x revert-buffer` in that buffer after the sync, or the next save
+from Emacs would drop the new to-dos.
+
+![The grasscatcher after Sync to-dos, with the log's [#A1] task added.](imgs/gui-todo-sync.png)
 
 ### The coach
 
@@ -697,6 +765,10 @@ without the extra skips the graphical tests rather than failing them.
 | The tabs name the wrong semester | the file name's date or today's date is outside the period you meant; check the dates in **Periods** |
 | A banner asks which period the lists are for | the file has no `#+PROJECT_PERIOD:` line; choose the period and press **File under this period** |
 | **Roll forward** is offered too early | the new period starts sooner than you want; move its Start date in **Periods** |
+| **Sync to-dos** says no log file found | the project's folder is not named like the legend entry and no folder starts with its number; check `projects_root` |
+| **Sync to-dos** lists several logs | more than one folder starts with the project's number; rename the legend entry to match the folder name |
+| New to-dos vanished from a log | Emacs had the log open and saved its old buffer; recover them from `logNNNN.org~` and revert the buffer before the next sync |
+| A tab shows (0 of 12) | the Find box still holds text; press Esc in it |
 | The Name panel says the week has no canonical name | a cell holds a two-letter code such as `AB`; the file name allows only single letters, so give the project a letter or keep the current name |
 
 ## Licensing

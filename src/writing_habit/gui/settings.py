@@ -32,6 +32,7 @@ DEFAULTS = {
     "hour_view": "true",   # show the weekly table as 24 hour rows
     "push_blocks": "true",  # a placed or shifted block pushes later overlaps down
     "ai_debrief": "false",  # ask the local model (debrief and every coach task)
+    "projects_root": "",   # where project folders such as 0142.../log0142.org live; empty is home
     "ai_url": "http://localhost:11434",  # the local model server (Ollama API)
     "ai_model": "llama3.2",  # the model the coach asks
     "ai_api": "ollama",    # the server's interface: ollama, or openai for LM Studio and llama.cpp

@@ -32,6 +32,10 @@ CLEAR_COLOR = "#fff59d"
 #: A clash takes precedence, because it is the more urgent thing to see.
 BREAK_COLOR = "#ffe0b2"
 
+#: The tint of a block whose project matches the search box. Only a clash
+#: takes precedence, because the writer asked to see these cells.
+FIND_COLOR = "#a8dcf5"
+
 #: The shade of every other group of rows that start at the same time. Rows
 #: sharing a start time are one group, so the eye reads 05:00-05:30,
 #: 05:00-06:00, and 05:00-07:00 as the choices for one slot. The other groups
@@ -61,6 +65,8 @@ class WeeklyTableModel(QtCore.QAbstractTableModel):
         self._rows: List[int] = []
         self._conflicts: set = set()
         self._breaks: set = set()
+        #: The project codes the search box matches; their cells are tinted.
+        self.highlight: set = set()
         #: The document row of the selected Time cell, and the rows clear of it.
         self._anchor: Optional[int] = None
         self._clear: set = set()
@@ -235,6 +241,14 @@ class WeeklyTableModel(QtCore.QAbstractTableModel):
         cell_index = self.document_cell(row, column)
         if role == Qt.BackgroundRole and (document_row, cell_index) in self._conflicts:
             return QtGui.QBrush(QtGui.QColor(CONFLICT_COLOR))
+        if role in (Qt.BackgroundRole, Qt.FontRole) and self.highlight:
+            found = self.block_at(document_row, cell_index)
+            if found is not None and found.letter in self.highlight:
+                if role == Qt.FontRole:
+                    font = QtGui.QFont()
+                    font.setBold(True)
+                    return font
+                return QtGui.QBrush(QtGui.QColor(FIND_COLOR))
         if role == Qt.BackgroundRole and (document_row, cell_index) in self._breaks:
             return QtGui.QBrush(QtGui.QColor(BREAK_COLOR))
         if role == Qt.BackgroundRole and document_row in self._clear:
@@ -250,6 +264,16 @@ class WeeklyTableModel(QtCore.QAbstractTableModel):
             return self.tooltip(self.table.cell(document_row, cell_index),
                                 self.block_at(document_row, cell_index))
         return None
+
+    def set_highlight(self, codes) -> None:
+        """Tint the cells of the projects in ``codes``; an empty set clears it."""
+        codes = set(codes or ())
+        if codes == self.highlight:
+            return
+        self.highlight = codes
+        if self.rowCount() and self.columnCount():
+            self.dataChanged.emit(self.index(0, 0),
+                                  self.index(self.rowCount() - 1, self.columnCount() - 1))
 
     def block_at(self, document_row: int, cell_index: int):
         """Return the filled block at a document cell, or ``None``."""

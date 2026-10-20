@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple
 from . import settings
 from .qt import Qt, QtCore, QtGui, QtWidgets, pyqtSignal
 from .table_model import (ACTIVITY_BUTTONS, ACTIVITY_COLOR, BREAK_COLOR,
-                          CONFLICT_COLOR, SOURCE_LABEL)
+                          CONFLICT_COLOR, FIND_COLOR, SOURCE_LABEL)
 from .weekly_table import (CATEGORY_LETTER, PICK_MAX, PICK_STEP, WeeklyTable,
                            picker_ranges)
 
@@ -59,6 +59,8 @@ class HourGridModel(QtCore.QAbstractTableModel):
         self._spans: Dict[Tuple[int, int], list] = {}
         self._conflicts: set = set()
         self._breaks: set = set()
+        #: The project codes the search box matches; their cells are tinted.
+        self.highlight: set = set()
         self._hours = sheet_hours()
         self.set_table(table)
 
@@ -85,6 +87,16 @@ class HourGridModel(QtCore.QAbstractTableModel):
             self.dataChanged.emit(self.index(0, 0),
                                   self.index(self.rowCount() - 1,
                                              self.columnCount() - 1))
+
+    def set_highlight(self, codes) -> None:
+        """Tint the cells of the projects in ``codes``; an empty set clears it."""
+        codes = set(codes or ())
+        if codes == self.highlight:
+            return
+        self.highlight = codes
+        if self.rowCount() and self.columnCount():
+            self.dataChanged.emit(self.index(0, 0),
+                                  self.index(self.rowCount() - 1, self.columnCount() - 1))
 
     # -- lookups -----------------------------------------------------------
     def offset(self, column: int) -> int:
@@ -147,10 +159,18 @@ class HourGridModel(QtCore.QAbstractTableModel):
                 lines = [CONTINUES + CATEGORY_LETTER.get(b.category, "") + b.letter
                          for b in spans]
             return "\n".join(lines)
+        found = bool(self.highlight) and any(
+            b.letter in self.highlight for b in starts + spans)
+        if role == Qt.FontRole and found:
+            font = QtGui.QFont()
+            font.setBold(True)
+            return font
         if role == Qt.BackgroundRole:
             cells = {(b.row, b.column) for b in starts + spans}
             if cells & self._conflicts:
                 return QtGui.QBrush(QtGui.QColor(CONFLICT_COLOR))
+            if found:
+                return QtGui.QBrush(QtGui.QColor(FIND_COLOR))
             if cells & self._breaks:
                 return QtGui.QBrush(QtGui.QColor(BREAK_COLOR))
             first = (starts or spans or [None])[0]

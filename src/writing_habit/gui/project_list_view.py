@@ -117,6 +117,8 @@ class ProjectListPanel(QtWidgets.QWidget):
     commit_requested = pyqtSignal(int)
     #: Emitted when the writer asks the coach to rank the grasscatcher.
     rank_requested = pyqtSignal()
+    #: Emitted when the writer asks to sync the grasscatcher with the logs.
+    sync_requested = pyqtSignal()
     logged = pyqtSignal(str)
 
     def __init__(self, name: str, title: str, parent=None):
@@ -178,7 +180,20 @@ class ProjectListPanel(QtWidgets.QWidget):
         # of copying a project to the legend.
         self.commit_button = None
         self.rank_button = None
+        self.sync_button = None
+        self.priority_button = None
         if name == GRASSCATCHER:
+            self.sync_button = QtWidgets.QPushButton("Sync to-dos")
+            self.sync_button.setToolTip(
+                "Compare these tasks with the * Project TODOS section of each "
+                "project's log file, such as ~/0142.../log0142.org, and bring "
+                "both up to date after showing the changes")
+            self.sync_button.clicked.connect(self.sync_requested)
+            self.priority_button = QtWidgets.QPushButton("Sort by priority")
+            self.priority_button.setToolTip(
+                "Order the tasks by their priority cookie: [#A], [#A1], [#A2], "
+                "[#B], then numbers such as [#1], then tasks without a cookie")
+            self.priority_button.clicked.connect(lambda: self.sort_priority())
             self.add_button.setText("Add task")
             self.add_button.setToolTip(
                 "Add a task to the grasscatcher. Put the project's code in the "
@@ -206,7 +221,8 @@ class ProjectListPanel(QtWidgets.QWidget):
         if name != GRASSCATCHER:
             buttons += [self.sort_button, self.copy_button]
         else:
-            buttons += [self.commit_button, self.rank_button]
+            buttons += [self.commit_button, self.priority_button,
+                        self.sync_button, self.rank_button]
         if self.complete_button is not None:
             buttons.append(self.complete_button)
         if self.keep_button is not None:
@@ -309,6 +325,16 @@ class ProjectListPanel(QtWidgets.QWidget):
         self._changed()
         self.moved.emit(COMPLETED)
         return entry
+
+    def sort_priority(self) -> bool:
+        """Order the grasscatcher by priority cookie.  Say whether anything moved."""
+        from ..todo_sync import sort_by_priority
+        if self.table is None or not sort_by_priority(self.table.lists):
+            return False
+        self.model.set_table(self.table)
+        self.logged.emit("Sorted the grasscatcher by priority")
+        self._changed()
+        return True
 
     def keep(self) -> Optional[Entry]:
         """Move the selected carried project to the current list."""

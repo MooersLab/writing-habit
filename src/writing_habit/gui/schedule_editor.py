@@ -431,6 +431,7 @@ class ScheduleEditor(QtWidgets.QWidget):
             panel.commit_requested.connect(
                 lambda position: self.commit_grasscatcher(position))
             panel.rank_requested.connect(lambda: self.rank_grasscatcher())
+            panel.sync_requested.connect(lambda: self.sync_todos())
             self.list_panels[name] = panel
             self.project_tabs.addTab(panel, title)
         self.legend_model.modelReset.connect(self._refresh_lists)
@@ -455,6 +456,30 @@ class ScheduleEditor(QtWidgets.QWidget):
         banner_row.addWidget(self.period_file_button)
         banner_row.addWidget(self.roll_button)
         self.period_banner.setVisible(False)
+        # The search box filters every project tab and tints the matching
+        # projects' cells in the grid, so a name is found without scrolling.
+        search_row = QtWidgets.QHBoxLayout()
+        self.search_box = QtWidgets.QLineEdit()
+        self.search_box.setPlaceholderText(
+            "Find a project or task by name or code (Ctrl+F). Enter goes to the "
+            "next tab with a match; Esc clears.")
+        self.search_box.setClearButtonEnabled(True)
+        self.search_box.textChanged.connect(lambda _text: self.apply_search())
+        self.search_box.returnPressed.connect(lambda: self.next_match())
+        self.search_status = QtWidgets.QLabel()
+        search_row.addWidget(QtWidgets.QLabel("Find"))
+        search_row.addWidget(self.search_box, 1)
+        search_row.addWidget(self.search_status)
+        legend_layout.addLayout(search_row)
+        find = QtWidgets.QShortcut(QtGui.QKeySequence.Find, self)
+        find.setContext(Qt.WidgetWithChildrenShortcut)
+        find.activated.connect(lambda: (self.search_box.setFocus(),
+                                        self.search_box.selectAll()))
+        clear = QtWidgets.QShortcut(QtGui.QKeySequence("Escape"), self.search_box)
+        clear.setContext(Qt.WidgetShortcut)
+        clear.activated.connect(self.search_box.clear)
+        #: Grid tab name -> (matches, rows) while the search box holds text.
+        self._search_counts = {}
         legend_layout.addWidget(self.period_banner)
         legend_layout.addWidget(self.project_tabs)
         #: The calendar of planning periods, or ``None`` when there is none.
@@ -491,9 +516,96 @@ class ScheduleEditor(QtWidgets.QWidget):
                 panel.set_table(self.table)
         self._title_lists()
 
+    # -- the search box ----------------------------------------------------
+    def search_query(self) -> str:
+        box = getattr(self, "search_box", None)
+        return box.text().strip().lower() if box is not None else ""
+
+    @staticmethod
+    def _matches(query: str, code: Optional[str], text: str) -> bool:
+        if not query:
+            return True
+        return query == (code or "").lower() or query in (text or "").lower()
+
+    def _filter_rows(self) -> dict:
+        """Hide the rows that do not match the search.  Return the counts.
+
+        The counts are ``{name: (matches, rows)}`` with ``None`` for the legend.
+        Rows are hidden in the views, not removed from the models, so every
+        button keeps working on the row it points at.
+        """
+        query = self.search_query()
+        counts = {}
+        codes = set()
+        legend_rows = self.table.legend_rows() if self.table is not None else []
+        shown = 0
+        for i, document_row in enumerate(legend_rows):
+            code, description, _risk = self.table.rows[document_row].parsed
+            hit = self._matches(query, code, f"{code} {description}")
+            self.legend_view.setRowHidden(i, not hit)
+            if hit:
+                shown += 1
+                if query:
+                    codes.add(code)
+        counts[None] = (shown, len(legend_rows))
+        for name, panel in self.list_panels.items():
+            entries = panel.model.entries()
+            shown = 0
+            for i, entry in enumerate(entries):
+                hit = self._matches(query, entry.code,
+                                    f"{entry.code or ''} {entry.description}")
+                panel.view.setRowHidden(i, not hit)
+                shown += hit
+            counts[name] = (shown, len(entries))
+        self.model.set_highlight(codes)
+        self.hour_model.set_highlight(codes)
+        self._search_counts = counts if query else {}
+        if not hasattr(self, "search_status"):
+            return counts
+        if query:
+            total = sum(m for m, _n in counts.values())
+            self.search_status.setText(f"{total} match(es)" if total else "no match")
+        else:
+            self.search_status.setText("")
+        return counts
+
+    def apply_search(self) -> None:
+        """Filter the project tabs and tint the grid for the search box."""
+        self._title_lists()
+
+    def _count_text(self, name, count: int) -> str:
+        found = self._search_counts.get(name)
+        if found is not None and count:
+            return f"({found[0]} of {count})"
+        return f"({count})" if count else ""
+
+    def next_match(self) -> Optional[int]:
+        """Raise the next tab with a match and select its first match."""
+        if not self.search_query():
+            return None
+        order = [None] + [name for name, _t in LISTS]
+        start = self.project_tabs.currentIndex()
+        for step in range(1, len(order) + 1):
+            index = (start + step) % len(order)
+            name = order[index]
+            if self._search_counts.get(name, (0, 0))[0] and \
+                    self.project_tabs.isTabVisible(index):
+                self.project_tabs.setCurrentIndex(index)
+                view = self.legend_view if name is None else self.list_panels[name].view
+                for row in range(view.model().rowCount()):
+                    if not view.isRowHidden(row):
+                        view.setCurrentIndex(view.model().index(row, 1))
+                        break
+                return index
+        return None
+
     def _title_lists(self) -> None:
         """Put each tab's project count in its title, as in This week (9)."""
-        self.project_tabs.setTabText(0, f"{LEGEND_TAB} ({self.legend_model.rowCount()})")
+        self._filter_rows()
+        legend_count = self.legend_model.rowCount()
+        self.project_tabs.setTabText(
+            0, f"{LEGEND_TAB} {self._count_text(None, legend_count)}".strip()
+            if self._search_counts else f"{LEGEND_TAB} ({legend_count})")
         self.sort_legend_button.setEnabled(self.legend_model.rowCount() > 1)
         titles, tips = self.list_titles()
         for index, (name, _plain_title) in enumerate(LISTS, start=1):
@@ -501,7 +613,8 @@ class ScheduleEditor(QtWidgets.QWidget):
             panel = self.list_panels[name]
             panel.title = title
             count = panel.model.rowCount()
-            self.project_tabs.setTabText(index, f"{title} ({count})" if count else title)
+            self.project_tabs.setTabText(
+                index, f"{title} {self._count_text(name, count)}".strip())
             self.project_tabs.setTabToolTip(index, tips.get(name, ""))
             if name == CARRIED:
                 # The list exists only between a roll forward and its review.
@@ -1568,6 +1681,84 @@ class ScheduleEditor(QtWidgets.QWidget):
                 con.close()
         except Exception as exc:                         # pragma: no cover
             self.logged.emit(f"Could not move the reviews with the blocks: {exc}")
+
+    # -- syncing the grasscatcher with the project logs ---------------------
+    def projects_root(self) -> Path:
+        return Path(settings.get("projects_root") or Path.home()).expanduser()
+
+    def plan_todo_sync(self):
+        """Return one :class:`~writing_habit.todo_sync.ProjectSync` per legend project."""
+        from .. import todo_sync
+        rows = todo_sync.grasscatcher_rows(self.table.lists)
+        plans = []
+        for code in self.table.legend():
+            info = self.table.project_info(code) or {}
+            project = (info.get("name") or "").strip()
+            if todo_sync.project_number(project) is None:
+                continue
+            log, candidates = todo_sync.find_log(project, self.projects_root())
+            plans.append(todo_sync.plan_project(code, project, log, rows, candidates))
+        return plans
+
+    def _todo_sync_text(self, plans) -> str:
+        lines = []
+        for plan in plans:
+            head = f"{plan.code}: {plan.project}"
+            if plan.problem:
+                lines.append(f"{head}: {plan.problem}")
+                continue
+            if not plan.changes:
+                lines.append(f"{head}: up to date")
+                continue
+            lines.append(f"{head} ({plan.log})")
+            lines += [f"    to the grasscatcher: {t}" for t in plan.to_grasscatcher]
+            lines += [f"    to the log as TODO: {t}" for t in plan.to_log]
+            lines += [f"    done in the log, off the grasscatcher: "
+                      f"{self.table.lists.entries(GRASSCATCHER)[p].description}"
+                      for p in plan.done]
+            lines += [f"    priority from the log: {t}" for _p, t in plan.reprioritize]
+            if plan.lock is not None and plan.to_log:
+                lines.append(f"    WARNING: {plan.lock.name} shows the log is open in "
+                             "Emacs; revert that buffer after the sync")
+        return "\n".join(lines)
+
+    def sync_todos(self, confirm: bool = True) -> Optional[dict]:
+        """Bring the grasscatcher and the logs' Project TODOS up to date.
+
+        The changes are shown first. The grasscatcher changes reach the file
+        when you save; the logs are written at once, each with a ``~`` copy.
+        Return ``{"grasscatcher": n, "logs": n}``, or ``None`` when nothing ran.
+        """
+        from .. import todo_sync
+        if self.table is None:
+            return None
+        plans = self.plan_todo_sync()
+        if not plans:
+            self.logged.emit("No project in this week's legend starts with a "
+                             "four-digit number, so no log was looked for")
+            return None
+        text = self._todo_sync_text(plans)
+        if not any(p.changes for p in plans):
+            self.logged.emit("The grasscatcher and the logs agree\n" + text)
+            return {"grasscatcher": 0, "logs": 0}
+        if confirm and not self._confirm(
+                "Sync to-dos", "Make these changes?\n\n" + text
+                + "\n\nThe logs are written now, each with a ~ copy. The "
+                "grasscatcher is written when you save the table."):
+            return None
+        changed = todo_sync.apply_to_lists(self.table.lists, plans)
+        written = 0
+        for plan in plans:
+            if plan.log is not None and plan.to_log:
+                written += todo_sync.write_log(plan.log, plan.to_log)
+                self.logged.emit(f"Added {len(plan.to_log)} to-do(s) to {plan.log}")
+        if changed:
+            self.table.dirty = True
+            self._reload_list(GRASSCATCHER)
+            self.on_edit()
+        self.logged.emit(f"Synced to-dos: {changed} grasscatcher change(s), "
+                         f"{written} new log to-do(s)")
+        return {"grasscatcher": changed, "logs": written}
 
     def _reload_list(self, name: str) -> None:
         """Redraw one list after a change made outside its own panel.

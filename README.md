@@ -168,6 +168,15 @@ number itself, the coach stays quiet during a block and in an AI-off week, and
 every request is logged with the facts sent. The weekly dashboard adds **Personal bests** and a **Done this
 week** list, where missed blocks are grey rather than red.
 
+#### Finding a project, and syncing to-dos with project logs
+
+The **Find** box above the project tabs filters every tab and tints the
+matching projects' blocks in the grid. On the **Grasscatcher** tab, **Sort by
+priority** orders tasks by org-mode cookies such as `[#A]`, `[#A1]`, and `[#B2]`,
+and **Sync to-dos** brings the grasscatcher and the `* Project TODOS` section of
+each project's log, such as `~/0142RETKinaseCovalentInhibitors/log0142.org`, up
+to date after showing the changes.
+
 #### Naming the project lists by period
 
 **Periods** edits a calendar of semesters, quarters, or fiscal years kept as an
