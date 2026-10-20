@@ -491,5 +491,15 @@ def after_first_table(text: str) -> List[str]:
 
 
 def read_lists(path: str) -> ProjectLists:
-    """Read the lists of the weekly table file at ``path``."""
-    return ProjectLists(after_first_table(Path(path).read_text(encoding="utf-8")))
+    """Read the lists of the weekly table file at ``path``.
+
+    Lists kept in columns are read as well as lists of one-cell rows, and a
+    list named by its tab title, such as ``Completed this semester``, gets its
+    standard name.
+    """
+    from .columns import to_one_cell
+    lines, _legend, _tasks, _found = to_one_cell(
+        after_first_table(Path(path).read_text(encoding="utf-8")))
+    lists = ProjectLists(lines)
+    lists.tidy_names()
+    return lists

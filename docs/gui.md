@@ -847,6 +847,43 @@ plan import, the calendar, or the sheets. `track sync` reads the current list,
 and **New from template** carries the lists into the new week.
 
 
+### Project tables in columns
+
+The legend and the project lists may be kept as tables with one column per
+field, the same columns the window shows:
+
+```org
+#+NAME: This week
+| Code | Project Number | Project Name    | Deadline   | Risk tag | Default activity |
+|------+----------------+-----------------+------------+----------+------------------|
+| B:   | 1006           | AIrxOpt         | 2026-12-15 | :safe:   |                  |
+| -    | 1452           | PHFSboXt        | 2027-03-01 | :safe:   | editing          |
+
+#+NAME: current-semester-projects
+#+CAPTION: Fall 2026 projects
+| Code | Project Number | Project Name | Deadline | Risk tag | Default activity |
+...
+
+#+NAME: grasscatcher
+#+CAPTION: Grasscatcher
+| Code | Project Number | Project Name                | Priority | Task          |
+|------+----------------+-----------------------------+----------+---------------|
+| 1:   | 0142           | RETKinaseCovalentInhibitors | [#A1]    | Read reviews. |
+```
+
+A file in this layout is written back in it. The legend stays in the `This
+week` table after the time blocks, and each list keeps its standard name with
+its tab title as the caption, so the name does not change when a new semester
+starts while the caption does. A dash in the Code column means the project has
+no code yet. The Default activity column takes generative, editing, or support.
+A grasscatcher row names its project by code, and the editor fills in the
+project's number and name from the legend or the lists when it saves.
+
+An untouched file saves byte for byte. The scheduler (writing-schedule 0.6 or
+newer), plan import, `track sync`, and the sheets read the `This week` table
+when the first table has no legend rows. The Emacs port does not read the
+column layout yet.
+
 ### Files in other layouts
 
 The editor reads three other layouts and brings each to the standard one. A

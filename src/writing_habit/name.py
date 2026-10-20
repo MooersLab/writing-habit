@@ -284,30 +284,31 @@ def read_legend(table_path: str) -> dict:
 def _named_legend(table_path: str) -> dict:
     """Read a legend kept in its own table named ``This week``, if there is one.
 
-    The editor moves such a table back under the time blocks when it opens the
-    file, and this keeps the command line working on the file before that.
+    The table may hold one-cell rows, as the first table does, or columns
+    (Code, Project Number, Project Name, ...), as the editor writes it.
     """
     import re
+    from .columns import read_table
+    lines = Path(table_path).read_text(encoding="utf-8").splitlines()
     legend: dict = {}
-    inside = False
-    for raw in Path(table_path).read_text(encoding="utf-8").splitlines():
-        s = raw.strip()
-        m = re.match(r"^#\+NAME:\s*(.*?)\s*$", s, re.IGNORECASE)
-        if m:
-            inside = re.sub(r"\s+", " ", m.group(1)).strip().lower() in (
-                "this week", "legend")
+    for index, raw in enumerate(lines):
+        m = re.match(r"^\s*#\+NAME:\s*(.*?)\s*$", raw, re.IGNORECASE)
+        if not m or re.sub(r"\s+", " ", m.group(1)).strip().lower() not in (
+                "this week", "legend"):
             continue
-        if not inside:
-            continue
-        if not s.startswith("|"):
-            if legend:
+        block = []
+        for line in lines[index + 1:]:
+            if line.strip().startswith("#+"):
+                continue
+            if not line.strip().startswith("|"):
                 break
-            continue
-        if set(s) <= set("|-+ "):
-            continue
-        parsed = parse_legend_cell(s.strip("|").split("|")[0].strip())
-        if parsed is not None:
-            legend.setdefault(parsed[0], (parsed[1], parsed[2]))
+            block.append(line)
+        _columnar, rows = read_table(block)
+        for cell in rows:
+            parsed = parse_legend_cell(cell)
+            if parsed is not None:
+                legend.setdefault(parsed[0], (parsed[1], parsed[2]))
+        break
     return legend
 
 

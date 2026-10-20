@@ -293,11 +293,22 @@ class WeeklyTable:
         #: from the file, stays even while no cell uses it yet.
         self._synced_codes: set = set()
         self._parse(text)
+        #: Whether the file keeps its legend and lists as tables in columns
+        #: (Code, Project Number, Project Name, ...). Such a file is written
+        #: back in columns; see :mod:`writing_habit.columns`.
+        self.columnar = False
+        #: ``{code: (number, name)}`` read from a grasscatcher in columns.
+        self._task_projects: dict = {}
+        #: ``{list name: title}`` written as each list's caption in columns.
+        self.list_titles: dict = {}
+        self._read_columns()
         #: What the reader changed to bring a file to the standard layout, one
         #: line each. Such a file is marked changed, so a save writes it out.
         self.layout_notes: List[str] = self._absorb_legend_table()
         #: The semester project lists that follow the week, edited in place.
         self.lists = ProjectLists(self._after)
+        self._original_text = text
+        self._loaded_model = self._model_text()
 
     # -- reading -----------------------------------------------------------
     @classmethod
@@ -353,6 +364,52 @@ class WeeklyTable:
                 continue
 
             self.rows.append(Row(OTHER, line, cells))
+
+    def _read_columns(self) -> None:
+        """Read the tables kept in columns into the one-cell model."""
+        from .. import columns
+        from writing_schedule.orgtable import split_row
+        lines, legend, tasks, found = columns.to_one_cell(self._after)
+        if not found:
+            return
+        self.columnar = True
+        self._after[:] = lines
+        self._task_projects = tasks
+        if legend:
+            if self.rows and self.rows[-1].kind != RULE:
+                rule = next((r.raw for r in self.rows if r.kind == RULE), None)
+                if rule is not None:
+                    self.rows.append(Row(RULE, rule))
+            have = set()
+            for cell in legend:
+                parsed = namemod.parse_legend_cell(cell)
+                if parsed is None or parsed[0] in have:
+                    continue
+                have.add(parsed[0])
+                line = f"| {cell} |"
+                self.rows.append(Row(LEGEND, line, split_row(line), parsed=parsed))
+
+    def _model_text(self) -> str:
+        """Return the document in the one-cell form, the model every edit changes."""
+        parts = list(self._before) + [row.raw for row in self.rows] + list(self._after)
+        return "\n".join(parts) + ("\n" if parts else "")
+
+    def _task_lookup(self) -> dict:
+        """Return ``{code: (number, name)}`` for the grasscatcher's columns."""
+        from ..columns import split_project
+        from ..project_lists import NAMES, GRASSCATCHER
+        out = dict(self._task_projects)
+        sources = [(code, desc) for code, (desc, _risk) in self.legend().items()]
+        for name in NAMES:
+            if name != GRASSCATCHER:
+                sources += [(e.code, e.description) for e in self.lists.entries(name)
+                            if e.code]
+        for code, desc in reversed(sources):
+            out[code] = split_project(split_due_date(desc)[0])
+        legend = self.legend()
+        for code, (desc, _risk) in legend.items():
+            out[code] = split_project(split_due_date(desc)[0])
+        return out
 
     #: Names under which a writer may keep the week's legend as its own table.
     LEGEND_TABLE_NAMES = {"this week", "legend", "this week's legend",
@@ -422,7 +479,18 @@ class WeeklyTable:
         property the editor rests on, because a save that reformats a file the
         user did not change is a loss they cannot undo.
         """
-        parts = list(self._before) + [row.raw for row in self.rows] + list(self._after)
+        if not self.columnar:
+            return self._model_text()
+        if self._model_text() == self._loaded_model:
+            return self._original_text
+        from .. import columns
+        from ..project_lists import LISTS
+        grid = [row.raw for row in self.rows if row.kind != LEGEND]
+        legend = [row.cells[0] for row in self.rows if row.kind == LEGEND]
+        titles = dict(LISTS)
+        titles.update(self.list_titles or {})
+        after = columns.to_columns(list(self._after), legend, titles, self._task_lookup())
+        parts = list(self._before) + grid + after
         return "\n".join(parts) + ("\n" if parts else "")
 
     # -- editing -----------------------------------------------------------
@@ -1100,9 +1168,12 @@ class WeeklyTable:
         target = path or self.path
         if not target:
             raise ValueError("no path to save to")
-        Path(target).write_text(self.to_text(), encoding="utf-8")
+        text = self.to_text()
+        Path(target).write_text(text, encoding="utf-8")
         self.path = str(target)
         self.dirty = False
+        self._original_text = text
+        self._loaded_model = self._model_text()
         return self.path
 
     # -- content -----------------------------------------------------------

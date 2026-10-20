@@ -107,6 +107,18 @@ def import_org(con, path: str, week: str) -> int:
 
     text = Path(path).read_text(encoding="utf-8")
     parsed = parse_text(text)
+    if not parsed.legend:
+        # A legend kept in columns in a "This week" table. writing-schedule
+        # 0.6 reads it itself; this keeps older versions working.
+        from .columns import to_one_cell
+        from .name import parse_legend_cell
+        from .project_lists import after_first_table
+        _lines, cells, _tasks, _found = to_one_cell(after_first_table(text))
+        for cell in cells or []:
+            got = parse_legend_cell(cell)
+            if got is not None:
+                parsed.legend.append((got[0], got[1] + (
+                    {"safe": " :safe:", "speculative": " :risky:"}.get(got[2] or "", ""))))
     monday = week_monday(week)
 
     unknown_sections: set[str] = set()

@@ -625,6 +625,9 @@ class ScheduleEditor(QtWidgets.QWidget):
             if self._search_counts else f"{LEGEND_TAB} ({legend_count})")
         self.sort_legend_button.setEnabled(self.legend_model.rowCount() > 1)
         titles, tips = self.list_titles()
+        if self.table is not None:
+            # A file in columns shows each list's title as its caption.
+            self.table.list_titles = dict(titles)
         for index, (name, _plain_title) in enumerate(LISTS, start=1):
             title = titles[name]
             panel = self.list_panels[name]
