@@ -64,6 +64,8 @@ def table():
     (["-", "1452", "PHFSboXt", "2027-03-01", "risky", ""], "- 1452PHFSboXt 2027-03-01 :risky:"),
     (["B", "1006", "AIrxOpt", "", ":safe:", "@editing"], "B: 1006AIrxOpt @editing :safe:"),
     (["E:", "", "email", "", "", "support"], "E: email @support"),
+    (["V:", "0379", "pymolSceneManager", "2026-12- 31", ":risky:", ""],
+     "V: 0379pymolSceneManager 2026-12-31 :risky:"),
     (["", "", "", "", "", ""], None),
 ])
 def test_a_project_row_reads_as_one_cell(row, cell):

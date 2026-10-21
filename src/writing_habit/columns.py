@@ -88,6 +88,7 @@ def project_cell(row: List[str]) -> Optional[str]:
     if head is None:
         return None
     text = f"{head} {number}{name}".rstrip()
+    deadline = re.sub(r"\s+", "", deadline)
     if deadline:
         text += f" {deadline}"
     word = _ACTIVITY.get(activity.lstrip("@").strip().lower())
