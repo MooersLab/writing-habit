@@ -123,6 +123,9 @@ def test_clearing_shows_everything_again(editor):
 def test_enter_goes_to_the_next_tab_with_a_match(editor):
     editor.search_box.setText("gnina")
     assert editor.next_match() == list(editor.list_panels).index(GRASSCATCHER) + 1
+    panel = editor.list_panels[GRASSCATCHER]
+    assert editor.project_tabs.currentWidget() is panel
+    assert panel.view.currentIndex().row() == 1
 
 
 def test_the_find_button_steps_to_the_next_match(editor):
@@ -151,9 +154,6 @@ def test_the_find_keys_work_from_anywhere_in_the_window(editor, monkeypatch):
     monkeypatch.setattr(editor_module._sys, "platform", "darwin")
     keys = [k.toString() for k in editor_module.find_keys()]
     assert "Meta+F" in keys                    # the Control key on a Mac
-    panel = editor.list_panels[GRASSCATCHER]
-    assert editor.project_tabs.currentWidget() is panel
-    assert panel.view.currentIndex().row() == 1
 
 
 def test_the_filter_survives_an_edit(editor):
