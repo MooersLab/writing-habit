@@ -188,6 +188,17 @@ def test_titles_name_the_periods(calendar):
     assert titles["next-next-next-next-semester-projects"] == "Spring 2028 projects"
 
 
+def test_the_two_furthest_tabs_reach_two_years_out():
+    from writing_habit.project_lists import HORIZONS
+    assert len(HORIZONS) == 7
+    fall = "| semester | Fall 2028   | 2028-08-02 | 2028-12-15 | yes     |\n"
+    text = CALENDAR.replace("| fiscal", fall + "| fiscal", 1)
+    calendar = pm.Calendar.parse(text)
+    titles = list_titles(calendar.ahead("semester", D(2026, 10, 15), len(HORIZONS)))
+    assert titles["next-next-next-next-next-semester-projects"] == "Summer 2028 projects"
+    assert titles["next-next-next-next-next-next-semester-projects"] == "Fall 2028 projects"
+
+
 def test_titles_fall_back_past_the_calendar(calendar):
     titles = list_titles(calendar.ahead("semester", D(2027, 9, 1), 5))
     assert titles["next-next-next-semester-projects"] == "3*Next semester projects"

@@ -1,10 +1,10 @@
 """Semester project lists kept beside the weekly table, with no Qt.
 
-A weekly table file may carry up to seven lists of projects after the weekly
+A weekly table file may carry up to nine lists of projects after the weekly
 table itself: the projects finished this semester, the projects carried over
-from the last period, and one list per planning horizon, which reaches about
-two years ahead. An eighth list, the grasscatcher, holds tasks rather than
-projects: the to-do items that did not make a block's objectives. Each list is its own small org table,
+from the last period, and one list per planning horizon. The seven horizons
+reach six semesters, about two years, ahead. A tenth list, the grasscatcher,
+holds tasks rather than projects: the to-do items that did not make a block's objectives. Each list is its own small org table,
 named by an org ``#+NAME:`` line so Emacs and this package find it the same way::
 
     #+NAME: current-semester-projects
@@ -38,6 +38,8 @@ LISTS: List[Tuple[str, str]] = [
     ("next-next-semester-projects", "Next next semester projects"),
     ("next-next-next-semester-projects", "3*Next semester projects"),
     ("next-next-next-next-semester-projects", "4*Next semester projects"),
+    ("next-next-next-next-next-semester-projects", "5*Next semester projects"),
+    ("next-next-next-next-next-next-semester-projects", "6*Next semester projects"),
     ("grasscatcher", "Grasscatcher"),
 ]
 NAMES = [name for name, _title in LISTS]
@@ -51,7 +53,9 @@ GRASSCATCHER = "grasscatcher"
 #: The lists that move one step nearer at each roll forward, nearest first.
 HORIZONS = [CURRENT, "next-semester-projects", "next-next-semester-projects",
             "next-next-next-semester-projects",
-            "next-next-next-next-semester-projects"]
+            "next-next-next-next-semester-projects",
+            "next-next-next-next-next-semester-projects",
+            "next-next-next-next-next-next-semester-projects"]
 
 _PERIOD_LINE = re.compile(r"^\s*#\+PROJECT_PERIOD:\s*(.*?)\s*$", re.IGNORECASE)
 

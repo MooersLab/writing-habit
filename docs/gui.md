@@ -894,13 +894,14 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src python scripts/make_tutorial_images.py
 
 ## Semester project lists
 
-The box under the grid, titled **Projects**, holds seven tabs, and an eighth
+The box under the grid, titled **Projects**, holds ten tabs, and an eleventh
 after a roll forward, each showing its
 number of projects in parentheses. **This week** is the week's legend, which
 should name only the projects of the week. **Current
 semester projects**, **Completed this semester**, **Next semester projects**, **Next next semester
-projects**, **3*Next semester projects**, and **4*Next semester projects** hold
-the longer lists, about two years ahead, with the same columns as the legend.
+projects**, **3*Next semester projects**, **4*Next semester projects**,
+**5*Next semester projects**, and **6*Next semester projects** hold the longer
+lists, six semesters or about two years ahead, with the same columns as the legend.
 **Sort by number**, on every tab, orders the projects by the four-digit number
 that starts each name, with unnumbered projects last. Each
 list has buttons to add, move, and delete a project, and **Copy to this week's
