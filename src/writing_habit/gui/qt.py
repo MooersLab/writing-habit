@@ -71,6 +71,20 @@ def prepare_for_web_engine() -> bool:
     return web_engine_view() is not None
 
 
+def sound_effect_class():
+    """Return the ``QSoundEffect`` class, or ``None`` when sound is unavailable.
+
+    QtMultimedia ships with the PyQt5 wheels, but on some systems it cannot
+    load, for example a Linux box without the PulseAudio libraries. The
+    Pomodoro timer then falls back to another way of playing its sounds.
+    """
+    try:
+        from PyQt5.QtMultimedia import QSoundEffect
+    except ImportError:
+        return None
+    return QSoundEffect
+
+
 def fixed_font():
     """Return the platform's fixed-width font.
 

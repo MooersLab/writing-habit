@@ -40,6 +40,9 @@ DEFAULTS = {
     "ai_off_week": "",     # the Monday of a week the writer runs without the coach
     "periods_file": "",    # the calendar of periods; empty means beside the tables
     "period_kind": "semester",  # the kind of period that names the lists
+    "pomodoro": "",        # JSON of the Pomodoro timer's settings; empty is the defaults
+    "pomodoro_today": "",  # JSON {"date": ISO date, "count": Pomodoros finished that day}
+    "pom_recorded": "",    # JSON {"date", "count"} last written to the Pomodoro count table
 }
 
 

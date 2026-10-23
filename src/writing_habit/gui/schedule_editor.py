@@ -35,6 +35,28 @@ from . import coach_runner
 from .review_panel import ReviewDialog
 from .hour_view import HOUR_COLUMN, HourGridModel, HourPicker
 from .table_model import TIME_COLUMN, CodeDelegate, WeeklyTableModel
+
+import sys as _sys
+
+# Qt reads Ctrl as the Command key on macOS, so QKeySequence.Find is
+# Command+F there.  The physical Control key is Meta to Qt, and the tutorial
+# says Ctrl+F, so a Mac gets Control+F as well.
+FIND_KEYS_TEXT = ("Command+F or Control+F" if _sys.platform == "darwin"
+                  else "Ctrl+F")
+
+
+def find_keys() -> list:
+    """Return the key sequences that put the cursor in the Find box.
+
+    Built after the application starts, because Qt looks up the standard
+    Find keys in the running platform.
+    """
+    keys = [QtGui.QKeySequence(QtGui.QKeySequence.Find)]
+    if _sys.platform == "darwin":
+        keys.append(QtGui.QKeySequence("Meta+F"))
+    if keys[0].isEmpty():
+        keys[0] = QtGui.QKeySequence("Ctrl+F")
+    return keys
 from .weekly_table import BLOCK, PROJECT_CODES, SECTION, WeeklyTable
 
 #: The shift buttons, as (minutes, label, hour-view keys), earliest first.
@@ -211,6 +233,10 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.block_timer.select_requested.connect(self.select_block)
         self.block_timer.review_requested.connect(lambda b: self.open_review(b))
         shift_bar.addWidget(self.block_timer)
+        from .pomodoro import PomodoroTimer
+        self.pomodoro = PomodoroTimer(self.pomodoro_block, self)
+        self.pomodoro.logged.connect(self.logged)
+        shift_bar.addWidget(self.pomodoro)
         self.review_button = QtWidgets.QPushButton("Objectives and review")
         self.review_button.setToolTip(
             "Set the selected block's objectives before it starts, and rate "
@@ -477,21 +503,40 @@ class ScheduleEditor(QtWidgets.QWidget):
         # projects' cells in the grid, so a name is found without scrolling.
         search_row = QtWidgets.QHBoxLayout()
         self.search_box = QtWidgets.QLineEdit()
+        self.search_box.setObjectName("findBox")
         self.search_box.setPlaceholderText(
-            "Find a project or task by name or code (Ctrl+F). Enter goes to the "
-            "next tab with a match; Esc clears.")
+            f"Find a project or task by name or code ({FIND_KEYS_TEXT}). Enter "
+            "goes to the next tab with a match. Esc clears.")
+        self.search_box.setToolTip(
+            f"Type part of a project name or a legend code ({FIND_KEYS_TEXT})")
         self.search_box.setClearButtonEnabled(True)
         self.search_box.textChanged.connect(lambda _text: self.apply_search())
         self.search_box.returnPressed.connect(lambda: self.next_match())
+        # The button does what Enter does, so a reader who does not know the
+        # keys can still step from one tab with a match to the next.
+        self.find_button = QtWidgets.QPushButton("Find next")
+        self.find_button.setToolTip(
+            "Go to the next project tab with a match, or put the cursor in "
+            "the Find box when it is empty")
+        self.find_button.clicked.connect(lambda: self.find_clicked())
         self.search_status = QtWidgets.QLabel()
-        search_row.addWidget(QtWidgets.QLabel("Find"))
+        find_label = QtWidgets.QLabel("&Find")
+        find_label.setBuddy(self.search_box)
+        search_row.addWidget(find_label)
         search_row.addWidget(self.search_box, 1)
+        search_row.addWidget(self.find_button)
         search_row.addWidget(self.search_status)
         legend_layout.addLayout(search_row)
-        find = QtWidgets.QShortcut(QtGui.QKeySequence.Find, self)
-        find.setContext(Qt.WidgetWithChildrenShortcut)
-        find.activated.connect(lambda: (self.search_box.setFocus(),
-                                        self.search_box.selectAll()))
+        # The window-wide context lets the keys work right after a click on
+        # the Schedule tab, when the focus still sits on the tab bar.  Qt fires
+        # a shortcut only while its widget is visible, so the keys do nothing
+        # on the other tabs.
+        self.find_shortcuts = []
+        for keys in find_keys():
+            find = QtWidgets.QShortcut(keys, self)
+            find.setContext(Qt.WindowShortcut)
+            find.activated.connect(lambda: self.focus_search())
+            self.find_shortcuts.append(find)
         clear = QtWidgets.QShortcut(QtGui.QKeySequence("Escape"), self.search_box)
         clear.setContext(Qt.WidgetShortcut)
         clear.activated.connect(self.search_box.clear)
@@ -534,6 +579,18 @@ class ScheduleEditor(QtWidgets.QWidget):
         self._title_lists()
 
     # -- the search box ----------------------------------------------------
+    def focus_search(self) -> None:
+        """Put the cursor in the Find box with its text selected."""
+        self.search_box.setFocus(Qt.ShortcutFocusReason)
+        self.search_box.selectAll()
+
+    def find_clicked(self) -> Optional[int]:
+        """Step to the next match, or focus the empty Find box."""
+        if not self.search_query():
+            self.focus_search()
+            return None
+        return self.next_match()
+
     def search_query(self) -> str:
         box = getattr(self, "search_box", None)
         return box.text().strip().lower() if box is not None else ""
@@ -1708,6 +1765,19 @@ class ScheduleEditor(QtWidgets.QWidget):
                 "Make the selected task an objective of the block selected in "
                 "the grid, and take it off the grasscatcher"
                 + ("" if ready else ". Select a block in the grid first."))
+
+    def pomodoro_block(self):
+        """Return the block whose length sets the Pomodoro cycle, or ``None``.
+
+        That is the block under way when there is one, and otherwise the
+        block selected in the grid.
+        """
+        if self.table is None:
+            return None
+        state = self.block_timer.update_state()
+        if state.kind in ("live", "ending"):
+            return state.block
+        return self.selected_block()
 
     def select_block(self, block) -> None:
         """Select ``block`` in the shown view, scrolled into sight."""

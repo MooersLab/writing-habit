@@ -123,6 +123,34 @@ def test_clearing_shows_everything_again(editor):
 def test_enter_goes_to_the_next_tab_with_a_match(editor):
     editor.search_box.setText("gnina")
     assert editor.next_match() == list(editor.list_panels).index(GRASSCATCHER) + 1
+
+
+def test_the_find_button_steps_to_the_next_match(editor):
+    editor.search_box.setText("gnina")
+    editor.find_button.click()
+    assert editor.project_tabs.currentIndex() == \
+        list(editor.list_panels).index(GRASSCATCHER) + 1
+
+
+def test_the_find_button_focuses_an_empty_box(editor):
+    editor.show()
+    editor.project_tabs.tabBar().setFocus()
+    assert editor.find_clicked() is None
+    assert editor.focusWidget() is editor.search_box
+
+
+def test_the_find_keys_work_from_anywhere_in_the_window(editor, monkeypatch):
+    import writing_habit.gui.schedule_editor as editor_module
+    from writing_habit.gui.qt import Qt
+    assert editor.find_shortcuts
+    assert all(s.context() == Qt.WindowShortcut for s in editor.find_shortcuts)
+    editor.show()
+    editor.project_tabs.tabBar().setFocus()
+    editor.find_shortcuts[0].activated.emit()
+    assert editor.focusWidget() is editor.search_box
+    monkeypatch.setattr(editor_module._sys, "platform", "darwin")
+    keys = [k.toString() for k in editor_module.find_keys()]
+    assert "Meta+F" in keys                    # the Control key on a Mac
     panel = editor.list_panels[GRASSCATCHER]
     assert editor.project_tabs.currentWidget() is panel
     assert panel.view.currentIndex().row() == 1

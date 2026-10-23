@@ -385,6 +385,79 @@ the next block of the day and how soon it starts, and pressing it selects that
 block in the grid. It rereads the clock every fifteen seconds, counts only the
 week of the open table, and never sounds an alarm.
 
+### The Pomodoro timer
+
+The Pomodoro timer sits just right of the block timer. It splits a block into
+Pomodoros of focused work with short breaks between them and ends the cycle
+with a long break. The display reads `Pomodoro 1/3  18:13` during work, tinted
+red, and `Short break  04:10` during a break, tinted green. Press the display
+or the play button to start or pause, press the square to stop, and press
+`...` for the settings.
+
+To the right, `Today: 3` counts the Pomodoros finished today. A Pomodoro
+counts when its time runs out. A break does not count, and neither does a
+Pomodoro you stop early. The count is kept with the other preferences, so it
+survives closing the application, and it starts over at midnight.
+
+At 11:59 PM the timer writes the day's total to a table in a SQLite
+database, by default the table `zzPomCount` in
+`~/6003TimeTracking/cb/mytime.db`. The table has one row per day:
+
+| Column | Holds |
+|--------|-------|
+| `date` | the day, as `2026-10-21` |
+| `pom_count` | the Pomodoros finished that day |
+| `recorded_at` | when the row was last written |
+
+The table is created when it is missing. A day written twice keeps one row
+with the later total. When the application is closed at 11:59 PM, or the
+computer is asleep, the missed day is written the next time the application
+starts, or when the next day's first Pomodoro finishes. The same catch-up
+corrects the row when a Pomodoro finishes in the last minute of the day. The
+folder must exist, so a mistyped folder is reported in the log and does not
+create a new database somewhere else.
+
+The Database tab of the settings sets the folder, the database file, and the
+table, and turns the record off. "Record today now" writes today's count at
+once, to check the settings.
+
+By default the number of Pomodoros in the cycle comes from the block. That is
+the block under way, or the block selected in the grid when none is under way.
+The timer fits as many Pomodoros as the block holds with their short breaks.
+With the default 25 and 5 minutes, a two-hour block holds four
+(4 x 25 + 3 x 5 = 115 minutes), 90 minutes holds three, an hour holds two, and
+anything shorter holds one. The long break then falls in the break between two
+blocks. With no block, the cycle has four.
+
+When a cycle ends inside a block and "Start next timer automatically" is on,
+the next cycle starts by itself, with its length taken from that block.
+
+The settings have five tabs.
+
+| Tab | Holds |
+|-----|-------|
+| General | Ticking during a Pomodoro, ticking in breaks too, the tick volume with a Test button, and the tick sound file |
+| Timing | Pomodoro, short break, and long break minutes; Pomodoros per cycle, or "From the time block"; "Start next timer automatically" |
+| Notifications | The buzzer at the end of a phase, its volume, the alarm sound file, and bouncing the Dock icon |
+| Hotkeys | Start Pomodoro, by default Control Command P, and Stop Pomodoro, by default Control Command S. Click a box and press the keys to record a new one |
+| Database | Whether to record each day's total at 11:59 PM, and the folder, database file, and table it goes to |
+
+The hotkeys work on every tab of the window while the application is in front.
+They do not reach the application when another program is in front. The sounds
+play through QtMultimedia. When it cannot load, the timer uses `afplay` on
+macOS, and elsewhere the buzzer becomes the system beep and the tick is
+silent. The settings are kept with the other preferences.
+
+The tick and the alarm can be your own sound files. Set them in "Tick sound"
+on the General tab and "Alarm sound" on the Notifications tab, with Browse to
+pick a file and Built-in to go back to the built-in sound. A WAV file plays
+through QtMultimedia. An AIFF, MP3, M4A, or CAF file plays through `afplay`,
+so those types need a Mac. The Test buttons play the file shown in the box,
+before OK saves it. When a chosen file has been moved or deleted, the timer
+plays the built-in sound and says so once in the log. Keep a tick shorter
+than a second, because it plays every second. The alarm sounds at the end of
+every Pomodoro and every break.
+
 ### Objectives and review for a block
 
 A planned block answers when you meant to write. Two small records answer what
@@ -431,8 +504,10 @@ also matches that code. Each tab title then shows its matches, as
 tinted blue and bold in the grid, in both the hour and the row view. A clash
 keeps its red tint.
 
-Press Ctrl+F to reach the box, Enter to go to the next tab with a match and
-select it, and Esc to clear it. Rows are hidden, not removed, so every button
+Press Ctrl+F to reach the box from anywhere on the Schedule tab. On a Mac,
+Command+F and Control+F both work. Enter or the **Find next** button goes to
+the next tab with a match and selects it, and Esc clears the box. With the box
+empty, **Find next** puts the cursor in it. Rows are hidden, not removed, so every button
 still acts on the row it shows.
 
 ![Typing qflip filters the tabs and tints that project's blocks in the hour view.](imgs/gui-project-search.png)
