@@ -93,6 +93,12 @@
       "system": "Explain a suggested size for next week's writing plan in two plain sentences. The number has already been computed from the writer's own record and is given to you. Do not change it. Say what it is based on, and encourage a plan the writer can keep.",
       "instruction": "Explain this suggested plan size.",
       "schema": null
+    },
+    "partner": {
+      "rule": 8,
+      "system": "Draft the short weekly message the writer will send to an accountability partner. Write in the first person, as the writer, to the partner. Use only the facts given. Lead with what the writer finished, using the writer's own objectives. State the share of the plan kept as a percentage and, when the facts hold them, the objectives met out of those committed. If blocks were missed, mention it once, plainly, as information, with no apology and no blame. Mention a personal best or a return to the plan when the facts hold one. End with next week's planned time only if the facts give it. Keep it under one hundred words. Do not add any number that is not in the facts, and do not invent work that is not listed.",
+      "instruction": "Draft this week's message to my writing partner.",
+      "schema": null
     }
   }
 }

@@ -264,6 +264,12 @@ class ScheduleEditor(QtWidgets.QWidget):
             "A plan size drawn from the minutes you actually wrote in recent "
             "weeks like this one")
         self.size_week_action.triggered.connect(lambda: self.size_week())
+        self.partner_action = coach_menu.addAction("Summary for my partner")
+        self.partner_action.setToolTip(
+            "A short message about the open week for your accountability "
+            "partner, with the share of the plan kept and the objectives met. "
+            "You edit it and send it yourself (Rule 8).")
+        self.partner_action.triggered.connect(lambda: self.partner_summary())
         coach_menu.addSeparator()
         self.coach_settings_action = coach_menu.addAction("Settings...")
         self.coach_settings_action.setToolTip(
@@ -2090,6 +2096,52 @@ class ScheduleEditor(QtWidgets.QWidget):
             result["answer"] = answer
 
         self._ask_coach(path, lambda con: coachmod.read_weeks(model, con, end), show)
+        return result.get("answer")
+
+    def partner_summary(self):
+        """Draft the open week's summary for an accountability partner (Rule 8).
+
+        The summary needs no model, so it is offered even when the coach must
+        stay quiet. In an AI-off week, or when the writer declines to ask the
+        coach during a block, the plain summary is shown and nothing is written
+        to the ``ai_log`` table, so the week still counts as a week without AI.
+        """
+        path = settings.get("db")
+        if not path:
+            self.logged.emit("The partner summary reads the habit database. "
+                             "Choose it in the Plan or Track form first.")
+            return None
+        monday = self.week_monday()
+        if monday is None:
+            self.logged.emit("The table has no week date, so there is no week "
+                             "to summarize")
+            return None
+        week = monday.isoformat()
+        today = self.today().isoformat()
+        refused = self.coach_guard.allows()
+        model = None if refused else coach_runner.client()
+        log = not refused
+        result = {}
+
+        def show(answer):
+            result["answer"] = answer
+            if answer.data is None:
+                self.logged.emit(answer.text)
+                return
+            if refused:
+                answer.source = ("plain summary written without a model, because "
+                                 f"{refused}")
+            dialog = coach_runner.PartnerDialog(answer, parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            if accepted:
+                QtWidgets.QApplication.clipboard().setText(dialog.text())
+                self.logged.emit("Copied the summary for your partner to the "
+                                 "clipboard")
+            if answer.log_id is not None:
+                self._settle(path, answer, accepted)
+
+        self._ask_coach(path, lambda con: coachmod.partner_summary(
+            model, con, week, today=today, log=log), show)
         return result.get("answer")
 
     def size_week(self):

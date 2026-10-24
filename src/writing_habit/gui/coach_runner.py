@@ -201,3 +201,52 @@ class SuggestionDialog(QtWidgets.QDialog):
     def chosen(self) -> List[int]:
         """Return the positions of the checked items."""
         return [i for i, box in enumerate(self.boxes) if box.isChecked()]
+
+
+class PartnerDialog(QtWidgets.QDialog):
+    """The Friday summary as an editable draft that the writer copies and sends.
+
+    Nothing is sent from here. **Copy to clipboard** puts the edited text on the
+    clipboard for the writer to paste into an email or a chat, and marks the
+    draft accepted in the ``ai_log`` table.
+    """
+
+    def __init__(self, answer: coach.Answer, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Summary for your writing partner")
+        self.answer = answer
+        layout = QtWidgets.QVBoxLayout(self)
+        intro = QtWidgets.QLabel(
+            "A short summary of the week for your accountability partner. "
+            "Edit it as you like, then copy it into a message. It holds totals "
+            "and objectives met, not your full log.")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        self.editor = QtWidgets.QPlainTextEdit(answer.data["text"])
+        self.editor.setMinimumHeight(160)
+        layout.addWidget(self.editor)
+        source = QtWidgets.QLabel(source_line(answer.source))
+        source.setWordWrap(True)
+        source.setStyleSheet("color: #898781;")
+        layout.addWidget(source)
+        facts = QtWidgets.QPushButton("Show what was sent")
+        facts.setAutoDefault(False)
+        facts.setCheckable(True)
+        self.facts_view = QtWidgets.QPlainTextEdit(answer.facts or "Nothing was sent.")
+        self.facts_view.setReadOnly(True)
+        self.facts_view.setVisible(False)
+        facts.toggled.connect(self.facts_view.setVisible)
+        layout.addWidget(facts)
+        layout.addWidget(self.facts_view)
+        buttons = QtWidgets.QDialogButtonBox()
+        self.accept_button = buttons.addButton("Copy to clipboard",
+                                               QtWidgets.QDialogButtonBox.AcceptRole)
+        buttons.addButton("Close", QtWidgets.QDialogButtonBox.RejectRole)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.resize(640, 470)
+
+    def text(self) -> str:
+        """Return the draft as the writer left it."""
+        return self.editor.toPlainText().strip()

@@ -1,9 +1,10 @@
 """The writing coach: a local language model in a supporting role.
 
-The Ten Simple Rules paper puts AI in four rules. Rule 4 drafts a block's
+The Ten Simple Rules paper puts AI in five rules. Rule 4 drafts a block's
 objectives and ranks the grasscatcher list. Rule 5 writes the debrief after a
 block (see :mod:`writing_habit.debrief`). Rule 7 reads patterns across weeks
-and sizes next week's plan. Rule 10 sets the guardrails, and this module
+and sizes next week's plan. Rule 8 drafts the Friday summary the writer sends
+to an accountability partner. Rule 10 sets the guardrails, and this module
 enforces them in code rather than leaving them to the writer's discipline.
 
 Three layers keep the model in its place.
@@ -702,6 +703,175 @@ def explain_size(client: Optional[Client], size: dict, con=None, week_start=None
     answer = _run("size", client, facts, lambda: plain_size(size), parse,
                   con, week_start, prompts)
     answer.data = {"text": answer.data, **size}
+    return answer
+
+
+# -- Rule 8: the Friday summary for a partner -----------------------------------
+#: At most this many finished objectives are named in the summary. A partner
+#: needs the gist of the week, not the full log.
+PARTNER_DONE = 3
+#: At most this many personal bests are named, so the message stays short.
+PARTNER_BESTS = 2
+
+
+def partner_week(con, week_start: str, today: Optional[str] = None) -> Optional[dict]:
+    """Collect the numbers of the week starting ``week_start`` for a partner.
+
+    Return ``None`` when the week has no plan in the database. Everything is
+    computed here from the habit database, so the model only puts it into
+    words. The record is a summary: totals, block counts, objectives met
+    against those committed, a few finished objectives in the writer's words,
+    any personal best the week set, and next week's planned minutes.
+    """
+    from . import review
+
+    row = con.execute("SELECT planned_min, actual_min FROM v_week_overall"
+                      " WHERE week_start = ?", (week_start,)).fetchone()
+    if row is None or not row[0]:
+        return None
+    planned, actual = int(row[0]), int(row[1] or 0)
+    counts = {"kept": 0, "partial": 0, "missed": 0, "ahead": 0}
+    for block in review.block_outcomes(con, week_start, today):
+        counts[block["status"]] += 1
+    review.ensure(con)
+    committed, met = con.execute(
+        "SELECT COUNT(*), COALESCE(SUM(done), 0) FROM block_objective"
+        " WHERE week_start = ?", (week_start,)).fetchone()
+    done = [_clean(item["text"]) for item in review.done_list(con, week_start)]
+    # In the first planned week every mark is a best, which says nothing.
+    bests = ([(b.label, b.value) for b in review.personal_bests(con, week_start)
+              if b.this_week][:PARTNER_BESTS]
+             if review.planned_weeks(con, week_start) >= 2 else [])
+    monday = _dt.date.fromisoformat(week_start)
+    before = con.execute(
+        "SELECT planned_min, actual_min FROM v_week_overall WHERE week_start = ?",
+        ((monday - _dt.timedelta(days=7)).isoformat(),)).fetchone()
+    restart = bool(before and before[0] and not before[1] and actual)
+    after = con.execute(
+        "SELECT planned_min FROM v_week_overall WHERE week_start = ?",
+        ((monday + _dt.timedelta(days=7)).isoformat(),)).fetchone()
+    return {"week_start": week_start, "planned": planned, "actual": actual,
+            "kept_pct": _pct(actual / planned), "blocks": counts,
+            "committed": int(committed), "met": int(met),
+            "done": done[:PARTNER_DONE], "done_total": len(done),
+            "bests": bests, "restart": restart,
+            "next_planned": int(after[0]) if after and after[0] else None}
+
+
+def partner_facts(week: dict) -> str:
+    """Write the week's numbers as the facts the model receives."""
+    b = week["blocks"]
+    lines = [f"Week starting: {week['week_start']}",
+             f"Minutes planned: {week['planned']} ({_hours(week['planned'])})",
+             f"Minutes written: {week['actual']} ({_hours(week['actual'])})",
+             f"Share of the plan kept: {week['kept_pct']}%",
+             f"Blocks kept: {b['kept']}",
+             f"Blocks kept in part: {b['partial']}",
+             f"Blocks missed: {b['missed']}",
+             f"Blocks still ahead this week: {b['ahead']}"]
+    if week["committed"]:
+        lines += [f"Objectives committed: {week['committed']}",
+                  f"Objectives met: {week['met']}"]
+    lines += [f"Objective met: {text}" for text in week["done"]]
+    lines += [f"Personal best set this week: {label}, {value}"
+              for label, value in week["bests"]]
+    if week["restart"]:
+        lines.append("Back on the plan after a planned week with no writing: yes")
+    if week["next_planned"]:
+        lines.append(f"Minutes planned for next week: {week['next_planned']}"
+                     f" ({_hours(week['next_planned'])})")
+    return "\n".join(lines)
+
+
+def _series(items: Sequence[str]) -> str:
+    items = [i.rstrip(".") for i in items]
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + (", and " if len(items) > 2 else " and ") + items[-1]
+
+
+def _date_words(week_start: str) -> str:
+    day = _dt.date.fromisoformat(week_start)
+    return f"{day.strftime('%B')} {day.day}"
+
+
+def plain_partner(week: dict) -> str:
+    """Write the summary without a model, in the writer's own voice.
+
+    The message has up to three short paragraphs: the time, the work, and
+    anything worth celebrating or planned next.
+    """
+    b = week["blocks"]
+    passed = b["kept"] + b["partial"] + b["missed"]
+    time = [f"Here is my writing week of {_date_words(week['week_start'])}.",
+            f"I planned {_hours(week['planned'])} of writing and wrote "
+            f"{_hours(week['actual'])}, which is {week['kept_pct']}% of the plan."]
+    if passed:
+        text = f"I kept {b['kept']} of the {passed} planned blocks that have passed"
+        if b["partial"]:
+            text += f" and kept {b['partial']} more in part"
+        time.append(text + ".")
+    if b["ahead"]:
+        time.append(f"{b['ahead']} more block{'' if b['ahead'] == 1 else 's'} "
+                    f"{'is' if b['ahead'] == 1 else 'are'} still ahead this week.")
+    work = []
+    met, committed = week["met"], week["committed"]
+    if committed == 1:
+        work.append("I met the one objective I committed to." if met else
+                    "I did not meet the one objective I committed to.")
+    elif committed and met == committed:
+        work.append(f"I met all {committed} objectives I committed to.")
+    elif committed:
+        work.append(f"I met {met} of the {committed} objectives I committed to.")
+    if week["done"]:
+        # The objectives are quoted, because they are the writer's own words.
+        quoted = ['"' + text.rstrip(".") + '"' for text in week["done"]]
+        label = ("The objective I met was" if len(quoted) == 1
+                 else "Objectives I met include")
+        work.append(f"{label} {_series(quoted)}.")
+    more = []
+    if week["restart"]:
+        more.append("This week put me back on the plan after a week without writing.")
+    if week["bests"]:
+        marks = [f"{label.lower()} at {value}" for label, value in week["bests"]]
+        noun = "a personal best" if len(marks) == 1 else "personal bests"
+        more.append(f"This week set {noun} for {_series(marks)}.")
+    if week["next_planned"]:
+        more.append(f"Next week I have planned {_hours(week['next_planned'])}.")
+    return "\n\n".join(" ".join(p) for p in (time, work, more) if p)
+
+
+def partner_summary(client: Optional[Client], con, week_start: str,
+                    today: Optional[str] = None, log: bool = True,
+                    prompts=None) -> Answer:
+    """Draft the short weekly message the writer sends to a partner (Rule 8).
+
+    The draft is the writer's to edit and send. Nothing is sent to the
+    partner from here. A model's draft is used only when it states the share
+    of the plan kept and carries no number that the facts do not hold.
+    """
+    week = partner_week(con, week_start, today)
+    if week is None:
+        return Answer(data=None,
+                      text=("The week has no plan in the habit database yet, so "
+                            "there is nothing to summarize. Import the plan first."),
+                      source="no data")
+    facts = partner_facts(week)
+    allowed = _numbers(facts)
+
+    def parse(reply):
+        text = _clean(reply)
+        if not text:
+            raise CoachError("the local model sent an empty draft")
+        if f"{week['kept_pct']}%" not in text:
+            raise CoachError("the draft left out the share of the plan kept")
+        if not _numbers(text) <= allowed:
+            raise CoachError("the draft held a number that is not in your record")
+        return text
+
+    answer = _run("partner", client, facts, lambda: plain_partner(week), parse,
+                  con if log else None, week_start, prompts)
+    answer.data = {"text": answer.data, **week}
     return answer
 
 

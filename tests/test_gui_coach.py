@@ -315,3 +315,74 @@ def test_settings_says_when_the_server_is_down(editor, store):
     dialog = editor.open_coach_settings()
     assert "Is the server running" in dialog.status.text()
     assert dialog.model_box.currentText() == "tiny"
+
+
+# -- Rule 8: the partner summary -------------------------------------------------------
+def _partner_week(store):
+    """The open week, Oct 12: Monday's block kept, nothing else written."""
+    con = db.connect(store["db"])
+    pid = db.get_or_create_project(con, "A", "1006AIrxOpt", "safe")
+    con.execute("INSERT INTO plan_block(day, start_time, end_time, project_id,"
+                " category_id) VALUES ('2026-10-12', '05:00', '07:00', ?, 1)", (pid,))
+    manual.add_session(con, day="2026-10-12", project_code="A", minutes=90,
+                       category="generative")
+    review.ensure(con)
+    oid = review.add_objective(con, BlockKey("2026-10-12", "05:00", "A"),
+                               "Draft the second aim paragraph")
+    review.mark(con, oid, True)
+    con.commit()
+    con.close()
+
+
+def test_partner_summary_copies_the_edited_draft(editor, store):
+    from writing_habit.gui.qt import QtWidgets
+    _partner_week(store)
+    shown = []
+
+    def edit_and_copy(dialog):
+        shown.append(dialog.text())
+        dialog.editor.setPlainText(dialog.text() + " See you Monday.")
+        return True
+
+    editor.run_coach_dialog = edit_and_copy
+    answer = editor.partner_summary()
+    assert answer.data["kept_pct"] == 75
+    assert "which is 75% of the plan" in shown[0]
+    assert "I met the one objective I committed to." in shown[0]
+    assert 'The objective I met was "Draft the second aim paragraph".' in shown[0]
+    copied = QtWidgets.QApplication.clipboard().text()
+    assert copied.startswith("Here is my writing week of October 12.")
+    assert copied.endswith("See you Monday.")
+    rows = _log(store)
+    assert [r["task"] for r in rows] == ["partner"]
+    assert rows[0]["accepted"] == 1
+
+
+def test_partner_summary_uses_the_model_when_it_is_on(editor, store, monkeypatch):
+    _partner_week(store)
+    use_model(monkeypatch, store, "I drafted the second aim paragraph and kept 75% "
+                                  "of my plan this week.")
+    answer = editor.partner_summary()
+    assert answer.source == "local model tiny"
+    assert editor.dialogs[-1].text().startswith("I drafted the second aim paragraph")
+
+
+def test_partner_summary_in_an_ai_off_week_is_plain_and_unlogged(editor, store,
+                                                                monkeypatch):
+    _partner_week(store)
+    use_model(monkeypatch, store, "anything")
+    editor.ai_off_action.setChecked(True)
+    answer = editor.partner_summary()
+    assert answer is not None
+    assert "AI-off week" in answer.source
+    assert answer.data["text"].startswith("Here is my writing week")
+    assert _log(store) == []
+
+
+def test_partner_summary_without_a_plan_says_so(editor, store):
+    messages = []
+    editor.logged.connect(messages.append)
+    answer = editor.partner_summary()
+    assert answer.data is None
+    assert any("nothing to summarize" in m for m in messages)
+    assert editor.dialogs == []

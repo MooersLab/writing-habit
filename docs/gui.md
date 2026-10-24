@@ -588,10 +588,10 @@ from Emacs would drop the new to-dos.
 
 ### The coach
 
-The coach is an optional helper for four of the Ten Simple Rules. It drafts a
+The coach is an optional helper for five of the Ten Simple Rules. It drafts a
 block's objectives and ranks the grasscatcher (Rule 4), writes a debrief after
-a block (Rule 5), and reads patterns across weeks and sizes the week's plan
-(Rule 7). It never writes your manuscript, and every task has a plain answer
+a block (Rule 5), reads patterns across weeks and sizes the week's plan
+(Rule 7), and drafts the weekly summary for an accountability partner (Rule 8). It never writes your manuscript, and every task has a plain answer
 written without a model, so nothing depends on it.
 
 | Where | Button | What it does |
@@ -601,6 +601,7 @@ written without a model, so nothing depends on it.
 | Grasscatcher tab | **Rank** | Orders the tasks by the nearest deadlines and this week's planned projects, with a reason for each. **Use this order** rewrites the list. |
 | Coach menu | **Read my weeks** | The two strongest patterns in how you keep your plan, by weekday, schedule shape, event tag, and month, and one change to try. |
 | Coach menu | **Size this week's plan** | A plan size for the open week, the median of what you actually wrote in up to eight recent planned weeks, or in earlier weeks with the same schedule code or event tag. |
+| Coach menu | **Summary for my partner** | A short message about the open week for an accountability partner, written as you. Edit it and press **Copy to clipboard**, then paste it into an email or a chat. Nothing is sent for you. |
 
 The software computes every number before the model sees it, and the model only
 puts the numbers into words. A pattern needs at least four weeks behind it. A
@@ -608,6 +609,29 @@ sentence from the model that carries a number the facts do not hold is replaced
 by the plain sentence, and a plan-size note keeps the computed number however
 the model words it. Each dialog has **Show what was sent**, which lists the
 exact facts that left the database.
+
+**The partner summary.** Rule 8 suggests trading the week's plan on Monday and
+the comparison on Friday with a partner, and sharing summaries rather than
+details. The summary holds the minutes planned and written, the share of the
+plan kept, the blocks kept, kept in part, and still ahead, the objectives met
+against those committed, up to three of the objectives you met in your own
+words, and next week's planned minutes when that plan is in the database. It
+mentions up to two personal bests from the week once there are two planned
+weeks to compare, and it notes a return to the plan after a planned week with
+no writing. It never names an unmet objective, a focus rating, or a note.
+
+| Paragraph | What it says |
+|-----------|--------------|
+| The time | Minutes planned and written, the share kept, and the blocks |
+| The work | The objectives met of those committed, and up to three of them quoted |
+| The rest | A return to the plan, personal bests, and next week's planned time |
+
+A model's draft is used only when it states the share of the plan kept and
+carries no number that the facts do not hold. Otherwise the plain summary is
+shown with the reason. The summary needs no model, so it is offered even in an
+AI-off week and during a block. In those cases the plain summary is shown and
+nothing is written to `ai_log`, so the week still counts as a week without the
+coach.
 
 **The local model.** Open **Coach > Settings...** to choose the server, its
 address, and the model. The model picker lists the models the server has

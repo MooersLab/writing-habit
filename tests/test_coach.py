@@ -69,7 +69,7 @@ def _week(con, week, planned, actual, code="A", day_offset=0, schedule=None, tag
 def test_the_prompts_file_covers_every_task_and_forbids_ghostwriting():
     prompts = coach.load_prompts()
     assert set(prompts["tasks"]) == {"objectives", "grasscatcher", "debrief",
-                                     "weeks", "size"}
+                                     "weeks", "size", "partner"}
     assert "never write" in prompts["rules"]
     for name, task in prompts["tasks"].items():
         assert task["system"] and task["instruction"], name
@@ -345,3 +345,98 @@ def test_list_models_reads_both_interfaces():
         coach.list_models("https://example.com", opener=ollama)
     with pytest.raises(CoachError, match="no model server answered"):
         coach.list_models(opener=down)
+
+
+# -- Rule 8: the Friday summary for a partner ------------------------------------------
+def _partner_week(con):
+    """A week of three planned blocks: one kept, one missed, one still ahead."""
+    week = "2026-10-12"
+    _week(con, week, 120, 120, code="A", day_offset=0)
+    _week(con, week, 60, 0, code="B", day_offset=1)
+    _week(con, week, 60, 0, code="A", day_offset=4)
+    review.ensure(con)
+    key = review.BlockKey("2026-10-12", "05:00", "A")
+    for text, done in (("Draft the second aim paragraph", True),
+                       ("Find three citations", True),
+                       ("Revise figure 2", False)):
+        oid = review.add_objective(con, key, text)
+        review.mark(con, oid, done)
+    return week
+
+
+def test_partner_plain_summary_states_the_week(con):
+    week = _partner_week(con)
+    answer = coach.partner_summary(None, con, week, today="2026-10-14")
+    text = answer.data["text"]
+    assert answer.source.startswith("plain summary")
+    assert "week of October 12" in text
+    assert "I planned 4 h 00 min of writing and wrote 2 h 00 min, which is 50% of the plan." in text
+    assert "I kept 1 of the 2 planned blocks that have passed." in text
+    assert "1 more block is still ahead this week." in text
+    assert "I met 2 of the 3 objectives I committed to." in text
+    assert 'Objectives I met include "Draft the second aim paragraph" and "Find three citations".' in text
+    assert text.count("\n\n") == 1                     # time, then work
+    assert "personal best" not in text                  # a first week sets every mark
+    assert "Revise figure 2" not in text
+    assert answer.data["blocks"] == {"kept": 1, "partial": 0, "missed": 1, "ahead": 1}
+    assert con.execute("SELECT task FROM ai_log").fetchall()[0][0] == "partner"
+
+
+def test_partner_facts_hold_only_the_summary(con):
+    week = _partner_week(con)
+    facts = coach.partner_facts(coach.partner_week(con, week, today="2026-10-14"))
+    assert "Share of the plan kept: 50%" in facts
+    assert "Objective met: Draft the second aim paragraph" in facts
+    assert "Revise figure 2" not in facts          # unmet objectives stay private
+    assert "session" not in facts.lower()
+
+
+def test_partner_keeps_a_model_draft_that_uses_the_facts(con):
+    week = _partner_week(con)
+    reply = ("This week I drafted the second aim paragraph and found three "
+             "citations. I kept 50% of my plan and met 2 of 3 objectives.")
+    answer = coach.partner_summary(Client("tiny", opener=fake_model(reply)), con, week,
+                                   today="2026-10-14")
+    assert answer.source == "local model tiny"
+    assert answer.data["text"] == reply
+
+
+def test_partner_rejects_a_draft_with_an_invented_number(con):
+    week = _partner_week(con)
+    reply = "I kept 50% of my plan and wrote 1,200 words."
+    answer = coach.partner_summary(Client("tiny", opener=fake_model(reply)), con, week,
+                                   today="2026-10-14")
+    assert "not in your record" in answer.source
+    assert answer.data["text"].startswith("Here is my writing week")
+
+
+def test_partner_rejects_a_draft_without_the_share_kept(con):
+    week = _partner_week(con)
+    answer = coach.partner_summary(Client("tiny", opener=fake_model("A fine week.")),
+                                   con, week, today="2026-10-14")
+    assert "share of the plan kept" in answer.source
+
+
+def test_partner_notes_a_restart_a_best_and_next_week(con):
+    _week(con, "2026-10-05", 60, 0)                 # a planned week with no writing
+    _week(con, "2026-10-12", 60, 60)
+    _week(con, "2026-10-19", 90, 0)                 # next week's plan
+    answer = coach.partner_summary(None, con, "2026-10-12", today="2026-10-18")
+    text = answer.data["text"]
+    assert "back on the plan after a week without writing" in text
+    assert ("personal bests for most of the plan kept at 100% and most minutes "
+            "written at 1 h 00 min.") in text
+    assert "Next week I have planned 1 h 30 min." in text
+
+
+def test_partner_without_a_plan_says_so(con):
+    answer = coach.partner_summary(None, con, "2026-10-12")
+    assert answer.data is None
+    assert "nothing to summarize" in answer.text
+    assert con.execute("SELECT COUNT(*) FROM ai_log").fetchone()[0] == 0
+
+
+def test_partner_unlogged_leaves_the_week_without_ai(con):
+    week = _partner_week(con)
+    coach.partner_summary(None, con, week, today="2026-10-14", log=False)
+    assert con.execute("SELECT COUNT(*) FROM ai_log").fetchone()[0] == 0
