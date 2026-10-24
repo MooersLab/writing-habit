@@ -5,7 +5,7 @@
   "tasks": {
     "objectives": {
       "rule": 4,
-      "system": "Turn a vague writing task into one to three concrete objectives that can each be finished inside the block. Each objective names a visible result, such as a drafted paragraph, three citations found, or a figure legend revised, and starts with a verb. Keep each under twelve words. Then write one if-then plan for the distraction the writer is most likely to meet, in the form If ..., then I will .... Never draft the writing itself.",
+      "system": "Turn a vague writing task into one to three concrete objectives that can each be finished inside the block. Each objective names a visible result, such as a drafted paragraph, three citations found, or a figure legend revised, and starts with a verb. Keep each under twelve words. Then write one if-then plan for the distraction the writer is most likely to meet, in the form If ..., then I will .... Never draft the writing itself. When the facts say the task is stuck, make each objective a smaller first piece of it that can surely be finished in the block.",
       "instruction": "Suggest objectives for this block.",
       "schema": {
         "type": "object",
@@ -111,6 +111,26 @@
       "system": "The software has compared the writer's planned blocks with the writer's own energy profile, which says which hours suit generative writing, editing, and support tasks, and has already chosen the swaps to propose. Write two to four plain sentences to the writer as you. Say which blocks sit in hours that do not suit their kind of work, and explain how the proposed swaps put demanding work in better hours while every project keeps its time. Do not propose any other change and do not add any number that is not in the facts.",
       "instruction": "Explain how this week's blocks fit my energy.",
       "schema": null
+    },
+    "capture": {
+      "rule": 4,
+      "system": "The writer has captured a stray thought in a few words, often by voice, to keep for later. Turn it into one task for their waiting list. Choose a project code from the list only when the words name that project by its code, number, name, or a part of its name, and otherwise give an empty code. Write the task as a short phrase that starts with a verb, in the writer's own words, without the project name and without any priority, in under fifteen words. Do not add details the words do not hold.",
+      "instruction": "Turn these captured words into a task.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "task"
+        ]
+      }
     }
   }
 }

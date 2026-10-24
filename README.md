@@ -166,7 +166,11 @@ Friday summary of the week for an accountability partner, which you edit and
 send yourself. Two planning checks need no model. **Check deadline coverage**
 finds projects due in the next four weeks with no block left this week and
 proposes a block for each, and the **Energy** tab records your best hours for
-each kind of writing and proposes swaps for blocks that do not fit them. It uses a
+each kind of writing and proposes swaps for blocks that do not fit them.
+**Capture** files a thought typed or dictated in plain words on the
+grasscatcher, with its project found by a lookup, and the review panel flags a
+**stuck project** whose objectives keep going unmet, ready for Suggest to break
+the work into smaller steps. It uses a
 model served on your own computer through Ollama, LM Studio, or llama.cpp when
 you turn it on, and plain summaries otherwise. The software computes every
 number itself, the coach stays quiet during a block and in an AI-off week, and

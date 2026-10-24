@@ -320,6 +320,8 @@ def _as_text(task: str, data) -> str:
     if task == "grasscatcher":
         return "\n".join(f"{i + 1}. {item['text']} ({item['reason']})"
                          for i, item in enumerate(data))
+    if task == "capture":
+        return data.entry_text()
     if task == "weeks":
         return "\n".join(data.get("patterns", []) + [data.get("change", "")]).strip()
     return json.dumps(data)
@@ -333,10 +335,17 @@ def _clean(text) -> str:
 def objective_facts(task: str, project: str, minutes: int,
                     deadline: Optional[str] = None,
                     waiting: Sequence[str] = (),
-                    last_step: Optional[str] = None) -> str:
-    """Return the facts the objectives task may see.  Nothing else is sent."""
+                    last_step: Optional[str] = None,
+                    stuck: Optional[str] = None) -> str:
+    """Return the facts the objectives task may see.  Nothing else is sent.
+
+    ``stuck`` is the sentence of :mod:`writing_habit.stuck` when the project
+    keeps missing its objectives, so the model breaks the task down further.
+    """
     lines = [f"Task: {_clean(task)}", f"Project: {_clean(project)}",
              f"Block length: {minutes} minutes"]
+    if stuck:
+        lines.append(f"Stuck: {_clean(stuck)} Break the task into smaller steps.")
     if deadline:
         lines.append(f"Project deadline: {deadline}")
     if last_step:
@@ -372,6 +381,33 @@ def suggest_objectives(client: Optional[Client], facts: str, con=None,
 
 
 # -- Rule 4: the grasscatcher -------------------------------------------------------
+def capture_task(client: Optional[Client], text: str, projects, con=None,
+                 week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Turn a captured thought into a grasscatcher task (Rule 4).
+
+    ``projects`` are :class:`writing_habit.capture.Project` objects. The plain
+    reading is always made first. A model's project and wording replace it only
+    where :func:`writing_habit.capture.confirm` can check them against the words.
+    """
+    from . import capture
+
+    plain = capture.plain(text, projects)
+    if client is None:
+        answer = Answer(data=plain, text=plain.entry_text(),
+                        source="plain summary written without a model")
+        return answer
+
+    def parse(reply):
+        if not isinstance(reply, dict):
+            raise CoachError("the reply held no task")
+        return capture.confirm(reply, text, projects, plain)
+
+    answer = _run("capture", client, capture.facts(text, projects), lambda: plain,
+                  parse, con, week_start, prompts)
+    answer.text = answer.data.entry_text()
+    return answer
+
+
 def grasscatcher_facts(tasks: Sequence[Tuple[Optional[str], str]],
                        deadlines: Dict[str, Optional[str]],
                        planned: Dict[str, int]) -> str:

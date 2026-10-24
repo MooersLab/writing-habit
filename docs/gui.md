@@ -493,6 +493,25 @@ Objectives are saved as soon as they change, because they are the plan.
 changed review too. The next block of the same project shows your last next
 step at the top of the panel, so the session starts warm.
 
+**A stuck project.** A project can get its blocks and still miss the same
+objective week after week. When you open a block, the panel looks at the
+project's earlier blocks and shows an amber note for the first of three signs.
+
+| Sign | What it means |
+|------|---------------|
+| An objective unmet twice | One objective, worded the same way, went unmet in two or more of the project's last three blocks with objectives |
+| Few objectives met | At most a third of the objectives were met over the last three blocks |
+| The same next step | The last two reviews give the same next-step note |
+
+The note puts the stuck task in the objective box. Press **Suggest** and the
+coach breaks it into smaller objectives, each a first piece that can surely be
+finished in the block. The facts sent to the model say the task is stuck, and
+nothing else changes. Without a model, Suggest gives its usual advice, and the
+note still names the task. **Coach > Find stuck projects** lists every project
+of the week's legend that shows a sign.
+
+![The review panel of a block of the grant, whose budget justification went unmet twice.](imgs/gui-review-stuck.png)
+
 When the week has no date, the panel says so. A file named for its Monday, such
 as `Oct12.org`, gives the date directly. A file renamed to its canonical name
 takes the week that plan import filed it under in the database.
@@ -534,6 +553,37 @@ project first, and **Back to grasscatcher** returns an objective to the list.
 The list lives in the weekly table file beside the semester lists, so it
 travels to next week's file with them. The scheduler reads only the first table
 of the file and never sees it.
+
+### Quick capture
+
+A stray thought is safest on the list in seconds. Type or dictate it in the
+box at the top of the **Grasscatcher** tab, or press Ctrl+Shift+G (Command+Shift+G
+on a Mac) from anywhere on the Schedule tab, and press Enter or **Capture**.
+The task goes to the end of the list at once, with no dialog, and the log says
+how its project was found.
+
+![A captured task with its code and priority, and the next thought in the box.](imgs/gui-grasscatcher-capture.png)
+
+| You write | The task becomes |
+|-----------|------------------|
+| `remember to email the program officer about the R01 budget, priority A` | `A: [#A] Email the program officer about the R01 budget` |
+| `C: tidy the methods` | `C: Tidy the methods` |
+| `check the stats in 3003` | `C: Check the stats in 3003` |
+| `buy printer toner` | `- Buy printer toner` |
+
+The software finds the project by a lookup of what the words name. A code
+written as `C:` at the start or as `project C` counts most, then the project's
+four-digit number, then its whole name, then a distinctive part of its name such
+as `R01`. Common words such as email, paper, or review do not count. When the
+words fit two projects equally, or none, the task gets no code. A priority comes
+only from a cookie such as `[#A1]` or from the words `priority A`. Openers such
+as "remember to" and "I need to" are dropped.
+
+With the local model on, the model proposes the project and words the task more
+tidily. Its project is kept only when the lookup finds that project named in
+your words, and its wording is kept only when it uses mostly your words and adds
+no number. During a block, or in an AI-off week, the plain reading is used and
+nothing asks, so capturing never breaks deep work.
 
 ### Priority cookies and syncing with a project's log
 
@@ -605,6 +655,8 @@ written without a model, so nothing depends on it.
 | Coach menu | **Size this week's plan** | A plan size for the open week, the median of what you actually wrote in up to eight recent planned weeks, or in earlier weeks with the same schedule code or event tag. |
 | Coach menu | **Check deadline coverage** | The projects due in the next 28 days with no block left this week, and a block to give each one. See [Deadline coverage](#deadline-coverage). |
 | Coach menu | **Match blocks to my energy** | The blocks whose hours do not suit their kind of writing, by your energy profile, and swaps that fix them. See [The Energy tab](#the-energy-tab). |
+| Grasscatcher tab | **Capture** | Turns a thought typed or dictated in plain words into a coded task. See [Quick capture](#quick-capture). |
+| Coach menu | **Find stuck projects** | The projects of the week that keep missing their objectives or keep the same next step. See the stuck sign under [Objectives and review](#objectives-and-review-for-a-block). |
 | Coach menu | **Summary for my partner** | A short message about the open week for an accountability partner, written as you. Edit it and press **Copy to clipboard**, then paste it into an email or a chat. Nothing is sent for you. |
 
 The software computes every number before the model sees it, and the model only

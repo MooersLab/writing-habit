@@ -119,6 +119,8 @@ class ProjectListPanel(QtWidgets.QWidget):
     rank_requested = pyqtSignal()
     #: Emitted when the writer asks to sync the grasscatcher with the logs.
     sync_requested = pyqtSignal()
+    #: Emitted with the words typed or dictated into the capture box.
+    capture_requested = pyqtSignal(str)
     logged = pyqtSignal(str)
 
     def __init__(self, name: str, title: str, parent=None):
@@ -215,6 +217,22 @@ class ProjectListPanel(QtWidgets.QWidget):
             for column in (RISK, ACTIVITY):
                 self.view.setColumnHidden(column, True)
 
+        # The grasscatcher catches stray thoughts, so it takes them in plain
+        # words, typed or dictated, and files them without a dialog.
+        self.capture_edit = None
+        self.capture_button = None
+        if name == GRASSCATCHER:
+            self.capture_edit = QtWidgets.QLineEdit()
+            self.capture_edit.setPlaceholderText(
+                "Capture a task in plain words (Ctrl+Shift+G), such as: email the "
+                "reviewer about figure 3 for the R01, priority A")
+            self.capture_edit.setToolTip(
+                "The project is found from its code, number, or name in your words. "
+                "Press Enter to add the task to the end of the list.")
+            self.capture_edit.returnPressed.connect(self._capture)
+            self.capture_button = QtWidgets.QPushButton("Capture")
+            self.capture_button.clicked.connect(self._capture)
+
         bar = QtWidgets.QHBoxLayout()
         buttons = [self.add_button, self.up_button, self.down_button,
                    self.delete_button]
@@ -232,12 +250,22 @@ class ProjectListPanel(QtWidgets.QWidget):
         bar.addStretch(1)
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        if self.capture_edit is not None:
+            capture_row = QtWidgets.QHBoxLayout()
+            capture_row.addWidget(self.capture_edit, 1)
+            capture_row.addWidget(self.capture_button)
+            layout.addLayout(capture_row)
         layout.addLayout(bar)
         layout.addWidget(self.view)
         self.view.selectionModel().currentChanged.connect(
             lambda *_args: self.update_buttons())
         self.model.modelReset.connect(self.update_buttons)
         self.update_buttons()
+
+    def _capture(self) -> None:
+        text = self.capture_edit.text().strip()
+        if text:
+            self.capture_requested.emit(text)
 
     # -- state -------------------------------------------------------------
     @property

@@ -10,7 +10,7 @@ so the tutorials keep showing the program as it is.
 
 Add ``--coach`` to redraw only the hour view, the review panel, and the coach
 dialogs, including the summary for a writing partner, the deadline coverage
-check, and the Energy tab.
+check, the Energy tab, quick capture, and the stuck sign in the review panel.
 
 The dashboard is a web page, so it is drawn by a headless Chromium through
 Playwright when that is installed, and skipped with a note otherwise.
@@ -119,7 +119,7 @@ def coach_images(app, window, store):
     # The Coach menu open under its button, over the shift bar.
     bar = editor.coach_button.parentWidget()
     top = editor.shift_buttons[-60].mapTo(editor, QtCore.QPoint(0, 0))
-    strip = editor.grab(QtCore.QRect(0, max(top.y() - 6, 0), editor.width(), 300))
+    strip = editor.grab(QtCore.QRect(0, max(top.y() - 6, 0), editor.width(), 340))
     menu = editor.coach_button.menu()
     menu.popup(editor.coach_button.mapToGlobal(
         QtCore.QPoint(0, editor.coach_button.height())))
@@ -130,7 +130,7 @@ def coach_images(app, window, store):
                    corner.y() - max(top.y() - 6, 0))
     menu.hide()
     shot = shot.copy(QtCore.QRect(max(shot.width() - 760, 0), 0, 760,
-                                  menu.height() + 60))
+                                  menu.height() + 90))
     OUT.mkdir(parents=True, exist_ok=True)
     shot.save(str(OUT / "coach-menu.png"))
     print(f"Wrote {OUT / 'coach-menu.png'}")
@@ -207,6 +207,7 @@ def coach_images(app, window, store):
     save(partner_dialog, "coach-partner.png")
     partner_dialog.reject()
     plan_check_images(app, window, store)
+    capture_and_stuck_images(app, window, store)
     del json
 
 
@@ -229,6 +230,55 @@ CHECK_WEEK = (
 )
 
 
+def capture_and_stuck_images(app, window, store):
+    """Draw the capture box on the grasscatcher and a review panel with the stuck sign."""
+    import datetime as dt
+
+    from writing_habit import db, review
+    from writing_habit.gui.hour_view import HourPicker
+    from writing_habit.project_lists import GRASSCATCHER
+
+    editor = window.editor
+    panel = editor.list_panels[GRASSCATCHER]
+    editor.project_tabs.setCurrentWidget(panel)
+    # One thought already captured, and the next one typed in the box.
+    background = editor.coach_runner.background
+    editor.coach_runner.background = False
+    editor.capture_task("remember to email the program officer about the R01 "
+                        "budget, priority A")
+    editor.coach_runner.background = background
+    panel.capture_edit.setText("ask the core about the 4004 diffraction data")
+    app.processEvents()
+    save(editor.project_tabs, "grasscatcher-capture.png")
+    panel.capture_edit.clear()
+    # Drop the captured task, so the window closes without asking to save.
+    editor.table.dirty = False
+    editor.open(store["table"])
+    app.processEvents()
+    editor.project_tabs.setCurrentIndex(0)
+
+    # Two earlier blocks of the grant left the same objective unmet.
+    con = db.connect(store["db"])
+    review.ensure(con)
+    for day in ("2026-09-28", "2026-09-30"):
+        key = review.BlockKey(day, "05:00", "A")
+        review.mark(con, review.add_objective(con, key, "Draft the budget justification"),
+                    False)
+    con.commit()
+    con.close()
+    starts = editor.hour_model.blocks_at(5, 1)
+    dialog = HourPicker(editor.table, 0, editor.table.day_labels[0], 5,
+                        existing=starts, parent=window,
+                        monday=editor.week_monday(), review_blocks=starts)
+    review_panel = dialog.review_panel
+    review_panel.guard.now = lambda: dt.datetime(2026, 10, 5, 4, 30)
+    dialog.show()
+    dialog.adjustSize()
+    app.processEvents()
+    save(dialog, "review-stuck.png")
+    dialog.reject()
+
+
 def plan_check_images(app, window, store):
     """Draw the deadline coverage dialog and the Energy tab from the sample week."""
     import datetime as dt
@@ -240,6 +290,7 @@ def plan_check_images(app, window, store):
     sample = Path(store["out_dir"]) / "Oct12.org"
     sample.write_text(CHECK_WEEK, encoding="utf-8")
     real_today = editor.today
+    tutorial_table = store["table"]          # opening a file remembers its path
     editor.today = lambda: dt.date(2026, 10, 14)
     editor.open(str(sample))
     app.processEvents()
@@ -264,7 +315,8 @@ def plan_check_images(app, window, store):
     editor.panels.setCurrentIndex(0)
 
     editor.today = real_today
-    editor.open(store["table"])
+    store["table"] = tutorial_table
+    editor.open(tutorial_table)
     app.processEvents()
 
 

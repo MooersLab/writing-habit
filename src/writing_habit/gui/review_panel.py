@@ -28,7 +28,7 @@ import datetime as _dt
 from contextlib import contextmanager
 from typing import List, Optional
 
-from .. import coach, db, debrief as debriefmod, review
+from .. import coach, db, debrief as debriefmod, review, stuck as stuckmod
 from ..project_lists import GRASSCATCHER, Entry
 from . import coach_runner, settings
 from .qt import Qt, QtWidgets, pyqtSignal
@@ -99,6 +99,19 @@ class ReviewPanel(QtWidgets.QWidget):
         self.last_label.setWordWrap(True)
         self.last_label.setStyleSheet("color: #52514e;")
         body.addWidget(self.last_label)
+        # A project that keeps missing its objectives says so here, at the
+        # point of starting, with the stuck task ready for Suggest.
+        self.stuck_label = QtWidgets.QLabel()
+        self.stuck_label.setObjectName("stuckLabel")
+        self.stuck_label.setWordWrap(True)
+        self.stuck_label.setStyleSheet(
+            "#stuckLabel { background: #fdf1d6; border: 1px solid #e0b860; "
+            "padding: 4px; }")
+        self.stuck_label.setVisible(False)
+        body.addWidget(self.stuck_label)
+        #: The stuck sign of the block's project, or ``None``.
+        self.stuck = None
+        self._prefilled = ""
 
         # -- objectives
         group = QtWidgets.QGroupBox("Objectives for this block")
@@ -294,6 +307,7 @@ class ReviewPanel(QtWidgets.QWidget):
             items = review.objectives(con, key)
             stored = review.review(con, key)
             last = review.last_next_step(con, key.code, key)
+            found = stuckmod.check(con, key.code, before=(key.day, key.start))
         self._loading = True
         self._show_objectives(items)
         self.committed_spin.setValue(-1 if stored.objectives_committed is None
@@ -311,6 +325,18 @@ class ReviewPanel(QtWidgets.QWidget):
         self.last_label.setText(f"Last time you planned to start with: {last}"
                                 if last else "")
         self.last_label.setVisible(bool(last))
+        # A task put in the box for the last block leaves with that block.
+        if self._prefilled and self.objective_edit.text() == self._prefilled:
+            self.objective_edit.clear()
+        self._prefilled = ""
+        self.stuck = found
+        if found is not None:
+            self.stuck_label.setText(f"Stuck? {found.sentence()} {found.advice()}")
+            if not self.objective_edit.text().strip():
+                self.objective_edit.setText(found.task)
+                self.objective_edit.setCursorPosition(0)
+                self._prefilled = found.task
+        self.stuck_label.setVisible(found is not None)
         self.status.setText(f"Saved {stored.updated_at}" if stored.updated_at else "")
         self._loading = False
         self._shown = self.current()
@@ -564,9 +590,13 @@ class ReviewPanel(QtWidgets.QWidget):
                    if e.code == block.letter] if self.table is not None else []
         with self.connection() as con:
             last = review.last_next_step(con, block.letter, self.key())
+        hint = None
+        if self.stuck is not None and (
+                stuckmod.normalize(task) == stuckmod.normalize(self.stuck.task)):
+            hint = self.stuck.sentence()
         facts = coach.objective_facts(task, info.get("name") or block.letter,
                                       block.minutes, info.get("due"),
-                                      waiting, last)
+                                      waiting, last, stuck=hint)
         model = coach_runner.client()
         week = self.monday.isoformat() if self.monday else None
         added: dict = {}

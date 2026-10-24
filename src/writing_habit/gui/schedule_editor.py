@@ -277,6 +277,11 @@ class ScheduleEditor(QtWidgets.QWidget):
             "Find the blocks whose hours do not suit their kind of writing, by "
             "your energy profile, and propose swaps (Rule 2)")
         self.energy_action.triggered.connect(lambda: self.match_energy())
+        self.stuck_action = coach_menu.addAction("Find stuck projects")
+        self.stuck_action.setToolTip(
+            "Name the projects of this week that keep missing their objectives "
+            "or keep the same next step, so you can break the work down")
+        self.stuck_action.triggered.connect(lambda: self.find_stuck())
         self.partner_action = coach_menu.addAction("Summary for my partner")
         self.partner_action.setToolTip(
             "A short message about the open week for your accountability "
@@ -489,6 +494,7 @@ class ScheduleEditor(QtWidgets.QWidget):
                 lambda position: self.commit_grasscatcher(position))
             panel.rank_requested.connect(lambda: self.rank_grasscatcher())
             panel.sync_requested.connect(lambda: self.sync_todos())
+            panel.capture_requested.connect(lambda text: self.capture_task(text))
             self.list_panels[name] = panel
             self.project_tabs.addTab(panel, title)
         self.legend_model.modelReset.connect(self._refresh_lists)
@@ -561,6 +567,10 @@ class ScheduleEditor(QtWidgets.QWidget):
             find.setContext(Qt.WindowShortcut)
             find.activated.connect(lambda: self.focus_search())
             self.find_shortcuts.append(find)
+        capture = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Shift+G"), self)
+        capture.setContext(Qt.WindowShortcut)
+        capture.activated.connect(lambda: self.focus_capture())
+        self.capture_shortcut = capture
         clear = QtWidgets.QShortcut(QtGui.QKeySequence("Escape"), self.search_box)
         clear.setContext(Qt.WidgetShortcut)
         clear.activated.connect(self.search_box.clear)
@@ -2115,6 +2125,114 @@ class ScheduleEditor(QtWidgets.QWidget):
 
         self._ask_coach(path, lambda con: coachmod.read_weeks(model, con, end), show)
         return result.get("answer")
+
+    # -- quick capture to the grasscatcher (Rule 4) -----------------------------
+    def focus_capture(self) -> None:
+        """Show the grasscatcher and put the cursor in its capture box."""
+        panel = self.list_panels[GRASSCATCHER]
+        self.project_tabs.setCurrentWidget(panel)
+        panel.capture_edit.setFocus(Qt.ShortcutFocusReason)
+        panel.capture_edit.selectAll()
+
+    def capture_projects(self):
+        from .. import capture
+        legend = {code: description
+                  for code, (description, _risk) in self.table.legend().items()}
+        lists = [(entry.code, entry.description)
+                 for name, _title in LISTS if name not in (GRASSCATCHER, COMPLETED)
+                 for entry in self.table.lists.entries(name)]
+        return capture.projects_from(legend, lists)
+
+    def capture_task(self, text: str):
+        """File a thought typed or dictated in plain words on the grasscatcher.
+
+        The task is added at once, with no dialog, because a capture that
+        interrupts is a capture that is skipped. The model is asked only when
+        the coach may speak. During a block, or in an AI-off week, the plain
+        reading is used without asking, so capturing never breaks deep work.
+        """
+        if self.table is None or not text.strip():
+            return None
+        projects = self.capture_projects()
+        quiet = None
+        try:
+            coachmod.check_allowed(self.today(), off_week=settings.get("ai_off_week"))
+            monday = self.week_monday()
+            if coachmod.block_now(self.table.blocks(), monday,
+                                  self.coach_guard.now()) is not None:
+                quiet = "you are inside a planned block"
+        except coachmod.CoachError as exc:
+            quiet = str(exc)
+        model = None if quiet else coach_runner.client()
+        path = settings.get("db") if model is not None else ""
+        monday = self.week_monday()
+        week = monday.isoformat() if monday else None
+        result = {}
+
+        def work():
+            if path:
+                con = coach_runner.connect(path)
+                try:
+                    return coachmod.capture_task(model, text, projects, con=con,
+                                                 week_start=week)
+                finally:
+                    con.close()
+            return coachmod.capture_task(model, text, projects)
+
+        def done(answer):
+            result["answer"] = answer
+            self.add_captured(answer.data)
+
+        self.coach_runner.run(work, done, lambda exc: self.logged.emit(
+            f"Could not capture the task: {exc}"))
+        return result.get("answer")
+
+    def add_captured(self, captured) -> int:
+        """Append a captured task to the grasscatcher.  Return its position."""
+        from ..project_lists import Entry
+        position = self.table.lists.insert(
+            GRASSCATCHER, None, Entry(captured.code, captured.entry_text()))
+        self.table.dirty = True
+        self._reload_list(GRASSCATCHER)
+        panel = self.list_panels[GRASSCATCHER]
+        panel.view.setCurrentIndex(panel.model.index(position, 1))
+        if panel.capture_edit is not None:
+            panel.capture_edit.clear()
+        head = f"{captured.code}: " if captured.code else "- "
+        self.logged.emit(f"Captured {head}{captured.entry_text()}"
+                         + (f" (project from {captured.how})" if captured.code
+                            else f" (no project, because {captured.how})"
+                            if captured.how else ""))
+        self.on_edit()
+        return position
+
+    # -- stuck projects (Rule 4) -----------------------------------------------
+    def find_stuck(self):
+        """Report the week's projects that keep missing their objectives."""
+        from .. import stuck
+        if self.table is None:
+            return None
+        path = settings.get("db")
+        if not path:
+            self.logged.emit("The objectives live in the habit database. Choose it "
+                             "in the Plan or Track form first.")
+            return None
+        con = coach_runner.connect(path)
+        try:
+            found = stuck.find(con, list(self.table.legend()),
+                               today=self.today().isoformat())
+        finally:
+            con.close()
+        text = stuck.report(found)
+        if not found:
+            self.logged.emit(text)
+            return found
+        answer = coachmod.Answer(data=found, text=text, facts="",
+                                 source="plain summary written without a model")
+        dialog = coach_runner.SuggestionDialog("Stuck projects", answer,
+                                               accept_text="Close", parent=self)
+        self.run_coach_dialog(dialog)
+        return found
 
     # -- planning checks: deadlines and energy (Rules 2 and 3) -------------------
     def _plan_check(self, work, show) -> None:
