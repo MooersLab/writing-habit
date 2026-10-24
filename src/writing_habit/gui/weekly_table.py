@@ -1509,6 +1509,21 @@ class WeeklyTable:
             value = letter + block.letter
         return value
 
+    def swap_blocks(self, first: Block, second: Block) -> None:
+        """Exchange the work of two blocks, keeping each block's time.
+
+        Each cell keeps its activity wherever it goes, so a block whose activity
+        came from its section header carries the letter with it.
+        """
+        one, two = self._cell_value(first), self._cell_value(second)
+        self.set_cell(first.row, first.column, two)
+        self.set_cell(second.row, second.column, one)
+
+    def give_block(self, block: Block, code: str) -> None:
+        """Give ``block``'s time to project ``code``, keeping the block's activity."""
+        self.set_cell(block.row, block.column,
+                      CATEGORY_LETTER.get(block.category, "") + code)
+
     def plan_push(self, offset: int, start: str, end: str,
                   exclude=()) -> List[Tuple[Block, str, str]]:
         """Return the later blocks that ``start``-``end`` would push down.

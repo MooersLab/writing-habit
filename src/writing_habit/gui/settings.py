@@ -43,6 +43,8 @@ DEFAULTS = {
     "pomodoro": "",        # JSON of the Pomodoro timer's settings; empty is the defaults
     "pomodoro_today": "",  # JSON {"date": ISO date, "count": Pomodoros finished that day}
     "pom_recorded": "",    # JSON {"date", "count"} last written to the Pomodoro count table
+    "coverage_days": "28",  # days ahead whose deadlines the coverage check counts
+    "energy_profile": "",  # JSON {activity: 24 levels, 0 low to 2 high}; empty is the default
 }
 
 

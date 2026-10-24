@@ -128,7 +128,7 @@ the table aligned; a longer value widens its own slot and leaves the rest alone,
 so you realign in Emacs with `C-c C-c` when you want to. A table you open and do
 not change saves byte for byte.
 
-Four panels report on the week as you edit it.
+Six panels report on the week as you edit it.
 
 | Panel | What it answers |
 |-------|-----------------|
@@ -136,6 +136,8 @@ Four panels report on the week as you edit it.
 | Clashes | the overlapping blocks, with the count in the tab label and the offending cells tinted |
 | Totals | planned minutes by day, by project, and by activity, any section header that maps to no activity, and any block that has no activity at all and so counts as generative |
 | Legend | every project letter resolved against the legend, unused legend entries, codes defined twice, risk tags that name no class, cells whose activity letter overrides their section, and the default activities |
+| Breaks | runs of blocks longer than two hours with no 15-minute break, described below |
+| Energy | your best hours for each kind of writing, and the blocks that do not fit them, described below |
 
 The toolbar holds **Open table**, **New from template**, which asks for a
 project count and the shape of the day and calls the scheduler's own scaffold, **Save**, **Save as**,
@@ -601,6 +603,8 @@ written without a model, so nothing depends on it.
 | Grasscatcher tab | **Rank** | Orders the tasks by the nearest deadlines and this week's planned projects, with a reason for each. **Use this order** rewrites the list. |
 | Coach menu | **Read my weeks** | The two strongest patterns in how you keep your plan, by weekday, schedule shape, event tag, and month, and one change to try. |
 | Coach menu | **Size this week's plan** | A plan size for the open week, the median of what you actually wrote in up to eight recent planned weeks, or in earlier weeks with the same schedule code or event tag. |
+| Coach menu | **Check deadline coverage** | The projects due in the next 28 days with no block left this week, and a block to give each one. See [Deadline coverage](#deadline-coverage). |
+| Coach menu | **Match blocks to my energy** | The blocks whose hours do not suit their kind of writing, by your energy profile, and swaps that fix them. See [The Energy tab](#the-energy-tab). |
 | Coach menu | **Summary for my partner** | A short message about the open week for an accountability partner, written as you. Edit it and press **Copy to clipboard**, then paste it into an email or a chat. Nothing is sent for you. |
 
 The software computes every number before the model sees it, and the model only
@@ -670,6 +674,67 @@ and writes an org report of each model's replies with a verdict on each.
 The prompts live in `src/writing_habit/coach_prompts.json`. The Emacs Lisp twin
 reads its own copy of the same file in `writing-habit-coach.el`, so the two
 ports give the same advice.
+
+### Deadline coverage
+
+A full week can still leave out the project whose deadline is nearest.
+**Coach > Check deadline coverage** finds every project with a deadline in the
+next 28 days, from the legend and from the semester lists, and checks how much
+of this week's remaining plan goes to it. A block counts as remaining from
+today on. The setting `coverage_days` changes the 28 days.
+
+For each project due soon with no block left this week, the check proposes one
+block to give it. The block comes from a project with no deadline in that span,
+keeps its time and its activity, and is still ahead this week. Generative and
+editing blocks are offered before support blocks, a project with no deadline
+gives before one with a later deadline, and a project with more time ahead
+gives first. A project with a deadline always keeps at least one block, and a
+project due soon never gives one up. When every block ahead belongs to a
+project due soon, the check says so and proposes nothing.
+
+![The check proposes Wednesday's block for the grant and Thursday afternoon's for the book chapter.](imgs/gui-coach-coverage.png)
+
+Check the proposals to keep and press **Make the checked changes**. A project
+that waits on a list, such as the book chapter, is first copied into the
+week's legend with a free code. The file changes only when you save. The
+check is made by the software, so it works without the habit database, without
+a model, in an AI-off week, and during a block. With the local model on, the
+model only words the note, and a note with a number the plan does not hold is
+replaced by the plain note.
+
+### The Energy tab
+
+Rule 2 of the Ten Simple Rules paper says to put generative work in the hours
+when you think best. The **Energy** tab beside the Legend panel records your
+energy for each kind of writing, hour by hour, as High, Medium, or Low. Click a
+cell to step it through the three levels. The profile is kept with your other
+preferences.
+
+![The Energy tab with the default profile and four blocks that do not fit it.](imgs/gui-energy-tab.png)
+
+The default profile follows a common pattern. Mornings are High for generative
+writing, late mornings are High for editing, and the early afternoon is High
+for support tasks. **Reset to defaults** restores it. **From my focus ratings**
+proposes a profile from your own reviews, setting an hour from the mean focus
+of the blocks of one activity reviewed in it. A mean of 4 or more is High, 3 or
+more is Medium, and lower is Low. An hour changes only when it has at least
+three rated blocks of that activity, and you check the changes to keep.
+
+The list under the grid names two kinds of block that do not fit, and the tab
+title counts them, as in **Energy (4)**.
+
+| Block | Why it does not fit |
+|-------|---------------------|
+| Generative or editing | Its hours are mostly Low for that activity |
+| Support | Its hours are mostly High for generative work, so email takes your best writing time |
+
+**Match blocks to my energy**, on the tab or in the Coach menu, proposes swaps.
+A swap exchanges the work of two blocks of the same length on the same day, so
+every project keeps its minutes and its day. A swap is proposed only when it
+makes the week fit better, each block takes part in one swap at most, and a
+day that has passed is never changed. The objectives of a swapped block move
+with their project. As with deadline coverage, the swaps come from the
+software, and a model only words the note.
 
 ### The two-hour break rule
 

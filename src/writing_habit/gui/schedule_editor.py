@@ -28,7 +28,10 @@ from .legend_model import (ACTIVITY, ACTIVITY_CHOICES, ActivityDelegate, CODE,
 from .qt import Qt, QtGui, QtWidgets, pyqtSignal
 from .. import periods as periodsmod
 from .. import coach as coachmod, db as dbmod, review as reviewmod
-from ..project_lists import CARRIED, GRASSCATCHER, HORIZONS, LISTS, list_titles
+from ..project_lists import (CARRIED, COMPLETED, GRASSCATCHER, HORIZONS, LISTS,
+                             list_titles)
+from .. import deadlines as deadlinesmod, energy as energymod
+from .energy_panel import EnergyPanel
 from .periods_dialog import PeriodsDialog
 from .project_list_view import ProjectListPanel
 from . import coach_runner
@@ -264,6 +267,16 @@ class ScheduleEditor(QtWidgets.QWidget):
             "A plan size drawn from the minutes you actually wrote in recent "
             "weeks like this one")
         self.size_week_action.triggered.connect(lambda: self.size_week())
+        self.coverage_action = coach_menu.addAction("Check deadline coverage")
+        self.coverage_action.setToolTip(
+            "Find the projects due in the next few weeks that have no block "
+            "left this week, and propose a block to give each one (Rule 3)")
+        self.coverage_action.triggered.connect(lambda: self.check_coverage())
+        self.energy_action = coach_menu.addAction("Match blocks to my energy")
+        self.energy_action.setToolTip(
+            "Find the blocks whose hours do not suit their kind of writing, by "
+            "your energy profile, and propose swaps (Rule 2)")
+        self.energy_action.triggered.connect(lambda: self.match_energy())
         self.partner_action = coach_menu.addAction("Summary for my partner")
         self.partner_action.setToolTip(
             "A short message about the open week for your accountability "
@@ -378,6 +391,11 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.panels.addTab(self.break_panel, "Breaks")
         self.panels.addTab(self.totals_panel, "Totals")
         self.panels.addTab(self.legend_panel, "Legend")
+        self.energy_panel = EnergyPanel(energymod.load(settings.get("energy_profile")))
+        self.energy_panel.changed.connect(self.on_energy_changed)
+        self.energy_panel.match_requested.connect(lambda: self.match_energy())
+        self.energy_panel.suggest_requested.connect(lambda: self.energy_from_reviews())
+        self.panels.addTab(self.energy_panel, "Energy")
         splitter.addWidget(self.panels)
         splitter.setSizes([620, 380])
 
@@ -2098,6 +2116,228 @@ class ScheduleEditor(QtWidgets.QWidget):
         self._ask_coach(path, lambda con: coachmod.read_weeks(model, con, end), show)
         return result.get("answer")
 
+    # -- planning checks: deadlines and energy (Rules 2 and 3) -------------------
+    def _plan_check(self, work, show) -> None:
+        """Run ``work(model, con)`` and pass its answer to ``show``.
+
+        The checks are made by the software, so they run without a habit
+        database and while the coach must stay quiet. The model only words the
+        note, and it is asked only when Rule 10 allows. A check made without the
+        model in an AI-off week or a block is not logged, so the week still
+        counts as a week without the coach.
+        """
+        path = settings.get("db")
+        refused = self.coach_guard.allows()
+        model = None if refused else coach_runner.client()
+        log = bool(path) and not refused
+
+        def finish(answer):
+            if refused:
+                answer.source = ("plain summary written without a model, because "
+                                 f"{refused}")
+            show(answer, path if log else None)
+
+        if log:
+            self._ask_coach(path, lambda con: work(model, con), finish)
+        else:
+            self.coach_runner.run(lambda: work(model, None), finish,
+                                  lambda exc: self.logged.emit(
+                                      f"The check could not run: {exc}"))
+
+    def coverage_result(self):
+        """Return the deadline coverage of the open week, or ``None``."""
+        monday = self.week_monday()
+        if self.table is None or monday is None:
+            return None
+        legend = {code: description
+                  for code, (description, _risk) in self.table.legend().items()}
+        lists = [(name, entry.code, entry.description)
+                 for name, _title in LISTS if name not in (GRASSCATCHER, COMPLETED)
+                 for entry in self.table.lists.entries(name)]
+        slots = [deadlinesmod.Slot(b.offset, b.start, b.end, b.letter, b.category,
+                                   b.minutes, b.row, b.column)
+                 for b in self.table.blocks()]
+        try:
+            horizon = int(settings.get("coverage_days") or deadlinesmod.HORIZON_DAYS)
+        except ValueError:
+            horizon = deadlinesmod.HORIZON_DAYS
+        return deadlinesmod.check(legend, lists, slots, monday, self.today(), horizon)
+
+    def check_coverage(self):
+        """Find projects due soon with no block left this week (Rule 3)."""
+        if self.table is None:
+            return None
+        result = self.coverage_result()
+        if result is None:
+            self.logged.emit("The table has no week date, so its deadlines "
+                             "cannot be checked")
+            return None
+        week = self.week_monday().isoformat()
+        out = {}
+
+        def show(answer, path):
+            out["answer"] = answer
+            risks = [r for r in result.risks if r.donor is not None]
+            if not result.risks:
+                self.logged.emit(answer.data["note"])
+                return
+            dialog = coach_runner.SuggestionDialog(
+                "Deadlines and this week's plan", answer,
+                [deadlinesmod.proposal_line(r) for r in risks],
+                intro=answer.data["note"], accept_text="Make the checked changes",
+                parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            if accepted and risks:
+                self.apply_coverage([risks[i] for i in dialog.chosen()])
+            if path and answer.log_id is not None:
+                self._settle(path, answer, accepted)
+
+        self._plan_check(lambda model, con: coachmod.cover_deadlines(
+            model, result, con=con, week_start=week), show)
+        return out.get("answer")
+
+    def apply_coverage(self, risks) -> int:
+        """Give each risk's proposed block to its project.  Return how many changed."""
+        changed = 0
+        for risk in risks:
+            block = self.table.block_at(risk.donor.row, risk.donor.column)
+            if block is None or block.letter != risk.donor.code:
+                continue
+            code = risk.project.code if risk.project.in_legend else None
+            if code is None:
+                entry = next((e for e in self.table.lists.entries(risk.project.source)
+                              if e.project == risk.project.name), None)
+                if entry is None:
+                    continue
+                row = self.table.copy_to_legend(entry)
+                code = self.table.rows[row].parsed[0]
+                self._rebuild_views()
+                block = self.table.block_at(risk.donor.row, risk.donor.column)
+            self.table.give_block(block, code)
+            self.logged.emit(f"Gave {risk.donor.label()} to {code} "
+                             f"{risk.project.name}, due {risk.project.deadline}")
+            changed += 1
+        if changed:
+            self.on_edit()
+        return changed
+
+    # -- energy ------------------------------------------------------------------
+    def energy_slots(self):
+        return [energymod.Slot(b.offset, b.start, b.end, b.letter, b.category,
+                               b.minutes, b.row, b.column)
+                for b in self.table.blocks()] if self.table is not None else []
+
+    def _movable(self):
+        """Return a test for blocks still ahead, so a swap never rewrites the past."""
+        monday = self.week_monday()
+        if monday is None:
+            return lambda slot: True
+        today = self.today()
+        return lambda slot: monday + _dt.timedelta(days=slot.offset) >= today
+
+    def _refresh_energy(self) -> None:
+        if not hasattr(self, "energy_panel"):
+            return
+        profile = self.energy_panel.profile
+        found = energymod.misfits(profile, self.energy_slots())
+        proposed = energymod.swaps(profile, self.energy_slots(), self._movable())
+        self.energy_panel.show_report(energymod.plain(profile, found, proposed))
+        index = self.panels.indexOf(self.energy_panel)
+        self.panels.setTabText(index, f"Energy ({len(found)})" if found else "Energy")
+
+    def on_energy_changed(self) -> None:
+        settings.put("energy_profile", energymod.dump(self.energy_panel.profile))
+        self._refresh_energy()
+
+    def energy_from_reviews(self):
+        """Offer a profile drawn from the focus ratings of reviewed blocks."""
+        path = settings.get("db")
+        if not path:
+            self.logged.emit("The focus ratings live in the habit database. "
+                             "Choose it in the Plan or Track form first.")
+            return None
+        con = coach_runner.connect(path)
+        try:
+            new, changes = energymod.from_reviews(con, self.energy_panel.profile)
+        finally:
+            con.close()
+        if not changes:
+            self.logged.emit(
+                "No hour has enough focus ratings to change your energy profile "
+                f"yet. An hour needs {energymod.MIN_REVIEWS} rated blocks of one "
+                "activity.")
+            return []
+        lines = [f"{c.activity.capitalize()} at {c.hour:02d}:00 from "
+                 f"{energymod.LEVELS[c.old]} to {energymod.LEVELS[c.new]}, "
+                 f"mean focus {c.mean} over {c.reviews} blocks" for c in changes]
+        answer = coachmod.Answer(data=None, text="", facts="",
+                                 source="plain summary written without a model")
+        dialog = coach_runner.SuggestionDialog(
+            "Energy from your focus ratings", answer, lines,
+            intro="Your focus ratings suggest these changes. Check the ones to keep.",
+            accept_text="Change the checked hours", parent=self)
+        if self.run_coach_dialog(dialog):
+            profile = {a: list(levels) for a, levels in self.energy_panel.profile.items()}
+            for i in dialog.chosen():
+                profile[changes[i].activity][changes[i].hour] = changes[i].new
+            self.energy_panel.set_profile(profile)
+            self.logged.emit(f"Changed {len(dialog.chosen())} hour(s) of your "
+                             "energy profile from your focus ratings")
+        return changes
+
+    def match_energy(self):
+        """Find blocks that do not fit the energy profile, and propose swaps (Rule 2)."""
+        if self.table is None:
+            return None
+        profile = self.energy_panel.profile
+        slots = self.energy_slots()
+        found = energymod.misfits(profile, slots)
+        proposed = energymod.swaps(profile, slots, self._movable())
+        monday = self.week_monday()
+        week = monday.isoformat() if monday else None
+        out = {}
+
+        def show(answer, path):
+            out["answer"] = answer
+            if not found:
+                self.logged.emit(answer.data["note"])
+                return
+            dialog = coach_runner.SuggestionDialog(
+                "Blocks and your energy", answer,
+                [energymod.swap_line(w) for w in proposed],
+                intro=answer.data["note"],
+                accept_text="Swap the checked blocks" if proposed else "Close",
+                parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            if accepted and proposed:
+                self.apply_swaps([proposed[i] for i in dialog.chosen()])
+            if path and answer.log_id is not None:
+                self._settle(path, answer, accepted)
+
+        self._plan_check(lambda model, con: coachmod.match_energy(
+            model, profile, found, proposed, con=con, week_start=week), show)
+        return out.get("answer")
+
+    def apply_swaps(self, chosen) -> int:
+        """Exchange the work of each chosen pair of blocks.  Return how many."""
+        moves, done = [], 0
+        for w in chosen:
+            a = self.table.block_at(w.first.row, w.first.column)
+            b = self.table.block_at(w.second.row, w.second.column)
+            if a is None or b is None or (a.letter, b.letter) != (w.first.code, w.second.code):
+                continue
+            self.table.swap_blocks(a, b)
+            # Objectives follow their project. Two blocks of one project swap
+            # only their activities, so their objectives stay where they are.
+            if a.letter != b.letter:
+                moves += [(a, b.start, b.end), (b, a.start, a.end)]
+            self.logged.emit(energymod.swap_line(w))
+            done += 1
+        if done:
+            self._rekey(moves)
+            self.on_edit()
+        return done
+
     def partner_summary(self):
         """Draft the open week's summary for an accountability partner (Rule 8).
 
@@ -2411,6 +2651,7 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.panels.setTabText(1, "Clashes" if not clashes else f"Clashes ({clashes})")
         runs = len(self.table.break_runs())
         self.panels.setTabText(2, "Breaks" if not runs else f"Breaks ({runs})")
+        self._refresh_energy()
 
     def _name_text(self) -> str:
         code, problem = self.table.code_or_problem()

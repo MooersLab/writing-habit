@@ -9,7 +9,8 @@ so the tutorials keep showing the program as it is.
     QT_QPA_PLATFORM=offscreen PYTHONPATH=src python scripts/make_tutorial_images.py
 
 Add ``--coach`` to redraw only the hour view, the review panel, and the coach
-dialogs.
+dialogs, including the summary for a writing partner, the deadline coverage
+check, and the Energy tab.
 
 The dashboard is a web page, so it is drawn by a headless Chromium through
 Playwright when that is installed, and skipped with a note otherwise.
@@ -187,7 +188,84 @@ def coach_images(app, window, store):
     app.processEvents()
     save(settings_dialog, "coach-settings.png")
     settings_dialog.reject()
+
+    # The summary for a writing partner, from the tutorial week's plan and the
+    # sessions in its mytime.db, with the objectives met in the review above.
+    from writing_habit import plan_import
+    from writing_habit.track.mytime_sync import sync_mytime
+    con = coach_runner.connect(store["db"])
+    try:
+        if not con.execute("SELECT 1 FROM plan_block LIMIT 1").fetchone():
+            plan_import.import_org(con, store["table"], WEEK)
+            sync_mytime(con, store["mytime_db"], table=store["table"])
+        partner = coach.partner_summary(None, con, WEEK, today="2026-10-10", log=False)
+    finally:
+        con.close()
+    partner_dialog = coach_runner.PartnerDialog(partner, parent=window)
+    partner_dialog.show()
+    app.processEvents()
+    save(partner_dialog, "coach-partner.png")
+    partner_dialog.reject()
+    plan_check_images(app, window, store)
     del json
+
+
+#: A sample week for the planning checks, because the tutorial week keeps every
+#: deadline covered and fits the default energy profile. Today is its Wednesday.
+CHECK_WEEK = (
+    "#+TITLE: Sample week for the planning checks\n"
+    "|        Time | M  | Tu | W  | Th | F  |\n"
+    "|-------------+----+----+----+----+----|\n"
+    "| 05:00-06:30 | gA | sE | gC | sE | gC |\n"
+    "| 14:00-15:30 |    | gB |    | gC |    |\n"
+    "|-------------+----+----+----+----+----|\n"
+    "| A: 1001grantR01 2026-10-30 :safe: |  |  |  |  |  |\n"
+    "| B: 2002reviewArticle 2027-03-01 :safe: |  |  |  |  |  |\n"
+    "| C: 3003methodsNote :risky: |  |  |  |  |  |\n"
+    "| E: 9001email @support |  |  |  |  |  |\n"
+    "\n"
+    "#+NAME: current-semester-projects\n"
+    "| - 5005bookChapter 2026-11-02 :safe: |\n"
+)
+
+
+def plan_check_images(app, window, store):
+    """Draw the deadline coverage dialog and the Energy tab from the sample week."""
+    import datetime as dt
+
+    from writing_habit import coach, deadlines
+    from writing_habit.gui import coach_runner
+
+    editor = window.editor
+    sample = Path(store["out_dir"]) / "Oct12.org"
+    sample.write_text(CHECK_WEEK, encoding="utf-8")
+    real_today = editor.today
+    editor.today = lambda: dt.date(2026, 10, 14)
+    editor.open(str(sample))
+    app.processEvents()
+
+    result = editor.coverage_result()
+    answer = coach.cover_deadlines(None, result)
+    risks = [r for r in result.risks if r.donor is not None]
+    dialog = coach_runner.SuggestionDialog(
+        "Deadlines and this week's plan", answer,
+        [deadlines.proposal_line(r) for r in risks], intro=answer.data["note"],
+        accept_text="Make the checked changes", parent=window)
+    dialog.show()
+    dialog.adjustSize()
+    app.processEvents()
+    save(dialog, "coach-coverage.png")
+    dialog.reject()
+
+    editor.panels.setCurrentWidget(editor.energy_panel)
+    editor.energy_panel.grid.scrollToItem(editor.energy_panel.grid.item(4, 0))
+    app.processEvents()
+    save(editor.panels, "energy-tab.png")
+    editor.panels.setCurrentIndex(0)
+
+    editor.today = real_today
+    editor.open(store["table"])
+    app.processEvents()
 
 
 def main() -> int:

@@ -1,6 +1,8 @@
 """The writing coach: a local language model in a supporting role.
 
-The Ten Simple Rules paper puts AI in five rules. Rule 4 drafts a block's
+The Ten Simple Rules paper puts AI in several rules. Rule 2 matches blocks to
+the writer's energy through the day, and Rule 3 checks that projects due soon
+have time in the week's plan. Rule 4 drafts a block's
 objectives and ranks the grasscatcher list. Rule 5 writes the debrief after a
 block (see :mod:`writing_habit.debrief`). Rule 7 reads patterns across weeks
 and sizes next week's plan. Rule 8 drafts the Friday summary the writer sends
@@ -872,6 +874,61 @@ def partner_summary(client: Optional[Client], con, week_start: str,
     answer = _run("partner", client, facts, lambda: plain_partner(week), parse,
                   con if log else None, week_start, prompts)
     answer.data = {"text": answer.data, **week}
+    return answer
+
+
+# -- Rules 2 and 3: planning checks the software makes ----------------------------
+def _note(task: str, client: Optional[Client], facts: str, plain_text: str,
+          con=None, week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Word a planning check.  The proposals themselves never come from the model.
+
+    The model writes a short note around proposals the software made. A note
+    that carries a number the facts do not hold is replaced by the plain note.
+    """
+    allowed = _numbers(facts)
+
+    def parse(reply):
+        text = _clean(reply)
+        if not text:
+            raise CoachError("the local model sent an empty note")
+        if not _numbers(text) <= allowed:
+            raise CoachError("the note held a number that is not in the plan")
+        return text
+
+    return _run(task, client, facts, lambda: plain_text, parse, con, week_start, prompts)
+
+
+def cover_deadlines(client: Optional[Client], result, con=None,
+                    week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Explain a deadline coverage check (Rule 3).
+
+    ``result`` is a :class:`writing_habit.deadlines.Coverage`. With nothing at
+    risk the plain note is enough, so no model is asked and nothing is logged.
+    """
+    from . import deadlines
+
+    plain_text = deadlines.plain(result)
+    if not result.risks:
+        return Answer(data={"note": plain_text, "result": result}, text=plain_text,
+                      source="plain summary written without a model")
+    answer = _note("coverage", client, deadlines.facts(result), plain_text,
+                   con, week_start, prompts)
+    answer.data = {"note": answer.data, "result": result}
+    return answer
+
+
+def match_energy(client: Optional[Client], profile, found, proposed, con=None,
+                 week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Explain the blocks that do not fit the energy profile (Rule 2)."""
+    from . import energy
+
+    plain_text = energy.plain(profile, found, proposed)
+    if not found:
+        return Answer(data={"note": plain_text, "misfits": [], "swaps": []},
+                      text=plain_text, source="plain summary written without a model")
+    answer = _note("energy", client, energy.facts(profile, found, proposed),
+                   plain_text, con, week_start, prompts)
+    answer.data = {"note": answer.data, "misfits": list(found), "swaps": list(proposed)}
     return answer
 
 

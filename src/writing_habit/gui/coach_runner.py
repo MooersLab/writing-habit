@@ -162,7 +162,14 @@ class SuggestionDialog(QtWidgets.QDialog):
         self.setWindowTitle(title)
         self.answer = answer
         layout = QtWidgets.QVBoxLayout(self)
-        if intro:
+        if intro and ("\n\n" in intro or len(intro) > 320):
+            # A long note of several paragraphs goes in a box that scrolls,
+            # because a wrapped label is cut off when the dialog sizes itself.
+            note = QtWidgets.QPlainTextEdit(intro)
+            note.setReadOnly(True)
+            note.setMinimumSize(560, 150)
+            layout.addWidget(note)
+        elif intro:
             label = QtWidgets.QLabel(intro)
             label.setWordWrap(True)
             layout.addWidget(label)

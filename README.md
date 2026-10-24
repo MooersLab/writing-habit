@@ -163,7 +163,10 @@ sync never overwrites them. Tasks that do not make the cut wait on the
 A **Coach** drafts objectives, ranks the grasscatcher, writes a debrief after
 a block, reads patterns across weeks, sizes the week's plan, and drafts a
 Friday summary of the week for an accountability partner, which you edit and
-send yourself. It uses a
+send yourself. Two planning checks need no model. **Check deadline coverage**
+finds projects due in the next four weeks with no block left this week and
+proposes a block for each, and the **Energy** tab records your best hours for
+each kind of writing and proposes swaps for blocks that do not fit them. It uses a
 model served on your own computer through Ollama, LM Studio, or llama.cpp when
 you turn it on, and plain summaries otherwise. The software computes every
 number itself, the coach stays quiet during a block and in an AI-off week, and

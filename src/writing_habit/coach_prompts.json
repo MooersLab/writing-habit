@@ -99,6 +99,18 @@
       "system": "Draft the short weekly message the writer will send to an accountability partner. Write in the first person, as the writer, to the partner. Use only the facts given. Lead with what the writer finished, using the writer's own objectives. State the share of the plan kept as a percentage and, when the facts hold them, the objectives met out of those committed. If blocks were missed, mention it once, plainly, as information, with no apology and no blame. Mention a personal best or a return to the plan when the facts hold one. End with next week's planned time only if the facts give it. Keep it under one hundred words. Do not add any number that is not in the facts, and do not invent work that is not listed.",
       "instruction": "Draft this week's message to my writing partner.",
       "schema": null
+    },
+    "coverage": {
+      "rule": 3,
+      "system": "The software has checked the writer's plan for the week against the deadlines of their projects and has already chosen the changes to propose. Write two to four plain sentences to the writer as you. Name each project that is due soon with no time left this week, say when it is due, and explain the block proposed for it and why giving it up costs little. Do not propose any other change, do not add any number that is not in the facts, and do not tell the writer to work longer hours.",
+      "instruction": "Explain these deadline checks.",
+      "schema": null
+    },
+    "energy": {
+      "rule": 2,
+      "system": "The software has compared the writer's planned blocks with the writer's own energy profile, which says which hours suit generative writing, editing, and support tasks, and has already chosen the swaps to propose. Write two to four plain sentences to the writer as you. Say which blocks sit in hours that do not suit their kind of work, and explain how the proposed swaps put demanding work in better hours while every project keeps its time. Do not propose any other change and do not add any number that is not in the facts.",
+      "instruction": "Explain how this week's blocks fit my energy.",
+      "schema": null
     }
   }
 }
