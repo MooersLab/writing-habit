@@ -3,7 +3,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 
-Track and compare planned versus actual academic writing effort. A companion to [writing-schedule](https://github.com/MooersLab/writing-schedule-py), and the twin of the Emacs Lisp package [writing-habit-el](https://github.com/MooersLab/writing-habit-el).
+Track and compare planned versus actual academic writing effort. 
+A companion to [writing-schedule](https://github.com/MooersLab/writing-schedule-py), and the twin of the Emacs Lisp package [writing-habit-el](https://github.com/MooersLab/writing-habit-el).
 
 The toolkit has three modules that share one SQLite database:
 
@@ -11,9 +12,14 @@ The toolkit has three modules that share one SQLite database:
 - **track** records the effort you actually spent, from a CSV, an ICS calendar, or by hand.
 - **compare** reports the gap between plan and performance, as a text report, an optional plot, or a self-contained HTML dashboard.
 
-The database schema in `schema.sql` is the single contract between the modules, so you can substitute other software at any stage. The core needs only the Python standard library. ICS import, plotting, and Google Sheets are optional extras. Because the schema is the contract, the database this package writes is byte-for-byte the same one the Emacs Lisp package writes, so either tool can read what the other recorded, and the two produce byte-identical dashboards.
+The database schema in `schema.sql` is the single contract between the modules, so you can substitute other software at any stage. 
+The core needs only the Python standard library. 
+ICS import, plotting, and Google Sheets are optional extras. 
+Because the schema is the contract, this package writes the same database the Emacs Lisp package does, so either tool can read what the other recorded, and both produce byte-identical dashboards.
 
-This is a tool for one person studying and improving their own writing habit, an N-of-1 instrument. It records self-reported effort, not verified focus.
+This is a tool for one person to study and improve their own writing habit, an N-of-1 instrument. 
+It records self-reported effort, not verified focus.
+It does support providing a self-assessment of how focused you were and how intensely you worked during a time block.
 
 ## Screenshots
 
@@ -87,17 +93,17 @@ changes.
 
 Select any cell of a time-block row and press **Move up** or **Move down**, or
 press Alt+Up or Alt+Down while the grid has the focus, which mirrors M-up and
-M-down on an org table in Emacs. The row trades places with its neighbour and
+M-down on an org table in Emacs. The row trades places with its neighbor and
 stays selected, so pressing the button again keeps moving the same block. Its
 times and project codes travel with it unchanged.
 
-A block that moves past a section header joins the neighbouring section. Moving
+A block that moves past a section header joins the neighboring section. Moving
 the last Generative block down puts it at the top of Rewriting, so it now
 counts as editing time in the Totals panel and in the tracker. A block cannot
 move above the first section header or below the last row, and a section header
 does not move, so the buttons turn grey in those cases.
 
-The file line is moved rather than rewritten. A move inside one section
+The file line is moved, not rewritten. A move inside one section
 therefore changes the order of two lines in the saved file and nothing else.
 
 ![The Schedule tab after Move down, with the 05:45-07:15 block moved into the Rewriting section and still selected.](assets/images/gui-move-row.png)
@@ -129,7 +135,7 @@ or a section header removes the tint.
 **Hour view**, the first button of the bar and the default view, folds the
 table into 24 rows, one per hour. A cell lists the
 blocks that start in that hour, and the hours a longer block runs into are
-shaded in its colour. Double-click a cell to open a picker with the four starts
+shaded in its color. Double-click a cell to open a picker with the four starts
 in the hour and eight lengths from 15 minutes to two hours. One click places
 the block. The range used last for a project is the default, so a repeated
 block is the Enter key. The file keeps its rows, and a missing row for a range
@@ -153,7 +159,7 @@ day until it reaches a gap. A two-hour block placed at 03:00 therefore moves a
 
 #### Objectives, review, and the grasscatcher list
 
-The picker shows a panel on its right for the blocks of the hour. Commit one to
+The picker shows a panel on the right for the hour's blocks. Commit one to
 three objectives to a block before it starts, and check them off as you meet
 them. When the block ends, rate your focus from 1 to 5, tally interruptions, and
 leave a next-step note, which greets the next block of the project. The records
@@ -174,7 +180,7 @@ the work into smaller steps. **Rescue missed blocks** proposes make-up slots for
 at most two missed blocks a week and lets the rest go, and **Number a new
 project** suggests a free four-digit number beside related projects. **Triage**
 on the Carried over tab suggests keeping, deferring, or dropping each project
-carried into a new period, from its recent minutes and its deadline, ,
+carried into a new period, from its recent minutes and its deadline.
 **Semester review** drafts a narrative of the semester for an annual faculty
 report, **Ask about missed blocks** asks one question about each missed block
 and saves your answers, and **Monday message for my partner** tells your
@@ -212,13 +218,13 @@ delete each project, and every later list moves one period nearer.
 The Legend box below the grid holds the project codes, their descriptions, and
 their risk tags. Two buttons above it, **Insert project above** and
 **Insert project below**, add a project beside the selected entry. With no
-entry selected, a project inserted below goes to the end of the legend and one
+entry selected, a project inserted below goes to the end of the legend, and one
 inserted above goes to the start.
 
 ![The dialog for a new project, with its code, description, and risk tag.](assets/images/gui-insert-project-dialog.png)
 
 The dialog offers the first code that neither the legend nor the grid uses
-yet. The single letters come first, and once A to Z are all taken it offers
+yet. The single letters come first, and once A to Z are all taken, it offers
 `AA`, `AB`, and so on to `ZZ`, so the legend can hold more than 26 projects.
 A grid cell takes a two-letter code the same way it takes a letter. It asks for a description and a risk tag of `none`, `safe`, or
 `risky`. A code must be a capital letter followed by up to three capitals or
@@ -239,7 +245,7 @@ Select any cell of a legend entry and press **Move project up** or
 focus. These are the same keys that move a time block in the grid. The entry
 trades places with the one beside it and stays selected, so you can keep
 pressing until the projects read in the order you want. A project never leaves
-the legend, so the first entry cannot move up and the last cannot move down.
+the legend, so the first entry cannot move up, and the last cannot move down.
 
 The order matters in one case beyond reading. When a code is defined twice, the
 readers keep the first definition, so moving the second one above the first
@@ -349,7 +355,7 @@ writing-habit track add --day 2026-01-19 --project A --minutes 75 --category gen
 
 ## Naming and decoding schedule files
 
-Weekly tables can be named by a compact code that encodes the whole week, for example `4gAAeAsA-gWW.org`. Lowercase letters are activities (`g` generative, `e` editing, `s` support), uppercase letters are projects (one letter is one block), and a digit at the start of a group is the count of consecutive days. The full specification is in `docs/table-file-naming-rules.org`.
+You can name weekly tables with a compact code that encodes the whole week, for example, `4gAAeAsA-gWW.org`. Lowercase letters are activities (`g` generative, `e` editing, `s` support), uppercase letters are projects (one letter is one block), and a digit at the start of a group is the count of consecutive days. The full specification is in `docs/table-file-naming-rules.org`.
 
 Decode a code, and optionally check its project letters against a table legend:
 
@@ -362,9 +368,9 @@ With no `--table`, the command looks for `<code>.org` in the current directory. 
 
 ## Tracking formats
 
-The CSV template (`tracking-template.csv`) has columns `date, start, end, minutes, project_code, category, note`. Enter either a start and end time or a minutes value. Excel and Google Sheets both export CSV, so no extra dependency is needed.
+The CSV template (`tracking-template.csv`) has columns `date, start, end, minutes, project_code, category, note`. Enter either a start and end time or a minutes value. Excel and Google Sheets both export CSV, so you do not need any extra dependencies.
 
-For calendar tracking, keep actuals in their own ICS calendar. Put the legend code in the event summary in brackets, for example `[A] DNPH1 docking`, and put the activity in the categories field.
+For calendar tracking, keep actuals in their own ICS calendar. Put the legend code in the event summary in brackets (e.g., `[A] DNPH1 docking`) and the activity in the categories field.
 
 ## Marking safe and speculative projects
 
@@ -402,7 +408,7 @@ writing-habit seasons --out seasons.html --db habit.db
 
 ## Interoperability with the Emacs Lisp version
 
-The Emacs Lisp twin, [writing-habit-el](https://github.com/MooersLab/writing-habit-el), shares this schema and the schedule-code specification, so the two interoperate on one database file. A session written by this package reads in the Emacs Lisp package, and the reverse holds too, because neither owns the schema. Both render the same dashboard from the same data, down to the byte. Use whichever fits your workflow, or both on the same database. The Emacs Lisp version adds one capture path this one cannot offer, an org-clock harvest, because Emacs already measures writing time.
+The Emacs Lisp twin, [writing-habit-el](https://github.com/MooersLab/writing-habit-el), shares this schema and the schedule-code specification, so the two interoperate on one database file. A session written by this package reads in the Emacs Lisp package, and vice versa, because neither owns the schema. Both render the same dashboard from the same data, down to the byte. Use whichever fits your workflow, or both on the same database. The Emacs Lisp version adds one capture path this one cannot offer: an org-clock harvest because Emacs already measures writing time.
 
 ## License
 
