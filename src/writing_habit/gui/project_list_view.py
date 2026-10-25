@@ -121,6 +121,8 @@ class ProjectListPanel(QtWidgets.QWidget):
     sync_requested = pyqtSignal()
     #: Emitted with the words typed or dictated into the capture box.
     capture_requested = pyqtSignal(str)
+    #: The Carried over tab asks the editor for keep, defer, or drop suggestions.
+    triage_requested = pyqtSignal()
     logged = pyqtSignal(str)
 
     def __init__(self, name: str, title: str, parent=None):
@@ -172,11 +174,17 @@ class ProjectListPanel(QtWidgets.QWidget):
         # The Carried over list hands a project back to the current list, or
         # Delete project drops it, so every carried project gets a decision.
         self.keep_button = None
+        self.triage_button = None
         if name == CARRIED:
             self.keep_button = QtWidgets.QPushButton("Move to current list")
             self.keep_button.setToolTip(
                 "Keep the selected project: move it to this period's list")
             self.keep_button.clicked.connect(lambda: self.keep())
+            self.triage_button = QtWidgets.QPushButton("Triage...")
+            self.triage_button.setToolTip(
+                "Suggest keeping, deferring, or dropping each carried project, "
+                "from its recent minutes, the last week worked, and its deadline")
+            self.triage_button.clicked.connect(self.triage_requested)
 
         # The grasscatcher holds tasks, so it commits one to a block instead
         # of copying a project to the legend.
@@ -244,7 +252,7 @@ class ProjectListPanel(QtWidgets.QWidget):
         if self.complete_button is not None:
             buttons.append(self.complete_button)
         if self.keep_button is not None:
-            buttons.append(self.keep_button)
+            buttons += [self.keep_button, self.triage_button]
         for button in buttons:
             bar.addWidget(button)
         bar.addStretch(1)
@@ -288,6 +296,8 @@ class ProjectListPanel(QtWidgets.QWidget):
         self.sort_button.setEnabled(count > 1)
         if self.rank_button is not None:
             self.rank_button.setEnabled(count > 1)
+        if self.triage_button is not None:
+            self.triage_button.setEnabled(count > 0)
         for button in (self.delete_button, self.copy_button, self.complete_button,
                        self.keep_button, self.commit_button):
             if button is not None:

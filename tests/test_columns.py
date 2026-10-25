@@ -81,8 +81,13 @@ def test_a_project_row_round_trips(cell):
 
 
 def test_a_task_row_reads_and_writes():
-    assert columns.task_cell(["1:", "0142", "RET", "[#A1]", "Read it."]) == "1: [#A1] Read it."
+    # The project number travels with the task in the one-cell form.
+    assert columns.task_cell(["1:", "0142", "RET", "[#A1]", "Read it."]) == (
+        "1: 0142 [#A1] Read it.")
     assert columns.task_cell(["-", "", "", "B2", "tidy"]) == "- [#B2] tidy"
+    assert columns.task_columns("1: 0142 [#A1] Read it.", {"1": ("0142", "RET")}) == [
+        "1:", "0142", "RET", "[#A1]", "Read it."]
+    # A row from before numbers were written still finds its number by code.
     assert columns.task_columns("1: [#A1] Read it.", {"1": ("0142", "RET")}) == [
         "1:", "0142", "RET", "[#A1]", "Read it."]
 

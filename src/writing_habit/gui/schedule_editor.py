@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import datetime as _dt
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 
 from .. import name as namemod
 from . import external_editor, settings
@@ -31,6 +31,7 @@ from .. import coach as coachmod, db as dbmod, review as reviewmod
 from ..project_lists import (CARRIED, COMPLETED, GRASSCATCHER, HORIZONS, LISTS,
                              list_titles)
 from .. import deadlines as deadlinesmod, energy as energymod
+from ..project_lists import CURRENT as CURRENT_LIST
 from .energy_panel import EnergyPanel
 from .periods_dialog import PeriodsDialog
 from .project_list_view import ProjectListPanel
@@ -60,7 +61,7 @@ def find_keys() -> list:
     if keys[0].isEmpty():
         keys[0] = QtGui.QKeySequence("Ctrl+F")
     return keys
-from .weekly_table import BLOCK, PROJECT_CODES, SECTION, WeeklyTable
+from .weekly_table import BLOCK, PROJECT_CODES, SECTION, WeeklyTable, split_due_date
 
 #: The shift buttons, as (minutes, label, hour-view keys), earliest first.
 SHIFT_STEPS = [
@@ -277,6 +278,24 @@ class ScheduleEditor(QtWidgets.QWidget):
             "Find the blocks whose hours do not suit their kind of writing, by "
             "your energy profile, and propose swaps (Rule 2)")
         self.energy_action.triggered.connect(lambda: self.match_energy())
+        self.rescue_action = coach_menu.addAction("Rescue missed blocks")
+        self.rescue_action.setToolTip(
+            "Find this week's blocks that passed with nothing tracked, and "
+            "propose a slot to make up each one worth rescuing, or say to let "
+            "it go (Rule 9)")
+        self.rescue_action.triggered.connect(lambda: self.rescue_missed())
+        self.numbering_action = coach_menu.addAction("Number a new project...")
+        self.numbering_action.setToolTip(
+            "Suggest a free four-digit number near the related projects, from "
+            "your project folders and lists, and flag a project that may be "
+            "forming inside another. Nothing is renamed or moved.")
+        self.numbering_action.triggered.connect(lambda: self.number_project())
+        self.triage_action = coach_menu.addAction("Triage carried projects")
+        self.triage_action.setToolTip(
+            "Suggest keeping, deferring, or dropping each project on the Carried "
+            "over list, from the minutes logged for it, the last week it was "
+            "worked, and its deadline. Only the checked suggestions are applied.")
+        self.triage_action.triggered.connect(lambda: self.triage_carried())
         self.stuck_action = coach_menu.addAction("Find stuck projects")
         self.stuck_action.setToolTip(
             "Name the projects of this week that keep missing their objectives "
@@ -495,6 +514,7 @@ class ScheduleEditor(QtWidgets.QWidget):
             panel.rank_requested.connect(lambda: self.rank_grasscatcher())
             panel.sync_requested.connect(lambda: self.sync_todos())
             panel.capture_requested.connect(lambda text: self.capture_task(text))
+            panel.triage_requested.connect(lambda: self.triage_carried())
             self.list_panels[name] = panel
             self.project_tabs.addTab(panel, title)
         self.legend_model.modelReset.connect(self._refresh_lists)
@@ -1404,6 +1424,10 @@ class ScheduleEditor(QtWidgets.QWidget):
         if renamed:
             table.dirty = True
             notes += renamed
+        aligned = table.lists.align_tasks()
+        if aligned:
+            table.dirty = True
+            notes += aligned
         blocks = table.legend_blocks()
         if len(blocks) > 1:
             notes.append(
@@ -1632,6 +1656,8 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.on_edit()
         if self.list_panels[CARRIED].model.rowCount():
             self.show_list(CARRIED)
+            self.logged.emit("Press Triage on the Carried over tab for a suggested "
+                             "keep, defer, or drop for each carried project")
         return len(steps)
 
     def open_periods(self) -> Optional[str]:
@@ -2205,6 +2231,247 @@ class ScheduleEditor(QtWidgets.QWidget):
                             if captured.how else ""))
         self.on_edit()
         return position
+
+    # -- missed-block rescue (Rule 9) ---------------------------------------------
+    def rescue_plan(self):
+        """Return the rescue decisions for the open week, or ``None`` with a reason logged."""
+        from .. import rescue
+        monday = self.week_monday()
+        path = settings.get("db")
+        if self.table is None or monday is None:
+            self.logged.emit("The table has no week date, so no block can be "
+                             "found missed")
+            return None
+        if not path:
+            self.logged.emit("Missed blocks are found from the sessions in the habit "
+                             "database. Choose it in the Plan or Track form first.")
+            return None
+        con = coach_runner.connect(path)
+        try:
+            outcomes = reviewmod.block_outcomes(con, monday.isoformat(),
+                                                self.today().isoformat())
+        finally:
+            con.close()
+        now = self.coach_guard.now()
+        slots = self.energy_slots()
+        missed = rescue.missed_blocks(slots, outcomes, monday, now)
+        days = sorted({offset for _i, offset, _label in self.table.columns})
+        legend = {code: description
+                  for code, (description, _risk) in self.table.legend().items()}
+        return rescue.plan(slots, missed, self.energy_panel.profile, days, monday,
+                           now, legend)
+
+    def rescue_missed(self):
+        """Offer to make up the week's missed blocks that are worth rescuing (Rule 9)."""
+        found = self.rescue_plan()
+        if found is None:
+            return None
+        profile = self.energy_panel.profile
+        week = self.week_monday().isoformat()
+        out = {}
+
+        def show(answer, path):
+            out["answer"] = answer
+            if not found:
+                self.logged.emit(answer.data["note"])
+                return
+            rescues = [r for r in found if r.rescued]
+            dialog = coach_runner.SuggestionDialog(
+                "Missed blocks", answer, [r.line() for r in rescues],
+                intro=answer.data["note"],
+                accept_text="Add the checked blocks" if rescues else "Close",
+                parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            if accepted and rescues:
+                self.apply_rescues([rescues[i] for i in dialog.chosen()])
+            if path and answer.log_id is not None:
+                self._settle(path, answer, accepted)
+
+        self._plan_check(lambda model, con: coachmod.rescue_missed(
+            model, found, profile, con=con, week_start=week), show)
+        return out.get("answer")
+
+    def apply_rescues(self, chosen) -> int:
+        """Place a make-up block for each chosen rescue.  Return how many."""
+        from .weekly_table import CATEGORY_LETTER
+        done, inserted = 0, False
+        for r in chosen:
+            value = CATEGORY_LETTER.get(r.missed.category, "") + r.missed.code
+            try:
+                _row, added = self.table.place_block(r.offset, r.start, r.end, value)
+            except ValueError as exc:
+                self.logged.emit(f"Could not add {r.line()}: {exc}")
+                continue
+            inserted = inserted or added
+            self.logged.emit(r.line())
+            done += 1
+        if inserted:
+            self._rebuild_views()
+        if done:
+            self.on_grid_edit()
+        return done
+
+    # -- project numbering help -------------------------------------------------
+    def ask_text(self, title: str, label: str) -> Optional[str]:
+        """Ask for one line of text.  A test replaces it."""
+        text, ok = QtWidgets.QInputDialog.getText(self, title, label)
+        return text.strip() if ok and text.strip() else None
+
+    def numbering_inputs(self):
+        """Return ``(known numbers, active numbers, tasks by code, names by code)``."""
+        from .. import numbering
+        from ..project_lists import project_number
+        legend = {code: split_due_date(description)[0]
+                  for code, (description, _risk) in self.table.legend().items()}
+        listed = [entry.project for name, _title in LISTS if name != GRASSCATCHER
+                  for entry in self.table.lists.entries(name)]
+        known = numbering.folder_projects(self.projects_root())
+        known.update({k: v for k, v in numbering.known_projects(
+            legend.values(), listed).items() if k not in known})
+        active = [n for n in (project_number(p) for p in list(legend.values()) + [
+            e.project for e in self.table.lists.entries(CURRENT_LIST)]) if n]
+        tasks: Dict[str, List[str]] = {}
+        for entry in self.table.lists.entries(GRASSCATCHER):
+            if entry.code:
+                tasks.setdefault(entry.code, []).append(entry.description)
+        path = settings.get("db")
+        if path:
+            since = (self.today() - _dt.timedelta(days=56)).isoformat()
+            con = coach_runner.connect(path)
+            try:
+                for code, text in con.execute(
+                        "SELECT code, text FROM block_objective WHERE day >= ?", (since,)):
+                    if code in legend:
+                        tasks.setdefault(code, []).append(text)
+            finally:
+                con.close()
+        return known, active, tasks, legend
+
+    def number_project(self, name: Optional[str] = None):
+        """Suggest a number for a new project and offer to add it to the current list."""
+        from .. import numbering
+        from ..project_lists import Entry
+        if self.table is None:
+            return None
+        name = name or self.ask_text("Number a new project",
+                                     "Working name of the new project, such as "
+                                     "RET kinase PROTAC degraders:")
+        if not name:
+            return None
+        known, active, tasks, legend = self.numbering_inputs()
+        suggestion = numbering.suggest(name, known, active=active)
+        found = numbering.forming(tasks, legend)
+        monday = self.week_monday()
+        week = monday.isoformat() if monday else None
+        out = {}
+
+        def show(answer, path):
+            out["answer"] = answer
+            dialog = coach_runner.SuggestionDialog(
+                "Number for a new project", answer,
+                [suggestion.line(number) for number in suggestion.numbers],
+                intro=answer.data["note"], checked=False,
+                accept_text="Add the first checked to the current list", parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            chosen = dialog.chosen()
+            if accepted and chosen:
+                number = suggestion.numbers[chosen[0]]
+                project = f"{number}{numbering.camel(name)}"
+                self.table.lists.insert(CURRENT_LIST, None, Entry(None, project))
+                self.table.dirty = True
+                self._reload_list(CURRENT_LIST)
+                self.logged.emit(f"Added {project} to the current semester list")
+                self.on_edit()
+            if path and answer.log_id is not None:
+                self._settle(path, answer, bool(accepted and chosen))
+
+        self._plan_check(lambda model, con: coachmod.number_project(
+            model, suggestion, found, con=con, week_start=week), show)
+        return out.get("answer")
+
+    # -- roll-forward triage (Rule 3) ------------------------------------------
+    def triage_plan(self):
+        """Return ``(decisions, period name)`` for the Carried over list, or ``None``."""
+        from .. import triage
+        if self.table is None:
+            return None
+        carried = self.table.lists.entries(CARRIED)
+        path = settings.get("db")
+        if carried and not path:
+            self.logged.emit("Triage reads the minutes logged for each project in "
+                             "the habit database. Choose it in the Plan or Track "
+                             "form first.")
+            return None
+        today = self.today()
+        period = self.current_period()
+        end = period.end if period is not None else today + _dt.timedelta(weeks=16)
+        name = period.name if period is not None else "this period"
+        titles, _tips = self.list_titles()
+        history = {}
+        if carried:
+            names = {e.code: e.project for e in carried if e.code}
+            for code, (description, _risk) in self.table.legend().items():
+                names.setdefault(code, split_due_date(description)[0])
+            start = (period.start if period is not None else today) - _dt.timedelta(
+                weeks=26)
+            con = coach_runner.connect(path)
+            try:
+                history = triage.minutes_by_project(con, names, start.isoformat())
+            finally:
+                con.close()
+        found = triage.triage(carried, history, today, end, titles[HORIZONS[1]])
+        return found, name
+
+    def triage_carried(self):
+        """Suggest keep, defer, or drop for each carried project, and apply the checked."""
+        plan = self.triage_plan()
+        if plan is None:
+            return None
+        found, period = plan
+        monday = self.week_monday()
+        week = monday.isoformat() if monday else None
+        out = {}
+
+        def show(answer, path):
+            out["answer"] = answer
+            if not found:
+                self.logged.emit(answer.data["note"])
+                return
+            dialog = coach_runner.SuggestionDialog(
+                "Carried-over projects", answer, [d.line() for d in found],
+                intro=answer.data["note"], accept_text="Apply the checked",
+                parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            if accepted:
+                self.apply_triage([found[i] for i in dialog.chosen()])
+            if path and answer.log_id is not None:
+                self._settle(path, answer, accepted)
+
+        self._plan_check(lambda model, con: coachmod.triage_projects(
+            model, found, period, con=con, week_start=week), show)
+        return out.get("answer")
+
+    def apply_triage(self, chosen) -> int:
+        """Keep, defer, or drop each chosen carried project.  Return how many."""
+        from .. import triage
+        lists, done = self.table.lists, 0
+        for d in chosen:
+            position = lists.find_project(CARRIED, d.project)
+            if position is None:
+                continue
+            if d.action == triage.DROP:
+                lists.remove(CARRIED, position)
+            else:
+                lists.transfer(CARRIED, position,
+                               CURRENT_LIST if d.action == triage.KEEP else HORIZONS[1])
+            self.logged.emit(d.line())
+            done += 1
+        if done:
+            self.table.dirty = True
+            for name in (CARRIED, CURRENT_LIST, HORIZONS[1]):
+                self._reload_list(name)
+            self.on_edit()
+        return done
 
     # -- stuck projects (Rule 4) -----------------------------------------------
     def find_stuck(self):

@@ -968,6 +968,63 @@ def match_energy(client: Optional[Client], profile, found, proposed, con=None,
     return answer
 
 
+def rescue_missed(client: Optional[Client], found, profile, con=None,
+                  week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Explain which missed blocks to make up and which to let go (Rule 9).
+
+    ``found`` are :class:`writing_habit.rescue.Rescue` decisions the software
+    made. The model only words the note, in a tone that treats a missed block
+    as information.
+    """
+    from . import rescue
+
+    plain_text = rescue.plain(found)
+    if not found:
+        return Answer(data={"note": plain_text, "rescues": []}, text=plain_text,
+                      source="plain summary written without a model")
+    answer = _note("rescue", client, rescue.facts(found, profile), plain_text,
+                   con, week_start, prompts)
+    answer.data = {"note": answer.data, "rescues": list(found)}
+    return answer
+
+
+def number_project(client: Optional[Client], suggestion, found=(), con=None,
+                   week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Explain a suggested number for a new project, and any project forming.
+
+    ``suggestion`` is a :class:`writing_habit.numbering.Suggestion` and
+    ``found`` a list of :class:`writing_habit.numbering.Forming`. The numbers
+    come from the software, and the model only explains them.
+    """
+    from . import numbering
+
+    plain_text = numbering.plain(suggestion, found)
+    answer = _note("numbering", client, numbering.facts(suggestion, found),
+                   plain_text, con, week_start, prompts)
+    answer.data = {"note": answer.data, "suggestion": suggestion, "forming": list(found)}
+    return answer
+
+
+def triage_projects(client: Optional[Client], found, period: str, con=None,
+                    week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Explain the keep, defer, and drop suggestions for carried projects (Rule 3).
+
+    ``found`` are :class:`writing_habit.triage.Decision` rows the software
+    made. The model only words the note. With nothing carried, the plain note
+    is enough, so no model is asked and nothing is logged.
+    """
+    from . import triage
+
+    plain_text = triage.plain(found)
+    if not found:
+        return Answer(data={"note": plain_text, "decisions": []}, text=plain_text,
+                      source="plain summary written without a model")
+    answer = _note("triage", client, triage.facts(found, period), plain_text,
+                   con, week_start, prompts)
+    answer.data = {"note": answer.data, "decisions": list(found)}
+    return answer
+
+
 # -- does the coach help? -----------------------------------------------------------
 def ai_week_comparison(con, end_week: Optional[str] = None) -> Optional[dict]:
     """Compare adherence in weeks with coach calls against weeks without.

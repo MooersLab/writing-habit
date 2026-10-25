@@ -122,6 +122,9 @@ class Entry:
     description: str
     risk: Optional[str] = None          # a class name, safe or speculative
     activity: Optional[str] = None      # a default activity, or None
+    #: For a grasscatcher task, the four-digit number of its project. The
+    #: number names the project for good, while the code is this week's alias.
+    number: Optional[str] = None
 
     @property
     def project(self) -> str:
@@ -139,6 +142,29 @@ class Entry:
             text += f" @{self.activity}"
         tag = _TAG_TO_RISK_TEXT.get(self.risk or "")
         return text + (f" :{tag}:" if tag else "")
+
+    def task_text(self) -> str:
+        """The first cell of a grasscatcher row, with the project number after the code.
+
+        ``A: 0142 [#A1] Read the reviews`` reads like a legend row, such as
+        ``A: 0142RETKinase``, and keeps the task tied to project 0142 when the
+        code changes from week to week.
+        """
+        head = f"{self.code}:" if self.code else "-"
+        body = self.description.strip()
+        if self.number:
+            body = f"{self.number} {body}"
+        return f"{head} {body}".rstrip()
+
+
+#: A grasscatcher task's project number, written after the code.
+TASK_NUMBER = re.compile(r"^(\d{4})\s+(.*)$")
+
+
+def project_number(project: str) -> Optional[str]:
+    """Return the four-digit number that starts a project name, or ``None``."""
+    m = re.match(r"\s*(\d{4})", project or "")
+    return m.group(1) if m else None
 
 
 def number_key(project: str):
@@ -195,8 +221,11 @@ class ProjectLists:
     with every edit included and every other line untouched.
     """
 
-    def __init__(self, lines: List[str]):
+    def __init__(self, lines: List[str], numbers=None):
         self.lines = lines
+        #: A callable that returns ``(code by number, number by code)`` for the
+        #: week's projects, so a grasscatcher task finds its project by number.
+        self.numbers = numbers
 
     # -- finding -----------------------------------------------------------
     def _span(self, name: str) -> Optional[Tuple[int, int]]:
@@ -306,7 +335,88 @@ class ProjectLists:
                 and parse_entry(_cells(self.lines[i])[0]) is not None]
 
     def entries(self, name: str) -> List[Entry]:
-        return [parse_entry(_cells(self.lines[i])[0]) for i in self.row_indexes(name)]
+        found = [parse_entry(_cells(self.lines[i])[0]) for i in self.row_indexes(name)]
+        if name != GRASSCATCHER:
+            return found
+        maps = self._maps()
+        return [self._as_task(entry, maps) for entry in found]
+
+    # -- grasscatcher tasks and project numbers -------------------------------
+    def _maps(self):
+        return self.numbers() if self.numbers else ({}, {})
+
+    @staticmethod
+    def _as_task(entry: Entry, maps) -> Entry:
+        """Resolve a task's project by its number, which wins over a stale code.
+
+        A number written after the code counts when it is the number of one of
+        the week's projects, so a task that happens to start with a year, such
+        as ``2026 budget``, keeps its words. Without a written number, the
+        number comes from the code.
+        """
+        by_number, by_code = maps
+        m = TASK_NUMBER.match(entry.description)
+        if m and m.group(1) in by_number:
+            number = m.group(1)
+            return Entry(by_number[number], m.group(2), entry.risk, entry.activity, number)
+        number = by_code.get(entry.code) if entry.code else None
+        return Entry(entry.code, entry.description, entry.risk, entry.activity, number)
+
+    def _row_text(self, name: str, entry: Entry) -> str:
+        if name != GRASSCATCHER:
+            return entry.text()
+        by_number, by_code = self._maps()
+        if entry.number is None and entry.code:
+            entry = Entry(entry.code, entry.description, entry.risk, entry.activity,
+                          by_code.get(entry.code))
+        if entry.number and entry.number in by_number:
+            entry = Entry(by_number[entry.number], entry.description, entry.risk,
+                          entry.activity, entry.number)
+        return entry.task_text()
+
+    def align_tasks(self) -> List[str]:
+        """Give each grasscatcher task the code its project number has this week.
+
+        Return a note for each task whose code changed. A task with no written
+        number is left alone, because only the code says what it meant.
+        """
+        by_number, _by_code = self._maps()
+        notes = []
+        for index in self.row_indexes(GRASSCATCHER):
+            raw = parse_entry(_cells(self.lines[index])[0])
+            m = TASK_NUMBER.match(raw.description)
+            if not m or m.group(1) not in by_number:
+                continue
+            code = by_number[m.group(1)]
+            if code == raw.code:
+                continue
+            task = Entry(code, m.group(2), raw.risk, raw.activity, m.group(1))
+            self.lines[index] = _with_first_cell(self.lines[index], task.task_text())
+            notes.append(f"Gave the grasscatcher task “{m.group(2)}” the code "
+                         f"{code or '-'} of project {m.group(1)} (it was "
+                         f"{raw.code or '-'})")
+        return notes
+
+    def number_tasks(self, maps) -> int:
+        """Write the project number into each grasscatcher task that lacks one.
+
+        ``maps`` are the ``(code by number, number by code)`` the codes were
+        written under, such as last week's when the lists are carried to a new
+        week. Return how many tasks gained a number.
+        """
+        _by_number, by_code = maps
+        done = 0
+        for index in self.row_indexes(GRASSCATCHER):
+            raw = parse_entry(_cells(self.lines[index])[0])
+            if TASK_NUMBER.match(raw.description) or not raw.code:
+                continue
+            number = by_code.get(raw.code)
+            if not number:
+                continue
+            task = Entry(raw.code, raw.description, raw.risk, raw.activity, number)
+            self.lines[index] = _with_first_cell(self.lines[index], task.task_text())
+            done += 1
+        return done
 
     def find_project(self, name: str, project: str) -> Optional[int]:
         """The position of ``project`` in list ``name``, matched by name."""
@@ -318,7 +428,7 @@ class ProjectLists:
     # -- editing -----------------------------------------------------------
     def set_entry(self, name: str, position: int, entry: Entry) -> bool:
         index = self.row_indexes(name)[position]
-        new = _with_first_cell(self.lines[index], entry.text())
+        new = _with_first_cell(self.lines[index], self._row_text(name, entry))
         if new == self.lines[index]:
             return False
         self.lines[index] = new
@@ -354,7 +464,8 @@ class ProjectLists:
             at = rows[position] if position is not None and position < len(rows) else (
                 rows[-1] + 1 if rows else span[1])
             shape = self.lines[rows[-1]] if rows else None
-        line = _with_first_cell(shape, entry.text()) if shape else f"| {entry.text()} |"
+        text = self._row_text(name, entry)
+        line = _with_first_cell(shape, text) if shape else f"| {text} |"
         if shape:
             # A fresh row copies the sibling's cells but none of their values.
             cells = _cells(line)
@@ -366,6 +477,8 @@ class ProjectLists:
     def remove(self, name: str, position: int) -> Entry:
         index = self.row_indexes(name)[position]
         entry = parse_entry(_cells(self.lines[index])[0])
+        if name == GRASSCATCHER:
+            entry = self._as_task(entry, self._maps())
         del self.lines[index]
         return entry
 

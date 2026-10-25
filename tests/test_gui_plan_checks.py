@@ -253,3 +253,158 @@ def test_energy_matching_with_nothing_to_fix(editor, store):
     editor.match_energy()
     assert editor.dialogs == []
     assert any("Every block of the week fits" in m for m in messages)
+
+
+# -- missed-block rescue ---------------------------------------------------------------
+def _plan_in_database(store, blocks):
+    con = db.connect(store["db"])
+    ids = {r[1]: r[0] for r in con.execute("SELECT category_id, name FROM category")}
+    names = {"A": "1006AIrxOpt", "B": "1002RNAediting", "C": "2003reviewArticle",
+             "E": "email"}
+    for day, start, end, code, category in blocks:
+        pid = db.get_or_create_project(con, code, names[code], "safe")
+        con.execute("INSERT INTO plan_block(day, start_time, end_time, project_id,"
+                    " category_id) VALUES (?, ?, ?, ?, ?)",
+                    (day, start, end, pid, ids[category]))
+    con.commit()
+    con.close()
+
+
+def test_rescue_makes_up_demanding_blocks_and_lets_support_go(editor, store):
+    _plan_in_database(store, [("2026-10-12", "05:00", "06:30", "A", "generative"),
+                              ("2026-10-13", "05:00", "06:30", "E", "support"),
+                              ("2026-10-13", "14:00", "15:30", "B", "generative")])
+    answer = editor.rescue_missed()
+    dialog = editor.dialogs[-1]
+    # Today is Wednesday at noon. Thursday 06:45 is the first high-energy slot
+    # that keeps a break after the 05:00 email block.
+    assert [box.text() for box in dialog.boxes] == [
+        "Make up generative A from Monday 05:00-06:30 on Thursday 06:45-08:15",
+        "Make up generative B from Tuesday 14:00-15:30 on Friday 06:45-08:15"]
+    assert "Let support E from Tuesday 05:00-06:30 go" in answer.data["note"]
+    assert _cell(editor, 3, "06:45") == "gA"
+    assert _cell(editor, 4, "06:45") == "gB"
+    assert editor.table.dirty
+    assert _log(store)[-1]["task"] == "rescue"
+
+
+def test_rescue_with_nothing_missed_says_so(editor, store):
+    messages = []
+    editor.logged.connect(messages.append)
+    editor.rescue_missed()
+    assert editor.dialogs == []
+    assert any("No block of this week has been missed" in m for m in messages)
+
+
+def test_rescue_needs_the_database(editor, store):
+    store["db"] = ""
+    messages = []
+    editor.logged.connect(messages.append)
+    assert editor.rescue_missed() is None
+    assert any("Choose it in the Plan or Track form" in m for m in messages)
+
+
+# -- project numbering help ------------------------------------------------------------
+def test_numbering_suggests_and_adds_to_the_current_list(editor, store, tmp_path):
+    root = tmp_path / "home"
+    for name in ("1006AIrxOpt", "1007AIrxOptBenchmarks", "2003reviewArticle"):
+        (root / name).mkdir(parents=True)
+    store["projects_root"] = str(root)
+    editor.ask_text = lambda title, label: "AIrxOpt web server"
+
+    def take_first(dialog):
+        editor.dialogs.append(dialog)
+        dialog.boxes[0].setChecked(True)
+        return True
+
+    editor.run_coach_dialog = take_first
+    answer = editor.number_project()
+    dialog = editor.dialogs[-1]
+    assert [box.text() for box in dialog.boxes][0] == (
+        "Use 1008AIrxOptWebServer, near 1006, 1007")
+    assert not any(box.isChecked() for box in dialog.boxes[1:])
+    assert answer.data["suggestion"].numbers[0] == "1008"
+    projects = [e.project for e in editor.table.lists.entries("current-semester-projects")]
+    assert projects[-1] == "1008AIrxOptWebServer"
+    assert editor.table.dirty
+
+
+def test_numbering_changes_nothing_when_declined(editor, store, tmp_path):
+    store["projects_root"] = str(tmp_path)
+    editor.accept_dialogs = False
+    before = editor.table.to_text()
+    editor.number_project("Seeded direct methods")
+    assert editor.table.to_text() == before
+    assert "is the next free number" in editor.dialogs[-1].answer.data["note"]
+
+
+# -- roll-forward triage ---------------------------------------------------------------
+def _carry(editor, *cells):
+    from writing_habit.project_lists import CARRIED, parse_entry
+    for cell in cells:
+        editor.table.lists.insert(CARRIED, None, parse_entry(cell))
+    editor._reload_list(CARRIED)
+
+
+def _sessions(store, rows):
+    con = db.connect(store["db"])
+    for day, code, name, minutes in rows:
+        pid = db.get_or_create_project(con, code, name, "safe")
+        con.execute("INSERT INTO session(day, actual_min, project_id, source) "
+                    "VALUES (?, ?, ?, 'manual')", (day, minutes, pid))
+    con.commit()
+    con.close()
+
+
+def test_triage_keeps_defers_and_drops_the_checked(editor, store):
+    _carry(editor, "- 1006AIrxOpt :safe:", "- 1002RNAediting 2027-03-01 :safe:",
+           "- 2003reviewArticle :safe:", "- 0901idea")
+    _sessions(store, [("2026-10-06", "A", "1006AIrxOpt", 90),
+                      ("2026-08-04", "C", "2003reviewArticle", 60)])
+    panel = editor.list_panels["carried-over-projects"]
+    assert panel.triage_button.isEnabled()
+    answer = editor.triage_carried()
+    dialog = editor.dialogs[-1]
+    assert [box.text() for box in dialog.boxes] == [
+        "Keep 1006AIrxOpt on the current list",
+        "Defer 1002RNAediting to Next semester projects",
+        "Defer 2003reviewArticle to Next semester projects",
+        "Drop 0901idea from the lists"]
+    assert "keep 1, defer 2, drop 1" in answer.data["note"]
+    lists = editor.table.lists
+    assert lists.entries("carried-over-projects") == []
+    assert "1006AIrxOpt" in [e.project for e in lists.entries("current-semester-projects")]
+    assert [e.project for e in lists.entries("next-semester-projects")][-2:] == [
+        "1002RNAediting", "2003reviewArticle"]
+    assert editor.table.dirty
+    assert _log(store)[-1]["task"] == "triage"
+
+
+def test_triage_applies_only_what_is_checked(editor, store):
+    _carry(editor, "- 1006AIrxOpt", "- 0901idea")
+
+    def keep_first(dialog):
+        editor.dialogs.append(dialog)
+        dialog.boxes[1].setChecked(False)
+        return True
+
+    editor.run_coach_dialog = keep_first
+    editor.triage_carried()
+    left = [e.project for e in editor.table.lists.entries("carried-over-projects")]
+    assert left == ["0901idea"]
+
+
+def test_triage_with_nothing_carried_says_so(editor, store):
+    messages = []
+    editor.logged.connect(messages.append)
+    editor.triage_carried()
+    assert editor.dialogs == []
+    assert not editor.list_panels["carried-over-projects"].triage_button.isEnabled()
+    assert any("Nothing is on the Carried over list" in m for m in messages)
+
+
+def test_triage_needs_the_database(editor, store):
+    _carry(editor, "- 0901idea")
+    store["db"] = ""
+    assert editor.triage_carried() is None
+    assert editor.table.lists.entries("carried-over-projects")[0].project == "0901idea"

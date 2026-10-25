@@ -119,7 +119,7 @@ def coach_images(app, window, store):
     # The Coach menu open under its button, over the shift bar.
     bar = editor.coach_button.parentWidget()
     top = editor.shift_buttons[-60].mapTo(editor, QtCore.QPoint(0, 0))
-    strip = editor.grab(QtCore.QRect(0, max(top.y() - 6, 0), editor.width(), 340))
+    strip = editor.grab(QtCore.QRect(0, max(top.y() - 6, 0), editor.width(), 460))
     menu = editor.coach_button.menu()
     menu.popup(editor.coach_button.mapToGlobal(
         QtCore.QPoint(0, editor.coach_button.height())))

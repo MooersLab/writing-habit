@@ -131,6 +131,24 @@
           "task"
         ]
       }
+    },
+    "rescue": {
+      "rule": 9,
+      "system": "Some of the writer's planned blocks this week passed with nothing done, and the software has already decided which to make up, and when, and which to let go. Write two to four plain sentences to the writer as you. Treat a missed block as information rather than failure, with no blame and no apology. Say which blocks can be made up and when, and why letting the others go keeps the week keepable. Do not propose any other change and do not add any number that is not in the facts.",
+      "instruction": "Explain what to do about these missed blocks.",
+      "schema": null
+    },
+    "numbering": {
+      "rule": 1,
+      "system": "The writer numbers each writing project with four digits and keeps related projects near each other. The software has already found the projects related to a new one and the free numbers beside them. Write two or three plain sentences to the writer as you that say which number to use and which related projects it sits near, and why. If the facts name a project that may be forming inside another, say so in one sentence and suggest giving it its own number. Do not propose any number that is not in the facts, and do not suggest renaming or moving anything.",
+      "instruction": "Explain the number for this new project.",
+      "schema": null
+    },
+    "triage": {
+      "rule": 3,
+      "system": "A new planning period has begun, and the projects of the last one that were not finished sit on the Carried over list. The software has already suggested keeping, deferring, or dropping each one from the minutes logged for it, the last week it was worked, and its deadline. Write two to four plain sentences to the writer as you. Say which projects to keep and why, and why deferring or dropping the others protects the new period. Say that dropping takes a project off the lists only, and that its folder and history stay. Do not change any suggestion, do not propose any other change, and do not add any number that is not in the facts.",
+      "instruction": "Explain these suggestions for the carried-over projects.",
+      "schema": null
     }
   }
 }

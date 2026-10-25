@@ -103,7 +103,7 @@ def project_cell(row: List[str]) -> Optional[str]:
 def task_cell(row: List[str]) -> Optional[str]:
     """Return the one-cell form of a grasscatcher row, or ``None`` when it is empty."""
     row = (row + [""] * 5)[:5]
-    code, _number, _name, priority, task = (c.strip() for c in row)
+    code, number, _name, priority, task = (c.strip() for c in row)
     if not task:
         return None
     head = _code_head(code)
@@ -112,7 +112,10 @@ def task_cell(row: List[str]) -> Optional[str]:
     priority = priority.strip()
     if priority and not _COOKIE.match(priority):
         priority = f"[#{priority.strip('[]#')}]"
-    return f"{head} {priority + ' ' if priority else ''}{task}".strip()
+    # The project number travels with the task, because it names the project
+    # for good while the code may change from week to week.
+    number = number if re.fullmatch(r"\d{4}", number) else ""
+    return " ".join(p for p in (head, number, priority, task) if p)
 
 
 # -- the one-cell form to columns ----------------------------------------------
@@ -143,8 +146,15 @@ def task_columns(cell: str, projects: Dict[str, Tuple[str, str]]) -> List[str]:
     entry = parse_entry(cell)
     if entry is None:
         return ["-", "", "", "", cell.strip()]
-    priority, task = split_priority(entry.description)
-    number, name = projects.get(entry.code or "", ("", ""))
+    description = entry.description
+    names = {number: name for number, name in projects.values() if number}
+    m = re.match(r"^(\d{4})\s+(.*)$", description)
+    if m and m.group(1) in names:
+        number, name = m.group(1), names[m.group(1)]
+        description = m.group(2)
+    else:
+        number, name = projects.get(entry.code or "", ("", ""))
+    priority, task = split_priority(description)
     return [f"{entry.code}:" if entry.code else "-", number, name,
             f"[#{priority}]" if priority else "", task]
 

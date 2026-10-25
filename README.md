@@ -170,7 +170,13 @@ each kind of writing and proposes swaps for blocks that do not fit them.
 **Capture** files a thought typed or dictated in plain words on the
 grasscatcher, with its project found by a lookup, and the review panel flags a
 **stuck project** whose objectives keep going unmet, ready for Suggest to break
-the work into smaller steps. It uses a
+the work into smaller steps. **Rescue missed blocks** proposes make-up slots for
+at most two missed blocks a week and lets the rest go, and **Number a new
+project** suggests a free four-digit number beside related projects. **Triage**
+on the Carried over tab suggests keeping, deferring, or dropping each project
+carried into a new period, from its recent minutes and its deadline. Grasscatcher
+tasks carry their project's number, so they stay with their projects when codes
+change between weeks. It uses a
 model served on your own computer through Ollama, LM Studio, or llama.cpp when
 you turn it on, and plain summaries otherwise. The software computes every
 number itself, the coach stays quiet during a block and in an AI-off week, and

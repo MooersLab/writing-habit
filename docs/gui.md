@@ -554,6 +554,31 @@ The list lives in the weekly table file beside the semester lists, so it
 travels to next week's file with them. The scheduler reads only the first table
 of the file and never sees it.
 
+### Project numbers keep tasks with their projects
+
+A grasscatcher task travels from week to week, while a project's code can
+change, for example when more than 36 projects share a semester. So a task also
+carries its project's four-digit number, written after the code:
+
+```org
+#+NAME: grasscatcher
+| 1: 0142 [#A1] Read the key review articles. |
+| E: answer the dean                          |
+```
+
+The number is the truth. When the file is read, each task takes the code that
+this week's legend, or a semester list, gives its number, and the window shows
+the task without the number. A file whose codes went stale is fixed as it opens,
+and the note above the project tabs names each task whose code changed, so a
+save keeps the fix. A task the editor writes, by Capture, Back to grasscatcher,
+or Sync to-dos, gets its number. **New from template** gives the carried tasks
+their numbers from last week's legend before this week's codes apply, so a
+task written as `A:` last week stays with its project even when A now names
+another one. A task for a project with no number, such as email, keeps its code
+alone. A number counts only when it is the number of one of the week's
+projects, so a task such as `2026 budget for the core` keeps its words. In the
+column layout the Project Number column plays the same part.
+
 ### Quick capture
 
 A stray thought is safest on the list in seconds. Type or dictate it in the
@@ -656,6 +681,9 @@ written without a model, so nothing depends on it.
 | Coach menu | **Check deadline coverage** | The projects due in the next 28 days with no block left this week, and a block to give each one. See [Deadline coverage](#deadline-coverage). |
 | Coach menu | **Match blocks to my energy** | The blocks whose hours do not suit their kind of writing, by your energy profile, and swaps that fix them. See [The Energy tab](#the-energy-tab). |
 | Grasscatcher tab | **Capture** | Turns a thought typed or dictated in plain words into a coded task. See [Quick capture](#quick-capture). |
+| Coach menu | **Rescue missed blocks** | The missed blocks worth making up, with a slot for each, and the ones to let go. See [Missed-block rescue](#missed-block-rescue). |
+| Coach menu | **Number a new project...** | A free number near the related projects, and any project forming inside another. See [Numbering a new project](#numbering-a-new-project). |
+| Coach menu or Carried over tab | **Triage carried projects** | A keep, defer, or drop suggestion for each carried-over project, with a reason. See [Triaging the carried projects](#triaging-the-carried-projects). |
 | Coach menu | **Find stuck projects** | The projects of the week that keep missing their objectives or keep the same next step. See the stuck sign under [Objectives and review](#objectives-and-review-for-a-block). |
 | Coach menu | **Summary for my partner** | A short message about the open week for an accountability partner, written as you. Edit it and press **Copy to clipboard**, then paste it into an email or a chat. Nothing is sent for you. |
 
@@ -787,6 +815,47 @@ makes the week fit better, each block takes part in one swap at most, and a
 day that has passed is never changed. The objectives of a swapped block move
 with their project. As with deadline coverage, the swaps come from the
 software, and a model only words the note.
+
+### Missed-block rescue
+
+**Coach > Rescue missed blocks** finds the blocks of the week that passed with
+nothing tracked in them, from the plan and the sessions in the habit database,
+and decides for each one whether to make it up or let it go.
+
+| Rule | Why |
+|------|-----|
+| Support blocks are let go | Email and chores fill whatever time they get |
+| At most two blocks a week are made up, demanding work and the nearest deadline first | Missed time should not snowball into an overloaded week |
+| A make-up slot has the length of the missed block, later the same day or on a later day | The project keeps its time |
+| The slot lies in hours your energy profile rates Medium or High for the activity, overlaps no block, and keeps every run within two hours with a 15-minute break | The make-up is as keepable as the plan |
+| The best energy wins, then a day with no other make-up, then the earliest | Make-ups spread across the week |
+| A block with no such slot is let go, with the reason | A missed block is information, not a debt |
+
+Check the make-ups to keep and press **Add the checked blocks**. The blocks are
+placed in the grid, and the file changes only when you save. The decisions come
+from the software, and a model, when on, only words the note.
+
+### Numbering a new project
+
+**Coach > Number a new project...** asks for the new project's working name,
+such as `RET kinase PROTAC degraders`, and suggests a free four-digit number
+near the related projects. It reads the numbered folders under `projects_root`,
+or your home folder, and the projects of the legend and the lists.
+
+A project is related when its name shares a distinctive word with the new name.
+A rare word counts more than a common one, so `protac` in one folder name says
+more than `kinase` in twenty, and the first word of the new name, usually its
+topic, counts double. The suggestions are the free numbers inside the related
+projects' range, nearest its middle, then those just above and just below.
+With no related project, the next free numbers after the highest number of this
+week's projects are offered.
+
+The same dialog flags a project that may be forming inside another, when three
+or more grasscatcher tasks or recent objectives of one project share a word that
+the project's name does not hold. Check a number and press **Add the first
+checked to the current list** to add the project, such as
+`0143RETKinasePROTACDegraders`, to the current semester list. Nothing is renamed
+and no folder is made or moved.
 
 ### The two-hour break rule
 
@@ -1187,4 +1256,30 @@ project** drops it. The tab hides itself once it is empty. `track sync` counts
 time on carried projects until you decide. A roll across several periods, after
 a long leave, moves the lists one step per period. The weekly grid and the
 legend do not change, and the file is written when you save.
+
+### Triaging the carried projects
+
+Keeping every carried project quietly overloads the new period. **Triage...** on
+the Carried over tab, or **Coach > Triage carried projects**, suggests a
+decision for each project from three facts you can check: the minutes logged
+for it in the habit database, the last week it was worked, and its deadline.
+The rules, in order:
+
+| Facts | Suggestion |
+|-------|------------|
+| An hour or more logged in the last four weeks | Keep it on the current list |
+| A deadline inside the new period | Keep it |
+| A deadline that has passed, with little recent work | Drop it, or renegotiate the date |
+| A deadline after the new period | Defer it to the next period's list |
+| Work earlier in the period but none lately | Defer it |
+| No time logged this period and no deadline | Drop it |
+
+A session is filed under a legend code, and a code can name another project from
+one week to the next. Triage gives the minutes to the project the code names in
+the open week, and otherwise to the project the database holds for the code, and
+it counts them by project number. Check the suggestions you agree with and press
+**Apply the checked**. Dropping takes a project off the lists only. Its folder,
+its log, and its history stay, and it can be added back. The model, when on,
+only words the note, and a note with a number the facts do not hold is replaced
+by the plain note.
 

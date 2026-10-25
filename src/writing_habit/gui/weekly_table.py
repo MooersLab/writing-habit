@@ -306,7 +306,7 @@ class WeeklyTable:
         #: line each. Such a file is marked changed, so a save writes it out.
         self.layout_notes: List[str] = self._absorb_legend_table()
         #: The semester project lists that follow the week, edited in place.
-        self.lists = ProjectLists(self._after)
+        self.lists = ProjectLists(self._after, numbers=self.project_numbers)
         self._original_text = text
         self._loaded_model = self._model_text()
 
@@ -630,6 +630,32 @@ class WeeklyTable:
             self.next_free_code())
         return self.add_legend(code, entry.description, entry.risk, entry.activity)
 
+    def project_numbers(self):
+        """Return ``(code by number, number by code)`` for the week's projects.
+
+        The legend comes first, because its codes are this week's, then the
+        semester lists. A project on a list with no code maps to ``None``.
+        """
+        from ..project_lists import GRASSCATCHER, NAMES, project_number
+        by_number: Dict[str, Optional[str]] = {}
+        by_code: Dict[str, str] = {}
+        for code, (description, _risk) in self.legend().items():
+            number = project_number(split_due_date(description)[0])
+            if number:
+                by_number.setdefault(number, code)
+                by_code.setdefault(code, number)
+        for name in NAMES:
+            if name == GRASSCATCHER:
+                continue
+            for entry in self.lists.entries(name):
+                number = project_number(entry.project)
+                if not number:
+                    continue
+                by_number.setdefault(number, entry.code)
+                if entry.code:
+                    by_code.setdefault(entry.code, number)
+        return by_number, by_code
+
     def adopt_lists(self, other: "WeeklyTable") -> bool:
         """Give this table the semester lists of ``other``.  Say whether any came."""
         if self.lists.present() or not other.lists.present():
@@ -643,6 +669,11 @@ class WeeklyTable:
                      if line.strip().upper().startswith(("#+NAME:", "#+PROJECT_PERIOD:")))
         block = list(other._after[start:])
         self._after.extend([""] + block)
+        # The grasscatcher's codes were written under the other week's legend,
+        # so each task first takes its project number from that legend, then
+        # the code this week gives that number.
+        self.lists.number_tasks(other.project_numbers())
+        self.lists.align_tasks()
         self.dirty = True
         return True
 
