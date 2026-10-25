@@ -1,5 +1,5 @@
 # writing-habit
-
+[![Version](https://img.shields.io/badge/writing-habit-0.1-brightgreen.svg)]
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 
