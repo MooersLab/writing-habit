@@ -11,6 +11,11 @@ The table holds one row per day. A day written twice, for example once at
 11:59 PM and again after a Pomodoro that ended in the last minute, keeps one
 row with the later total. The table is created when it is missing. Nothing
 here imports Qt, so the command line and the tests can use it too.
+
+The database is the time tracker's own, so this module never changes another
+table. It writes only to a table that has exactly the three columns above,
+refuses the time tracker's ``zTimeSpent`` table by name, and never alters,
+renames, or drops a table or a column.
 """
 
 from __future__ import annotations
@@ -26,6 +31,10 @@ DEFAULT_FILE = "mytime.db"
 DEFAULT_TABLE = "zzPomCount"
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+#: The columns of a Pomodoro count table, the only shape this module writes to.
+COLUMNS = ("date", "pom_count", "recorded_at")
+#: Tables of the time tracker that a Pomodoro count must never be written to.
+PROTECTED = {"ztimespent"}
 
 
 def database_path(folder: str = DEFAULT_DIR, file: str = DEFAULT_FILE) -> Path:
@@ -41,7 +50,25 @@ def check_table(table: str) -> str:
     """
     if not _IDENTIFIER.match(table or ""):
         raise ValueError(f"not a plain table name: {table!r}")
+    if table.lower() in PROTECTED:
+        raise ValueError(f"{table} is the time tracker's own table. Choose a "
+                         f"table of its own for the Pomodoro counts, such as "
+                         f"{DEFAULT_TABLE}.")
     return table
+
+
+def check_shape(con, table: str) -> None:
+    """Raise ``ValueError`` when ``table`` exists with columns other than ours.
+
+    SQLite matches table names without regard to case, so ``zzpomcount`` and
+    ``zzPomCount`` are one table, and the check reads the table that SQLite
+    would write to.
+    """
+    columns = [r[1] for r in con.execute(f'PRAGMA table_xinfo("{table}")')]
+    if columns and tuple(c.lower() for c in columns) != COLUMNS:
+        raise ValueError(f"{table} already exists with the columns "
+                         f"{', '.join(columns)}, so it is not a Pomodoro count "
+                         f"table. Choose another name, such as {DEFAULT_TABLE}.")
 
 
 def record(path: Union[str, Path], table: str, day: _dt.date, count: int,
@@ -58,6 +85,7 @@ def record(path: Union[str, Path], table: str, day: _dt.date, count: int,
     stamp = (now or _dt.datetime.now()).isoformat(timespec="seconds")
     con = sqlite3.connect(str(path))
     try:
+        check_shape(con, table)
         con.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ('
                     "date TEXT PRIMARY KEY, pom_count INTEGER NOT NULL, "
                     "recorded_at TEXT NOT NULL)")

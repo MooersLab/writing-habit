@@ -325,6 +325,67 @@ def test_record_refuses_a_bad_table_or_folder(tmp_path):
     assert pom_count.database_path("~/x", "") == pm.Path("~/x/mytime.db").expanduser()
 
 
+ZTIMESPENT = """CREATE TABLE "zTimeSpent" (
+  "id" INTEGER NOT NULL,
+  "DateDashed" Date,
+  "Start" TIME,
+  "End" TIME,
+  "TimeClock" TIME GENERATED ALWAYS AS (strftime('%H:%M', CAST((julianday("End") - julianday("Start")) AS REAL), '12:00')) VIRTUAL,
+  "TimeHr" TIME GENERATED ALWAYS AS (ROUND((julianday("End") - julianday("Start")) * 24, 2)) VIRTUAL,
+  "ProjectID" INT,
+  "ProjectDirectory" TEXT,
+  "Description" TEXT,
+  "Activity" TEXT DEFAULT none,
+  PRIMARY KEY("id")
+)"""
+
+
+def _time_db(path):
+    import sqlite3
+    con = sqlite3.connect(str(path))
+    con.execute(ZTIMESPENT)
+    con.execute('INSERT INTO zTimeSpent (id, DateDashed, Start, "End", ProjectID) '
+                "VALUES (1, '2026-10-21', '05:30', '07:00', 142)")
+    con.commit()
+    return con
+
+
+def test_the_time_tracker_table_is_never_touched(tmp_path):
+    from writing_habit import pom_count
+    path = tmp_path / "mytime.db"
+    con = _time_db(path)
+    before = con.execute("SELECT sql FROM sqlite_master WHERE name = 'zTimeSpent'"
+                         ).fetchone()[0]
+    con.close()
+    pom_count.record(path, "zzPomCount", dt.date(2026, 10, 21), 6)
+    for name in ("zTimeSpent", "ztimespent", "ZTIMESPENT"):
+        with pytest.raises(ValueError, match="time tracker's own table"):
+            pom_count.record(path, name, dt.date(2026, 10, 21), 6)
+    import sqlite3
+    con = sqlite3.connect(str(path))
+    after = con.execute("SELECT sql FROM sqlite_master WHERE name = 'zTimeSpent'"
+                        ).fetchone()[0]
+    clock, hours = con.execute("SELECT TimeClock, TimeHr FROM zTimeSpent").fetchone()
+    con.close()
+    assert after == before
+    assert (clock, hours) == ("01:30", 1.5)
+
+
+def test_a_table_of_another_shape_is_refused_and_left_alone(tmp_path):
+    import sqlite3
+    from writing_habit import pom_count
+    path = tmp_path / "mytime.db"
+    con = sqlite3.connect(str(path))
+    con.execute("CREATE TABLE zProjects (id INTEGER PRIMARY KEY, name TEXT)")
+    con.commit()
+    con.close()
+    with pytest.raises(ValueError, match="not a Pomodoro count table"):
+        pom_count.record(path, "zProjects", dt.date(2026, 10, 21), 3)
+    con = sqlite3.connect(str(path))
+    assert [r[1] for r in con.execute("PRAGMA table_info(zProjects)")] == ["id", "name"]
+    con.close()
+
+
 def test_the_next_record_time_is_tonight_or_tomorrow_night():
     assert pm.next_record_time(dt.datetime(2026, 10, 21, 19, 0)) == dt.datetime(2026, 10, 21, 23, 59)
     assert pm.next_record_time(dt.datetime(2026, 10, 21, 23, 59, 30)) == \
