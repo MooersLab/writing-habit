@@ -408,3 +408,23 @@ def test_triage_needs_the_database(editor, store):
     store["db"] = ""
     assert editor.triage_carried() is None
     assert editor.table.lists.entries("carried-over-projects")[0].project == "0901idea"
+
+
+# -- semester review -------------------------------------------------------------------
+def test_semester_review_drafts_from_the_database(editor, store):
+    _plan_in_database(store, [("2026-09-07", "05:00", "06:30", "A", "generative")])
+    _sessions(store, [("2026-09-07", "A", "1006AIrxOpt", 60)])
+    editor.accept_dialogs = False
+    editor.semester_span = lambda: ("Fall 2026", dt.date(2026, 8, 17), dt.date(2026, 10, 14))
+    answer = editor.semester_review()
+    dialog = editor.dialogs[-1]
+    assert dialog.windowTitle() == "Semester review of Fall 2026"
+    assert dialog.text().startswith("During Fall 2026, I planned 1 h 30 min")
+    assert answer.data["semester"].kept_pct == 67
+
+
+def test_semester_review_with_no_plan_says_so(editor, store):
+    messages = []
+    editor.logged.connect(messages.append)
+    assert editor.semester_review() is None
+    assert any("no semester to review" in m for m in messages)

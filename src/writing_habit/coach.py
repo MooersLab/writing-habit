@@ -1025,6 +1025,41 @@ def triage_projects(client: Optional[Client], found, period: str, con=None,
     return answer
 
 
+def _paragraphs(text) -> str:
+    """Tidy a reply but keep its paragraph breaks."""
+    parts = re.split(r"\n\s*\n", str(text or "").strip())
+    return "\n\n".join(p for p in (_clean(part) for part in parts) if p)
+
+
+def semester_review(client: Optional[Client], semester, con=None,
+                    week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Draft a narrative of a semester for an annual faculty report.
+
+    ``semester`` is a :class:`writing_habit.semester.Semester` the software
+    gathered. A model's draft is used only when it states the share of the
+    plan kept and carries no number that the facts do not hold.
+    """
+    from . import semester as semestermod
+
+    facts = semestermod.facts(semester)
+    allowed = _numbers(facts)
+
+    def parse(reply):
+        text = _paragraphs(reply)
+        if not text:
+            raise CoachError("the local model sent an empty draft")
+        if f"{semester.kept_pct}%" not in text:
+            raise CoachError("the draft left out the share of the plan kept")
+        if not _numbers(text) <= allowed:
+            raise CoachError("the draft held a number that is not in your record")
+        return text
+
+    answer = _run("semester", client, facts, lambda: semestermod.plain(semester),
+                  parse, con, week_start, prompts)
+    answer.data = {"text": answer.data, "semester": semester}
+    return answer
+
+
 # -- does the coach help? -----------------------------------------------------------
 def ai_week_comparison(con, end_week: Optional[str] = None) -> Optional[dict]:
     """Compare adherence in weeks with coach calls against weeks without.

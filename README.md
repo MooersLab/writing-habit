@@ -174,7 +174,9 @@ the work into smaller steps. **Rescue missed blocks** proposes make-up slots for
 at most two missed blocks a week and lets the rest go, and **Number a new
 project** suggests a free four-digit number beside related projects. **Triage**
 on the Carried over tab suggests keeping, deferring, or dropping each project
-carried into a new period, from its recent minutes and its deadline. Grasscatcher
+carried into a new period, from its recent minutes and its deadline, and
+**Semester review** drafts a narrative of the semester for an annual faculty
+report. Grasscatcher
 tasks carry their project's number, so they stay with their projects when codes
 change between weeks. It uses a
 model served on your own computer through Ollama, LM Studio, or llama.cpp when

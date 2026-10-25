@@ -685,6 +685,7 @@ written without a model, so nothing depends on it.
 | Coach menu | **Number a new project...** | A free number near the related projects, and any project forming inside another. See [Numbering a new project](#numbering-a-new-project). |
 | Coach menu or Carried over tab | **Triage carried projects** | A keep, defer, or drop suggestion for each carried-over project, with a reason. See [Triaging the carried projects](#triaging-the-carried-projects). |
 | Coach menu | **Find stuck projects** | The projects of the week that keep missing their objectives or keep the same next step. See the stuck sign under [Objectives and review](#objectives-and-review-for-a-block). |
+| Coach menu | **Semester review** | A short narrative of the semester for an annual faculty report, in your voice. See [Semester review](#semester-review). |
 | Coach menu | **Summary for my partner** | A short message about the open week for an accountability partner, written as you. Edit it and press **Copy to clipboard**, then paste it into an email or a chat. Nothing is sent for you. |
 
 The software computes every number before the model sees it, and the model only
@@ -856,6 +857,21 @@ the project's name does not hold. Check a number and press **Add the first
 checked to the current list** to add the project, such as
 `0143RETKinasePROTACDegraders`, to the current semester list. Nothing is renamed
 and no folder is made or moved.
+
+### Semester review
+
+**Coach > Semester review** drafts a short account of the semester's writing for
+an annual faculty report, in the first person. It reads the habit database for
+the semester the lists are filed under, as the calendar names it, or for the
+last sixteen weeks without a calendar. The facts are the weeks planned and the
+minutes written, the share of the plan kept and the months it was highest and
+lowest, the three projects that took the most time, the projects on the
+completed list, and the objectives met, with up to three quoted in your words.
+
+Run it before rolling the lists forward, while the completed list still holds
+the semester's projects. Edit the draft and press **Copy to clipboard**. A
+model's draft is used only when it states the share of the plan kept and holds
+no number that the facts do not, so it cannot invent a paper or a result.
 
 ### The two-hour break rule
 

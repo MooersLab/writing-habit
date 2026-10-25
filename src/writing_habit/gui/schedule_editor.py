@@ -307,6 +307,12 @@ class ScheduleEditor(QtWidgets.QWidget):
             "partner, with the share of the plan kept and the objectives met. "
             "You edit it and send it yourself (Rule 8).")
         self.partner_action.triggered.connect(lambda: self.partner_summary())
+        self.semester_action = coach_menu.addAction("Semester review")
+        self.semester_action.setToolTip(
+            "A short narrative of the semester for an annual faculty report: the "
+            "time planned and written, the share kept by month, the projects "
+            "completed, and objectives met. Run it before rolling forward.")
+        self.semester_action.triggered.connect(lambda: self.semester_review())
         coach_menu.addSeparator()
         self.coach_settings_action = coach_menu.addAction("Settings...")
         self.coach_settings_action.setToolTip(
@@ -2767,6 +2773,70 @@ class ScheduleEditor(QtWidgets.QWidget):
 
         self._ask_coach(path, lambda con: coachmod.partner_summary(
             model, con, week, today=today, log=log), show)
+        return result.get("answer")
+
+    def semester_span(self):
+        """Return ``(name, start, end)`` of the semester the lists are filed under.
+
+        The calendar names it. Without a calendar, the last sixteen weeks up to
+        today stand in for it.
+        """
+        today = self.today()
+        period = None
+        filed = self.table.lists.period() if self.table is not None else None
+        if self.calendar is not None and filed:
+            period = self.calendar.find(self.period_kind(), filed)
+        period = period or self.current_period()
+        if period is not None:
+            return period.name, period.start, min(period.end, today)
+        return "this semester", today - _dt.timedelta(weeks=16), today
+
+    def semester_review(self):
+        """Draft a narrative of the semester for an annual faculty report."""
+        from .. import semester as semestermod
+        path = settings.get("db")
+        if not path:
+            self.logged.emit("The semester review reads the habit database. "
+                             "Choose it in the Plan or Track form first.")
+            return None
+        name, start, end = self.semester_span()
+        completed = ([e.description for e in self.table.lists.entries(COMPLETED)]
+                     if self.table is not None else [])
+        con = coach_runner.connect(path)
+        try:
+            found = semestermod.gather(con, name, start.isoformat(), end.isoformat(),
+                                       completed)
+        finally:
+            con.close()
+        if found is None:
+            self.logged.emit(f"No week from {start} to {end} has a plan in the habit "
+                             "database, so there is no semester to review.")
+            return None
+        refused = self.coach_guard.allows()
+        model = None if refused else coach_runner.client()
+        monday = self.week_monday()
+        week = monday.isoformat() if monday else None
+        result = {}
+
+        def show(answer):
+            result["answer"] = answer
+            if refused:
+                answer.source = ("plain summary written without a model, because "
+                                 f"{refused}")
+            dialog = coach_runner.PartnerDialog(
+                answer, parent=self, title=f"Semester review of {name}",
+                intro=("A short account of the semester's writing for your annual "
+                       "report, in your voice. Edit it, then copy it into the "
+                       "report. Every number comes from the habit database."))
+            accepted = self.run_coach_dialog(dialog)
+            if accepted:
+                QtWidgets.QApplication.clipboard().setText(dialog.text())
+                self.logged.emit("Copied the semester review to the clipboard")
+            if answer.log_id is not None:
+                self._settle(path, answer, accepted)
+
+        self._ask_coach(path, lambda con: coachmod.semester_review(
+            model, found, con=None if refused else con, week_start=week), show)
         return result.get("answer")
 
     def size_week(self):

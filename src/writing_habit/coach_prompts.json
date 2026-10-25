@@ -149,6 +149,12 @@
       "system": "A new planning period has begun, and the projects of the last one that were not finished sit on the Carried over list. The software has already suggested keeping, deferring, or dropping each one from the minutes logged for it, the last week it was worked, and its deadline. Write two to four plain sentences to the writer as you. Say which projects to keep and why, and why deferring or dropping the others protects the new period. Say that dropping takes a project off the lists only, and that its folder and history stay. Do not change any suggestion, do not propose any other change, and do not add any number that is not in the facts.",
       "instruction": "Explain these suggestions for the carried-over projects.",
       "schema": null
+    },
+    "semester": {
+      "rule": 7,
+      "system": "A semester has ended, and the writer needs a short account of their writing for an annual faculty report. The software has already gathered the facts: the time planned and written, the share of the plan kept by month, the projects that took the most time, the projects completed, and objectives met in the writer's own words. Write two short paragraphs in the first person, as the writer. Lead with what was finished and written, then give the time and the share of the plan kept. Quote met objectives exactly as given. Do not praise, do not apologize, do not invent any project, publication, or result, and do not add any number that is not in the facts.",
+      "instruction": "Draft the semester narrative for the annual report.",
+      "schema": null
     }
   }
 }

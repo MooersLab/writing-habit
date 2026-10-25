@@ -218,15 +218,18 @@ class PartnerDialog(QtWidgets.QDialog):
     draft accepted in the ``ai_log`` table.
     """
 
-    def __init__(self, answer: coach.Answer, parent=None):
+    INTRO = ("A short summary of the week for your accountability partner. "
+             "Edit it as you like, then copy it into a message. It holds totals "
+             "and objectives met, not your full log.")
+
+    def __init__(self, answer: coach.Answer, parent=None,
+                 title: str = "Summary for your writing partner",
+                 intro: Optional[str] = None):
         super().__init__(parent)
-        self.setWindowTitle("Summary for your writing partner")
+        self.setWindowTitle(title)
         self.answer = answer
         layout = QtWidgets.QVBoxLayout(self)
-        intro = QtWidgets.QLabel(
-            "A short summary of the week for your accountability partner. "
-            "Edit it as you like, then copy it into a message. It holds totals "
-            "and objectives met, not your full log.")
+        intro = QtWidgets.QLabel(intro or self.INTRO)
         intro.setWordWrap(True)
         layout.addWidget(intro)
         self.editor = QtWidgets.QPlainTextEdit(answer.data["text"])
