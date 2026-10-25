@@ -423,3 +423,22 @@ CREATE TABLE IF NOT EXISTS ai_log (
 );
 
 CREATE INDEX IF NOT EXISTS ix_ai_log_week ON ai_log(week_start);
+
+-- ---------------------------------------------------------------------------
+-- Why a block was missed (Rule 6). One row per missed block that the writer
+-- answered: the question the coach asked and the reason in the writer's own
+-- words. The coach only asks. It never fills in a reason.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS block_miss (
+    miss_id    INTEGER PRIMARY KEY,
+    day        TEXT    NOT NULL,                  -- ISO date of the block
+    start_time TEXT    NOT NULL,                  -- HH:MM start of the block
+    code       TEXT    NOT NULL,                  -- legend code of the project
+    question   TEXT    NOT NULL,
+    reason     TEXT    NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    week_start TEXT GENERATED ALWAYS AS (
+        date(day, '-' || ((CAST(strftime('%w', day) AS INTEGER) + 6) % 7) || ' days')
+    ) VIRTUAL,
+    UNIQUE (day, start_time, code)
+);

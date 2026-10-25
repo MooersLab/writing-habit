@@ -428,3 +428,46 @@ def test_semester_review_with_no_plan_says_so(editor, store):
     editor.logged.connect(messages.append)
     assert editor.semester_review() is None
     assert any("no semester to review" in m for m in messages)
+
+
+# -- questions about missed blocks and the Monday message ------------------------------
+def test_asking_about_missed_blocks_saves_the_answers(editor, store):
+    _plan_in_database(store, [("2026-10-12", "05:00", "06:30", "A", "generative"),
+                              ("2026-10-13", "05:00", "06:30", "E", "support")])
+
+    def answer(dialog):
+        editor.dialogs.append(dialog)
+        dialog.boxes[0].setText("A department meeting")
+        return True
+
+    editor.run_coach_dialog = answer
+    result = editor.ask_misses()
+    dialog = editor.dialogs[-1]
+    assert [q for q in result.data["questions"]] == [
+        "The Monday 05:00-06:30 block of A 1006AIrxOpt was missed. What took that slot?",
+        "The Tuesday 05:00-06:30 block of E email was missed. What took that slot?"]
+    assert dialog.answers() == ["A department meeting", ""]
+    con = db.connect(store["db"])
+    rows = con.execute("SELECT day, code, reason FROM block_miss").fetchall()
+    con.close()
+    assert [tuple(r) for r in rows] == [("2026-10-12", "A", "A department meeting")]
+
+
+def test_asking_with_nothing_missed_says_so(editor, store):
+    messages = []
+    editor.logged.connect(messages.append)
+    assert editor.ask_misses() == []
+    assert editor.dialogs == []
+    assert any("nothing to ask about" in m for m in messages)
+
+
+def test_the_monday_message_is_drafted_from_the_table(editor, store):
+    store["db"] = ""
+    editor.accept_dialogs = False
+    answer = editor.plan_message()
+    dialog = editor.dialogs[-1]
+    assert dialog.windowTitle() == "Monday message for your writing partner"
+    assert dialog.text().startswith("This week I plan 10 h 30 min of writing in 7 "
+                                    "blocks over 5 days.")
+    assert "The one that matters most is 1006AIrxOpt, due October 30." in dialog.text()
+    assert answer.data["key"]["code"] == "A"

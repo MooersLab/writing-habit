@@ -32,7 +32,7 @@ def test_tables_and_views_exist(con):
         "v_week_overall", "v_week_project_mean", "v_week_project_category",
         "v_week_category_mean",
         "v_month_overall", "v_context_overall", "v_schedule_overall",
-        "block_objective", "session_review", "v_week_review",
+        "block_objective", "session_review", "v_week_review", "block_miss",
     ]:
         assert expected in names
 

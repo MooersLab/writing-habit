@@ -284,6 +284,12 @@ class ScheduleEditor(QtWidgets.QWidget):
             "propose a slot to make up each one worth rescuing, or say to let "
             "it go (Rule 9)")
         self.rescue_action.triggered.connect(lambda: self.rescue_missed())
+        self.misses_action = coach_menu.addAction("Ask about missed blocks")
+        self.misses_action.setToolTip(
+            "One question about each block of the week that was missed, for you "
+            "to answer in a sentence. The coach asks and never supplies a reason "
+            "(Rule 6).")
+        self.misses_action.triggered.connect(lambda: self.ask_misses())
         self.numbering_action = coach_menu.addAction("Number a new project...")
         self.numbering_action.setToolTip(
             "Suggest a free four-digit number near the related projects, from "
@@ -301,6 +307,12 @@ class ScheduleEditor(QtWidgets.QWidget):
             "Name the projects of this week that keep missing their objectives "
             "or keep the same next step, so you can break the work down")
         self.stuck_action.triggered.connect(lambda: self.find_stuck())
+        self.plan_message_action = coach_menu.addAction("Monday message for my partner")
+        self.plan_message_action.setToolTip(
+            "A short message that tells your accountability partner the week's "
+            "plan: the hours, the main projects, and the one that matters most. "
+            "You edit it and send it yourself (Rule 8).")
+        self.plan_message_action.triggered.connect(lambda: self.plan_message())
         self.partner_action = coach_menu.addAction("Summary for my partner")
         self.partner_action.setToolTip(
             "A short message about the open week for your accountability "
@@ -2773,6 +2785,119 @@ class ScheduleEditor(QtWidgets.QWidget):
 
         self._ask_coach(path, lambda con: coachmod.partner_summary(
             model, con, week, today=today, log=log), show)
+        return result.get("answer")
+
+    def ask_misses(self):
+        """Ask one question about each missed block of the open week (Rule 6)."""
+        from .. import misses
+        path = settings.get("db")
+        if not path:
+            self.logged.emit("Missed blocks are found from the sessions in the habit "
+                             "database. Choose it in the Plan or Track form first.")
+            return None
+        monday = self.week_monday()
+        if monday is None:
+            self.logged.emit("The table has no week date, so no block can be "
+                             "found missed")
+            return None
+        week = monday.isoformat()
+        con = coach_runner.connect(path)
+        try:
+            found = misses.find(con, week, self.today().isoformat())
+        finally:
+            con.close()
+        if not found:
+            self.logged.emit(misses.intro(found))
+            return found
+        refused = self.coach_guard.allows()
+        model = None if refused else coach_runner.client()
+        result = {}
+
+        def show(answer):
+            result["answer"] = answer
+            if refused:
+                answer.source = ("plain summary written without a model, because "
+                                 f"{refused}")
+            answer.data["intro"] = misses.intro(found)
+            dialog = coach_runner.MissesDialog(answer, parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            if accepted:
+                con = coach_runner.connect(path)
+                try:
+                    for miss, question, reason in zip(found, answer.data["questions"],
+                                                      dialog.answers()):
+                        misses.save(con, miss, question, reason)
+                finally:
+                    con.close()
+                saved = sum(bool(r) for r in dialog.answers())
+                self.logged.emit(f"Saved {saved} reason{'' if saved == 1 else 's'} "
+                                 "for missed blocks")
+            if answer.log_id is not None:
+                self._settle(path, answer, accepted)
+
+        self._ask_coach(path, lambda con: coachmod.ask_misses(
+            model, found, con=None if refused else con, week_start=week), show)
+        return result.get("answer")
+
+    def plan_message(self):
+        """Draft the Monday message that tells a partner the week's plan (Rule 8)."""
+        from .. import weekplan
+        if self.table is None:
+            return None
+        monday = self.week_monday()
+        if monday is None:
+            self.logged.emit("The table has no week date, so there is no week to "
+                             "describe")
+            return None
+        week = monday.isoformat()
+        blocks = self.table.blocks()
+        legend = {code: description
+                  for code, (description, _risk) in self.table.legend().items()}
+        path = settings.get("db")
+        objectives = []
+        if path:
+            con = coach_runner.connect(path)
+            try:
+                reviewmod.ensure(con)
+                objectives = [(r[0], r[1]) for r in con.execute(
+                    "SELECT code, text FROM block_objective WHERE week_start = ?"
+                    " AND done = 0 ORDER BY day, start_time, position, objective_id",
+                    (week,))]
+            finally:
+                con.close()
+        plan = weekplan.gather(week, self.table.totals()["project"], legend,
+                               len(blocks), len({b.offset for b in blocks}), objectives)
+        if plan is None:
+            self.logged.emit("The week has no blocks yet, so there is no plan to tell")
+            return None
+        refused = self.coach_guard.allows()
+        model = None if refused else coach_runner.client()
+        result = {}
+
+        def show(answer):
+            result["answer"] = answer
+            if refused:
+                answer.source = ("plain summary written without a model, because "
+                                 f"{refused}")
+            dialog = coach_runner.PartnerDialog(
+                answer, parent=self, title="Monday message for your writing partner",
+                intro=("The week's plan for your accountability partner. Edit it as "
+                       "you like, then copy it into a message. Nothing is sent "
+                       "for you."))
+            accepted = self.run_coach_dialog(dialog)
+            if accepted:
+                QtWidgets.QApplication.clipboard().setText(dialog.text())
+                self.logged.emit("Copied the Monday message to the clipboard")
+            if answer.log_id is not None:
+                self._settle(path, answer, accepted)
+
+        if path:
+            self._ask_coach(path, lambda con: coachmod.plan_message(
+                model, plan, con=None if refused else con, week_start=week), show)
+        else:
+            self.coach_runner.run(lambda: coachmod.plan_message(model, plan), show,
+                                  lambda exc: self.logged.emit(
+                                      f"The coach could not answer: {exc}"))
         return result.get("answer")
 
     def semester_span(self):

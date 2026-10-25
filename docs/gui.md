@@ -682,9 +682,11 @@ written without a model, so nothing depends on it.
 | Coach menu | **Match blocks to my energy** | The blocks whose hours do not suit their kind of writing, by your energy profile, and swaps that fix them. See [The Energy tab](#the-energy-tab). |
 | Grasscatcher tab | **Capture** | Turns a thought typed or dictated in plain words into a coded task. See [Quick capture](#quick-capture). |
 | Coach menu | **Rescue missed blocks** | The missed blocks worth making up, with a slot for each, and the ones to let go. See [Missed-block rescue](#missed-block-rescue). |
+| Coach menu | **Ask about missed blocks** | One question about each missed block of the week, for you to answer in a sentence. See [Asking why a block was missed](#asking-why-a-block-was-missed). |
 | Coach menu | **Number a new project...** | A free number near the related projects, and any project forming inside another. See [Numbering a new project](#numbering-a-new-project). |
 | Coach menu or Carried over tab | **Triage carried projects** | A keep, defer, or drop suggestion for each carried-over project, with a reason. See [Triaging the carried projects](#triaging-the-carried-projects). |
 | Coach menu | **Find stuck projects** | The projects of the week that keep missing their objectives or keep the same next step. See the stuck sign under [Objectives and review](#objectives-and-review-for-a-block). |
+| Coach menu | **Monday message for my partner** | A short message that tells your partner the week's plan. See [The Monday message](#the-monday-message). |
 | Coach menu | **Semester review** | A short narrative of the semester for an annual faculty report, in your voice. See [Semester review](#semester-review). |
 | Coach menu | **Summary for my partner** | A short message about the open week for an accountability partner, written as you. Edit it and press **Copy to clipboard**, then paste it into an email or a chat. Nothing is sent for you. |
 
@@ -857,6 +859,34 @@ the project's name does not hold. Check a number and press **Add the first
 checked to the current list** to add the project, such as
 `0143RETKinasePROTACDegraders`, to the current semester list. Nothing is renamed
 and no folder is made or moved.
+
+### Asking why a block was missed
+
+The weekly comparison shows that a block was missed, but not why, and the why
+is what Rule 6 asks you to write down. **Coach > Ask about missed blocks**
+lists the blocks of the open week that passed with nothing tracked and asks one
+question about each, such as "The Tuesday 05:00-06:30 block of A 1001grantR01
+was missed for the second week in a row. What took that slot?". The streak
+counts the earlier weeks, up to four, in which the same project's block on the
+same weekday and at the same time was missed too.
+
+Answer each question in a sentence and press **Save the answers**. The reasons
+are kept in the `block_miss` table of the habit database, and emptying a box
+removes a saved reason. A model, when on, may only reword the questions. It is
+never asked for a reason, because only you know it, and a reply that does not
+give one question per block, or that holds a number the facts do not, is
+replaced by the plain questions.
+
+### The Monday message
+
+Rule 8 suggests telling a partner the plan on Monday and how it went on Friday.
+**Coach > Monday message for my partner** drafts the Monday half from the open
+table: the hours planned, the blocks and the days they fall on, the three
+projects with the most time, and the one that matters most, which is the
+project with the nearest deadline still ahead, or the one with the most time
+when none has a deadline. When the habit database holds objectives for that
+project's blocks this week, the first one is quoted. Edit the draft and press
+**Copy to clipboard**. Nothing is sent for you.
 
 ### Semester review
 

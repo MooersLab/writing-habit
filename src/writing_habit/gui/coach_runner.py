@@ -260,3 +260,54 @@ class PartnerDialog(QtWidgets.QDialog):
     def text(self) -> str:
         """Return the draft as the writer left it."""
         return self.editor.toPlainText().strip()
+
+
+class MissesDialog(QtWidgets.QDialog):
+    """One question per missed block, each with a box for the writer's reason.
+
+    The coach only asks. **Save the answers** keeps each reason in the
+    ``block_miss`` table, and an emptied box removes a saved reason.
+    """
+
+    def __init__(self, answer: coach.Answer, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Why were these blocks missed?")
+        self.answer = answer
+        layout = QtWidgets.QVBoxLayout(self)
+        intro = QtWidgets.QLabel(answer.data.get("intro", ""))
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        self.boxes: List[QtWidgets.QLineEdit] = []
+        for question, miss in zip(answer.data["questions"], answer.data["misses"]):
+            label = QtWidgets.QLabel(question)
+            label.setWordWrap(True)
+            layout.addWidget(label)
+            box = QtWidgets.QLineEdit(miss.reason)
+            box.setPlaceholderText("What took that slot, in a sentence")
+            layout.addWidget(box)
+            self.boxes.append(box)
+        source = QtWidgets.QLabel(source_line(answer.source))
+        source.setWordWrap(True)
+        source.setStyleSheet("color: #898781;")
+        layout.addWidget(source)
+        facts = QtWidgets.QPushButton("Show what was sent")
+        facts.setAutoDefault(False)
+        facts.setCheckable(True)
+        self.facts_view = QtWidgets.QPlainTextEdit(answer.facts or "Nothing was sent.")
+        self.facts_view.setReadOnly(True)
+        self.facts_view.setVisible(False)
+        facts.toggled.connect(self.facts_view.setVisible)
+        layout.addWidget(facts)
+        layout.addWidget(self.facts_view)
+        buttons = QtWidgets.QDialogButtonBox()
+        self.accept_button = buttons.addButton("Save the answers",
+                                               QtWidgets.QDialogButtonBox.AcceptRole)
+        buttons.addButton("Close", QtWidgets.QDialogButtonBox.RejectRole)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.resize(640, 120 + 70 * len(self.boxes))
+
+    def answers(self) -> List[str]:
+        """Return the reasons as the writer left them, one per question."""
+        return [box.text().strip() for box in self.boxes]

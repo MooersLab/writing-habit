@@ -322,6 +322,8 @@ def _as_text(task: str, data) -> str:
                          for i, item in enumerate(data))
     if task == "capture":
         return data.entry_text()
+    if task == "misses":
+        return "\n".join(data)
     if task == "weeks":
         return "\n".join(data.get("patterns", []) + [data.get("change", "")]).strip()
     return json.dumps(data)
@@ -1057,6 +1059,61 @@ def semester_review(client: Optional[Client], semester, con=None,
     answer = _run("semester", client, facts, lambda: semestermod.plain(semester),
                   parse, con, week_start, prompts)
     answer.data = {"text": answer.data, "semester": semester}
+    return answer
+
+
+def ask_misses(client: Optional[Client], found, con=None,
+               week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Write one question about each missed block (Rule 6).
+
+    ``found`` are :class:`writing_habit.misses.Miss` rows the software listed.
+    The model may only reword the questions. A reply that does not give one
+    question per block, or that holds a number the facts do not, is replaced
+    by the plain questions. With nothing missed, no model is asked.
+    """
+    from . import misses
+
+    if not found:
+        return Answer(data={"questions": [], "misses": []}, text=misses.intro(found),
+                      source="plain summary written without a model")
+    facts = misses.facts(found)
+    allowed = _numbers(facts)
+
+    def parse(reply):
+        try:
+            lines = misses.parse(reply, found)
+        except ValueError as exc:
+            raise CoachError(str(exc))
+        if not _numbers("\n".join(lines)) <= allowed:
+            raise CoachError("a question held a number that is not in the facts")
+        return lines
+
+    answer = _run("misses", client, facts, lambda: misses.plain(found), parse,
+                  con, week_start, prompts)
+    answer.text = "\n".join(answer.data)
+    answer.data = {"questions": answer.data, "misses": list(found)}
+    return answer
+
+
+def plan_message(client: Optional[Client], plan: dict, con=None,
+                 week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Draft the Monday message that tells a partner the week's plan (Rule 8)."""
+    from . import weekplan
+
+    facts = weekplan.facts(plan)
+    allowed = _numbers(facts)
+
+    def parse(reply):
+        text = _paragraphs(reply)
+        if not text:
+            raise CoachError("the local model sent an empty draft")
+        if not _numbers(text) <= allowed:
+            raise CoachError("the draft held a number that is not in your plan")
+        return text
+
+    answer = _run("plan_message", client, facts, lambda: weekplan.plain(plan), parse,
+                  con, week_start, prompts)
+    answer.data = {"text": answer.data, **plan}
     return answer
 
 

@@ -155,6 +155,18 @@
       "system": "A semester has ended, and the writer needs a short account of their writing for an annual faculty report. The software has already gathered the facts: the time planned and written, the share of the plan kept by month, the projects that took the most time, the projects completed, and objectives met in the writer's own words. Write two short paragraphs in the first person, as the writer. Lead with what was finished and written, then give the time and the share of the plan kept. Quote met objectives exactly as given. Do not praise, do not apologize, do not invent any project, publication, or result, and do not add any number that is not in the facts.",
       "instruction": "Draft the semester narrative for the annual report.",
       "schema": null
+    },
+    "misses": {
+      "rule": 6,
+      "system": "Some of the writer's planned blocks this week were missed, and the software has listed them. Write one short question for each missed block, in the order given, one question per line, with no numbering and nothing else. Each question names the block's day and time and asks what took that slot, in a curious tone with no blame. When a block was missed in the same slot for several weeks, say so. Never suggest a reason, because only the writer knows it, and do not add any number that is not in the facts.",
+      "instruction": "Write one question for each missed block.",
+      "schema": null
+    },
+    "plan_message": {
+      "rule": 8,
+      "system": "It is Monday, and the writer tells an accountability partner the week's writing plan. The software has already gathered the plan: the hours planned, the blocks and days, the projects that take the most time, and the one project that matters most, with its first objective when there is one. Write two or three sentences in the first person, as the writer, to the partner. Name the planned hours, the main projects, and the one that matters most. Do not promise more than the plan, do not add any project, and do not add any number that is not in the facts.",
+      "instruction": "Draft the Monday message to the writing partner.",
+      "schema": null
     }
   }
 }

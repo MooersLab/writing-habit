@@ -115,7 +115,8 @@ def ensure(con: sqlite3.Connection) -> None:
             con.execute("DROP TABLE block_objective_old")
             con.commit()
             return
-    if not {"block_objective", "session_review", "v_week_review", "ai_log"} <= have:
+    if not {"block_objective", "session_review", "v_week_review", "ai_log",
+            "block_miss"} <= have:
         db.init_db(con)
 
 

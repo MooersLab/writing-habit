@@ -69,7 +69,7 @@ def _week(con, week, planned, actual, code="A", day_offset=0, schedule=None, tag
 def test_the_prompts_file_covers_every_task_and_forbids_ghostwriting():
     prompts = coach.load_prompts()
     assert set(prompts["tasks"]) == {"objectives", "grasscatcher", "debrief",
-                                     "weeks", "size", "partner", "coverage", "energy", "capture", "rescue", "numbering", "triage", "semester"}
+                                     "weeks", "size", "partner", "coverage", "energy", "capture", "rescue", "numbering", "triage", "semester", "misses", "plan_message"}
     assert "never write" in prompts["rules"]
     for name, task in prompts["tasks"].items():
         assert task["system"] and task["instruction"], name
