@@ -37,7 +37,7 @@ from .periods_dialog import PeriodsDialog
 from .project_list_view import ProjectListPanel
 from . import coach_runner
 from .review_panel import ReviewDialog
-from .hour_view import HOUR_COLUMN, HourGridModel, HourPicker
+from .hour_view import HOUR_COLUMN, HourCellDelegate, HourGridModel, HourPicker
 from .table_model import TIME_COLUMN, CodeDelegate, WeeklyTableModel
 
 import sys as _sys
@@ -371,6 +371,7 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.hour_model = HourGridModel(parent=self)
         self.hour_view = QtWidgets.QTableView()
         self.hour_view.setModel(self.hour_model)
+        self.hour_view.setItemDelegate(HourCellDelegate(self.hour_view))
         self.hour_view.setAlternatingRowColors(False)
         self.hour_view.setWordWrap(True)
         self.hour_view.verticalHeader().setVisible(False)

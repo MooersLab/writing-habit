@@ -318,6 +318,12 @@ time says that it does not overlap the selected one.
 per hour, with the days as columns. Press it again for the row view. The hour
 view is the default, and the window remembers which view you used last.
 
+Each block is drawn as a bar over the minutes it fills within the hour, with
+its colour at half opacity and a solid outline. Two blocks that touch show the
+line between them, two that overlap show both outlines, offset a little, and a
+deeper colour where they cross, and a break inside an hour, such as 06:30 to
+06:45, stays white.
+
 ![The hour view of a week, with a Saturday run of five hours tinted amber and listed in the Breaks panel.](imgs/gui-hour-view.png)
 
 A cell lists the blocks that start in that hour, such as `gB 04:00-06:00`. The

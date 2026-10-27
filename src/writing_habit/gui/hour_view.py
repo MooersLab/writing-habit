@@ -32,6 +32,64 @@ OFF_HOURS_COLOR = "#f4f4f4"
 #: The mark before a code in an hour that a longer block runs into.
 CONTINUES = "↓ "
 
+#: The role that gives the part of an hour each block fills, for the painter.
+SEGMENTS_ROLE = Qt.UserRole + 41
+#: The opacity of a block's fill, so the borders of overlapping or touching
+#: blocks and the white of a break inside the hour both show through.
+FILL_ALPHA = 128
+#: The sideways step between blocks that overlap in time, in pixels, so their
+#: borders do not lie on top of each other.
+LANE_STEP = 4
+
+
+class Segment(tuple):
+    """``(top, bottom, color, lane)``: a block's share of one hour cell.
+
+    ``top`` and ``bottom`` are fractions of the hour, 0 at its start and 1 at
+    its end, ``color`` is the block's fill as a hex string, and ``lane`` counts
+    the earlier blocks in the cell that it overlaps.
+    """
+
+    __slots__ = ()
+
+    def __new__(cls, top: float, bottom: float, color: str, lane: int = 0):
+        return super().__new__(cls, (top, bottom, color, lane))
+
+    top = property(lambda self: self[0])
+    bottom = property(lambda self: self[1])
+    color = property(lambda self: self[2])
+    lane = property(lambda self: self[3])
+
+
+def _minutes(clock: str) -> int:
+    return int(clock[:2]) * 60 + int(clock[3:5])
+
+
+def hour_segments(hour: int, blocks, color_of) -> List[Segment]:
+    """Return the part of hour ``hour`` that each of ``blocks`` fills.
+
+    ``color_of`` gives a block's fill colour. A block that crosses midnight
+    runs to the end of the day. Blocks that overlap in time take successive
+    lanes, so the painter can offset their outlines.
+    """
+    first_minute, last_minute = hour * 60, hour * 60 + 60
+    out: List[Segment] = []
+    spans: List[Tuple[int, int, int]] = []
+    for block in sorted(blocks, key=lambda b: (b.start, b.end, b.row, b.column)):
+        start, end = _minutes(block.start), _minutes(block.end)
+        if end <= start:
+            end = 24 * 60
+        top, bottom = max(start, first_minute), min(end, last_minute)
+        if bottom <= top:
+            continue
+        lane = 0
+        while any(lane == used and top < b and a < bottom for a, b, used in spans):
+            lane += 1
+        spans.append((top, bottom, lane))
+        out.append(Segment((top - first_minute) / 60, (bottom - first_minute) / 60,
+                           color_of(block), lane))
+    return out
+
 
 def sheet_hours() -> Tuple[int, int]:
     """Return the first and last hour the printed sheet draws."""
@@ -179,11 +237,24 @@ class HourGridModel(QtCore.QAbstractTableModel):
             if not self.in_sheet(row):
                 return QtGui.QBrush(QtGui.QColor(OFF_HOURS_COLOR))
             return None
+        if role == SEGMENTS_ROLE:
+            return hour_segments(row, spans + starts, lambda b: self.block_color(b, found))
         if role == Qt.TextAlignmentRole:
             return int(Qt.AlignCenter)
         if role == Qt.ToolTipRole:
             return self.tooltip(starts, spans)
         return None
+
+    def block_color(self, block, found: bool = False) -> str:
+        """Return the fill of one block, by the same priorities as the cell."""
+        cell = (block.row, block.column)
+        if cell in self._conflicts:
+            return CONFLICT_COLOR
+        if found and block.letter in self.highlight:
+            return FIND_COLOR
+        if cell in self._breaks:
+            return BREAK_COLOR
+        return ACTIVITY_COLOR[block.category]
 
     def tooltip(self, starts, spans) -> Optional[str]:
         lines: List[str] = []
@@ -201,6 +272,52 @@ class HourGridModel(QtCore.QAbstractTableModel):
         if not lines:
             return "Double-click or press Enter to place a block in this hour"
         return "\n".join(lines)
+
+
+class HourCellDelegate(QtWidgets.QStyledItemDelegate):
+    """Paint each block as a half-transparent bar over the minutes it fills.
+
+    A cell no longer takes one colour for the whole hour. Each block is drawn
+    from its start to its end within the hour with a fill at half opacity and
+    a solid outline, so two blocks that touch show the line between them, two
+    that overlap show both outlines and a deeper colour where they cross, and
+    a break inside the hour stays white.
+    """
+
+    def paint(self, painter, option, index):
+        segments = index.data(SEGMENTS_ROLE)
+        if not segments:
+            super().paint(painter, option, index)
+            return
+        opt = QtWidgets.QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        rect = opt.rect
+        painter.save()
+        base = QtGui.QColor("#ffffff")
+        hour = index.row()
+        model = index.model()
+        if hasattr(model, "in_sheet") and not model.in_sheet(hour):
+            base = QtGui.QColor(OFF_HOURS_COLOR)
+        painter.fillRect(rect, base)
+        for segment in segments:
+            top = rect.top() + round(segment.top * rect.height())
+            bottom = rect.top() + round(segment.bottom * rect.height())
+            inset = 1 + LANE_STEP * segment.lane
+            bar = QtCore.QRect(rect.left() + inset, top,
+                               max(rect.width() - 2 * inset, 4), max(bottom - top, 2))
+            fill = QtGui.QColor(segment.color)
+            outline = fill.darker(170)
+            fill.setAlpha(FILL_ALPHA)
+            painter.fillRect(bar, fill)
+            painter.setPen(QtGui.QPen(outline, 1))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(bar.adjusted(0, 0, -1, -1))
+        painter.restore()
+        # The text and any selection are drawn over the bars, without the
+        # cell's own background, which the bars replace.
+        opt.backgroundBrush = QtGui.QBrush(Qt.NoBrush)
+        style = opt.widget.style() if opt.widget is not None else QtWidgets.QApplication.style()
+        style.drawControl(QtWidgets.QStyle.CE_ItemViewItem, opt, painter, opt.widget)
 
 
 # -- remembered ranges -----------------------------------------------------

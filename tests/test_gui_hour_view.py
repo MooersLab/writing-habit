@@ -258,3 +258,73 @@ def test_drop_unused_rows_does_nothing_when_declined(editor, monkeypatch):
     assert editor.drop_unused_rows() == 0
     assert editor.table.to_text() == text
     assert not Path(editor.table.path + ".bak").exists()
+
+
+# -- half-transparent bars within an hour -------------------------------------
+BARS = (
+    "#+TITLE: bars\n"
+    "|        Time | M  | Tu |\n"
+    "|-------------+----+----|\n"
+    "| 05:00-05:30 | gA | gA |\n"
+    "| 05:15-06:00 |    | eB |\n"
+    "| 05:30-05:45 | eB |    |\n"
+    "|-------------+----+----|\n"
+    "| A: one :safe: |  |  |\n"
+    "| B: two :safe: |  |  |\n"
+)
+
+
+def test_each_block_fills_only_its_minutes_of_the_hour(qtbot, tmp_path, monkeypatch, store):
+    from writing_habit.gui.hour_view import SEGMENTS_ROLE
+    from writing_habit.gui.table_model import ACTIVITY_COLOR
+    editor_ = _open(qtbot, tmp_path, monkeypatch, store, BARS)
+    model = editor_.hour_model
+    monday = model.data(model.index(5, 1), SEGMENTS_ROLE)
+    # Monday: 05:00-05:30 then 05:30-05:45 touch, and 05:45-06:00 is a break.
+    assert [(s.top, s.bottom, s.lane) for s in monday] == [(0.0, 0.5, 0), (0.5, 0.75, 0)]
+    assert [s.color for s in monday] == [ACTIVITY_COLOR["generative"],
+                                         ACTIVITY_COLOR["editing"]]
+    # Tuesday: 05:15-06:00 overlaps 05:00-05:30, so it takes the next lane.
+    tuesday = model.data(model.index(5, 2), SEGMENTS_ROLE)
+    assert [(s.top, s.bottom, s.lane) for s in tuesday] == [(0.0, 0.5, 0), (0.25, 1.0, 1)]
+    assert model.data(model.index(7, 1), SEGMENTS_ROLE) == []
+
+
+def test_a_long_block_fills_each_hour_it_runs_into(editor):
+    from writing_habit.gui.hour_view import SEGMENTS_ROLE
+    model = editor.hour_model
+    # Tuesday 08:00-10:00, then 10:00-11:00: hour 9 is full, hour 10 holds B only.
+    assert [(s.top, s.bottom) for s in model.data(model.index(9, 2), SEGMENTS_ROLE)] == [(0.0, 1.0)]
+    assert [(s.top, s.bottom) for s in model.data(model.index(10, 2), SEGMENTS_ROLE)] == [(0.0, 1.0)]
+
+
+def test_the_bars_are_painted_half_transparent(qtbot, tmp_path, monkeypatch, store):
+    from writing_habit.gui.qt import QtGui
+    editor_ = _open(qtbot, tmp_path, monkeypatch, store, BARS)
+    editor_.set_hour_view(True)
+    editor_.resize(900, 700)
+    editor_.show()
+    qtbot.waitExposed(editor_)
+    view = editor_.hour_view
+    view.setRowHeight(5, 80)
+    rect = view.visualRect(editor_.hour_model.index(5, 1))
+    image = view.viewport().grab().toImage()
+    x = rect.left() + 3
+    fill = QtGui.QColor(image.pixel(x, rect.top() + 10))          # inside 05:00-05:30
+    gap = QtGui.QColor(image.pixel(x, rect.top() + rect.height() - 6))  # the 05:45 break
+    assert gap.name() == "#ffffff"
+    assert fill.name() not in ("#ffffff", "#dcebfa")              # blended, not solid
+
+
+def _open(qtbot, tmp_path, monkeypatch, store, text):
+    pytest.importorskip("PyQt5", reason="the graphical extra is not installed")
+    monkeypatch.setattr("writing_habit.gui.settings.get", lambda key: store.get(key, ""))
+    monkeypatch.setattr("writing_habit.gui.settings.put",
+                        lambda key, value: store.__setitem__(key, value))
+    from writing_habit.gui.schedule_editor import ScheduleEditor
+    widget = ScheduleEditor()
+    qtbot.addWidget(widget)
+    path = tmp_path / "bars.org"
+    path.write_text(text, encoding="utf-8")
+    widget.open(str(path))
+    return widget
