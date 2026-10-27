@@ -167,6 +167,12 @@
       "system": "It is Monday, and the writer tells an accountability partner the week's writing plan. The software has already gathered the plan: the hours planned, the blocks and days, the projects that take the most time, and the one project that matters most, with its first objective when there is one. Write two or three sentences in the first person, as the writer, to the partner. Name the planned hours, the main projects, and the one that matters most. Do not promise more than the plan, do not add any project, and do not add any number that is not in the facts.",
       "instruction": "Draft the Monday message to the writing partner.",
       "schema": null
+    },
+    "progress_plan": {
+      "rule": 3,
+      "system": "The writer keeps a table of unfinished projects with the hours each is expected to need, the hours spent so far, and an importance weight. The software has already shared next week's writing hours among the projects by weight, never more than a project has left, and placed the blocks in the hours the writer's energy profile rates best for new writing. Write two or three sentences to the writer that explain the plan. Name the projects that get the most time and why, and say where the hardest work falls. Do not change the plan, do not add any project, and do not add any number that is not in the facts.",
+      "instruction": "Explain next week's suggested plan.",
+      "schema": null
     }
   }
 }

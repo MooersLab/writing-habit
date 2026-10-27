@@ -53,6 +53,7 @@ schedule to comparing the week you planned with the week you had.
 | Tab | What it holds | Program |
 |-----|---------------|---------|
 | Schedule | the weekly table editor, and the `template` and `check` forms | `writing-schedule` |
+| Progress | the hours spent on each unfinished project against the hours it needs, as bars | `writing-habit` |
 | Generate | `generate`, `export`, and `weeks` | `writing-schedule` |
 | Sheets | `sheets` | `writing-schedule` |
 | Plan | `initdb` and `plan import` | `writing-habit` |
@@ -705,6 +706,7 @@ written without a model, so nothing depends on it.
 | Coach menu | **Number a new project...** | A free number near the related projects, and any project forming inside another. See [Numbering a new project](#numbering-a-new-project). |
 | Coach menu or Carried over tab | **Triage carried projects** | A keep, defer, or drop suggestion for each carried-over project, with a reason. See [Triaging the carried projects](#triaging-the-carried-projects). |
 | Coach menu | **Find stuck projects** | The projects of the week that keep missing their objectives or keep the same next step. See the stuck sign under [Objectives and review](#objectives-and-review-for-a-block). |
+| Coach menu | **Plan next week from progress** | Next week's hours shared among the projects of the Progress tab by weight and placed in your best hours. See [Planning next week from progress](#planning-next-week-from-progress). |
 | Coach menu | **Monday message for my partner** | A short message that tells your partner the week's plan. See [The Monday message](#the-monday-message). |
 | Coach menu | **Semester review** | A short narrative of the semester for an annual faculty report, in your voice. See [Semester review](#semester-review). |
 | Coach menu | **Summary for my partner** | A short message about the open week for an accountability partner, written as you. Edit it and press **Copy to clipboard**, then paste it into an email or a chat. Nothing is sent for you. |
@@ -906,6 +908,32 @@ project with the nearest deadline still ahead, or the one with the most time
 when none has a deadline. When the habit database holds objectives for that
 project's blocks this week, the first one is quoted. Edit the draft and press
 **Copy to clipboard**. Nothing is sent for you.
+
+### Planning next week from progress
+
+**Coach > Plan next week from progress** reads the progress table of the open
+week file (see [The Progress tab](#the-progress-tab)) and suggests how to
+spend next week. The writing hours to share are the project hours planned in
+the open week, or ten hours when it plans none. They are shared among the
+projects that have both an estimate and a weight, in proportion to the
+weights, in steps of 30 minutes. A project never gets more than it has left,
+and time it cannot use goes to the others by their weights alone. A project
+without an estimate or a weight is named and left out.
+
+Each project's minutes are then cut into blocks of at most 90 minutes and
+placed on Monday to Friday, heaviest project first, in the hours your
+[energy profile](#the-energy-tab) rates best for new writing. Blocks never
+overlap, a day holds at most four, and every run of blocks keeps the two-hour
+break rule. The dialog lists one line per project with its hours and its
+blocks. **Add the checked to Next week** puts the checked projects on the
+**Next week** list, copying the code-free entry from the current list so the
+deadline and risk tag come along, and copies the suggested blocks to the
+clipboard. Nothing is placed in the grid for you, because next week's table
+is a new file.
+
+The software makes the plan. The model only words a two- or three-sentence
+note around it, and a note holding a number the facts do not hold is replaced
+by the plain note.
 
 ### Semester review
 
@@ -1166,6 +1194,49 @@ After a change to the window, regenerate the screenshots from the real program:
 ```
 QT_QPA_PLATFORM=offscreen PYTHONPATH=src python scripts/make_tutorial_images.py
 ```
+
+## The Progress tab
+
+The **Progress** tab sits beside the Schedule tab and charts how far each
+unfinished project has come. It reads a table named `progress` at the end of
+the week file that the Schedule tab has open:
+
+```org
+#+NAME: progress
+| Project ID | Project name                | Est. hours | Hours spent | Weight |
+|------------+-----------------------------+------------+-------------+--------|
+| 0142       | RETKinaseCovalentInhibitors |        120 |        47.8 |      4 |
+| 0201       | dusp1                       |        200 |       200.8 |      4 |
+```
+
+Each project is one horizontal bar, labelled on the y axis by its number and
+name and sorted by number. The whole bar is the **Est. hours** the project is
+expected to need, the green part is the **Hours spent**, and the white part is
+the time left. A project past its estimate shows the overrun in darker green
+beyond a tick at the estimate, and a project with no estimate shows only its
+green bar and the words *no estimate*. Hover over a bar for its numbers.
+
+- **Add projects from the current list** adds a row for each numbered project
+  of this semester's list that the table lacks, and makes the table at the end
+  of the file when there is none.
+- **Update hours spent** adds up each project's sessions in the `zTimeSpent`
+  table of `mytime.db` and writes the totals into the **Hours spent** column.
+  A session counts for a project when its `ProjectID`, or the start of its
+  `ProjectDirectory`, is the project's number. The minutes come from the
+  `Start` and `End` times, so the tracker's own computed columns are not used,
+  and the tracker is opened read-only. The path is the one the Track tab's sync
+  form remembers, or `~/6003TimeTracking/cb/mytime.db`.
+- Type the **Est. hours** and the **Weight** in the table below the chart.
+  **Hours spent** is computed and cannot be typed over. The weight is yours to
+  assign. A larger number means the project matters more, and only its size
+  relative to the other weights counts. The Coach menu's **Plan next week from
+  progress** uses it, as described in
+  [Planning next week from progress](#planning-next-week-from-progress).
+- **Remove row** takes a finished project off the table.
+
+Every change marks the week file as edited, and the table is saved with it.
+The table passes through the list readers untouched, in both the one-cell and
+the column layouts.
 
 ## Semester project lists
 

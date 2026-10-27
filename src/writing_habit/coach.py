@@ -1027,6 +1027,27 @@ def triage_projects(client: Optional[Client], found, period: str, con=None,
     return answer
 
 
+def progress_plan(client: Optional[Client], plan, con=None,
+                  week_start: Optional[str] = None, prompts=None) -> Answer:
+    """Explain next week's suggested plan from the progress table (Rule 3).
+
+    ``plan`` is a :class:`writing_habit.progress.Plan`. The software shared
+    the hours by weight and placed the blocks by energy; the model only words
+    the note. With nothing to share, the plain note is enough, so no model is
+    asked and nothing is logged.
+    """
+    from . import progress
+
+    plain_text = progress.plain(plan)
+    if not plan.shares:
+        return Answer(data={"note": plain_text, "plan": plan}, text=plain_text,
+                      source="plain summary written without a model")
+    answer = _note("progress_plan", client, progress.facts(plan), plain_text,
+                   con, week_start, prompts)
+    answer.data = {"note": answer.data, "plan": plan}
+    return answer
+
+
 def _paragraphs(text) -> str:
     """Tidy a reply but keep its paragraph breaks."""
     parts = re.split(r"\n\s*\n", str(text or "").strip())

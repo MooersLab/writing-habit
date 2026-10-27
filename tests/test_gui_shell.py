@@ -37,8 +37,11 @@ def window(app, tmp_path, monkeypatch):
 
 def test_every_loop_stage_has_a_tab(window):
     titles = [window.tabs.tabText(i) for i in range(window.tabs.count())]
-    assert titles == [entry[0] for entry in mainwindow.TABS] + [mainwindow.TUTORIALS]
+    stages = [entry[0] for entry in mainwindow.TABS]
+    expected = stages[:1] + [mainwindow.PROGRESS] + stages[1:] + [mainwindow.TUTORIALS]
+    assert titles == expected
     assert titles[0] == "Schedule"          # the loop starts at the table
+    assert titles[1] == "Progress"          # the chart of the Schedule tab's projects
 
 
 def test_window_carries_the_version(window):

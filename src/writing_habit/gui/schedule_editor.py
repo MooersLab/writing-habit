@@ -310,6 +310,13 @@ class ScheduleEditor(QtWidgets.QWidget):
             "Name the projects of this week that keep missing their objectives "
             "or keep the same next step, so you can break the work down")
         self.stuck_action.triggered.connect(lambda: self.find_stuck())
+        self.progress_plan_action = coach_menu.addAction("Plan next week from progress")
+        self.progress_plan_action.setToolTip(
+            "Share next week's writing hours among the unfinished projects of the "
+            "Progress tab by their importance weights, never more than a project "
+            "has left, and place the blocks in the hours your energy profile rates "
+            "best. The checked projects can be added to the Next week list.")
+        self.progress_plan_action.triggered.connect(lambda: self.plan_from_progress())
         self.plan_message_action = coach_menu.addAction("Monday message for my partner")
         self.plan_message_action.setToolTip(
             "A short message that tells your accountability partner the week's "
@@ -2519,6 +2526,87 @@ class ScheduleEditor(QtWidgets.QWidget):
                 self._reload_list(name)
             self.on_edit()
         return done
+
+    # -- next week from the progress table (Rule 3) -----------------------------
+    #: Minutes shared out when the open week plans no project time to go by.
+    DEFAULT_CAPACITY = 600
+
+    def progress_capacity(self) -> int:
+        """Return the minutes to share next week: the open week's planned project time."""
+        planned = sum(self.table.totals()["project"].values()) if self.table else 0
+        return planned or self.DEFAULT_CAPACITY
+
+    def progress_plan(self):
+        """Return next week's suggested :class:`~writing_habit.progress.Plan`, or ``None``."""
+        from .. import progress
+        if self.table is None:
+            return None
+        rows = progress.read(self.table.lists.lines)
+        if rows is None:
+            self.logged.emit("The week file has no progress table. Make one on the "
+                             "Progress tab first.")
+            return None
+        return progress.plan(rows, self.progress_capacity(), self.energy_panel.profile)
+
+    def plan_from_progress(self):
+        """Suggest next week's plan from the weights and energy, and offer to list it."""
+        plan = self.progress_plan()
+        if plan is None:
+            return None
+        monday = self.week_monday()
+        week = monday.isoformat() if monday else None
+        out = {}
+
+        def show(answer, path):
+            out["answer"] = answer
+            if not plan.shares:
+                self.logged.emit(answer.data["note"])
+                return
+            items = []
+            for row, minutes in plan.shares:
+                when = [b.line().rsplit("  ", 1)[0] for b in plan.blocks if b.row is row]
+                items.append(f"{row.label}: {minutes // 60} h {minutes % 60:02d} min"
+                             + (f" ({'; '.join(when)})" if when else ""))
+            dialog = coach_runner.SuggestionDialog(
+                "Next week from progress", answer, items, intro=answer.data["note"],
+                accept_text="Add the checked to Next week", parent=self)
+            accepted = self.run_coach_dialog(dialog)
+            if accepted:
+                chosen = [plan.shares[i][0] for i in dialog.chosen()]
+                self.add_to_next_week(chosen)
+                QtWidgets.QApplication.clipboard().setText(
+                    "\n".join(b.line() for b in plan.blocks if b.row in chosen))
+                self.logged.emit("Copied next week's suggested blocks to the clipboard")
+            if path and answer.log_id is not None:
+                self._settle(path, answer, accepted)
+
+        self._plan_check(lambda model, con: coachmod.progress_plan(
+            model, plan, con=con, week_start=week), show)
+        return out.get("answer")
+
+    def add_to_next_week(self, rows) -> int:
+        """Put each progress row's project on the Next week list.  Return how many."""
+        from ..project_lists import Entry
+        lists, added = self.table.lists, 0
+        target = WEEKS[0]
+        have = {e.project[:4] for e in lists.entries(target)}
+        current = {e.project[:4]: e for e in lists.entries(CURRENT_LIST)}
+        for row in rows:
+            if row.number in have:
+                continue
+            entry = current.get(row.number)
+            entry = (Entry(None, entry.description, entry.risk, entry.activity)
+                     if entry else Entry(None, f"{row.number}{row.name}"))
+            lists.insert(target, None, entry)
+            have.add(row.number)
+            added += 1
+        if added:
+            self.table.dirty = True
+            self._reload_list(target)
+            self.on_edit()
+            self.logged.emit(f"Added {added} project{'' if added == 1 else 's'} "
+                             "to the Next week list")
+        return added
 
     # -- stuck projects (Rule 4) -----------------------------------------------
     def find_stuck(self):

@@ -183,8 +183,10 @@ on the Carried over tab suggests keeping, deferring, or dropping each project
 carried into a new period, from its recent minutes and its deadline.
 **Semester review** drafts a narrative of the semester for an annual faculty
 report, **Ask about missed blocks** asks one question about each missed block
-and saves your answers, and **Monday message for my partner** tells your
-partner the week's plan. Grasscatcher
+and saves your answers, **Monday message for my partner** tells your
+partner the week's plan, and **Plan next week from progress** shares next
+week's hours among your unfinished projects by their importance weights and
+places them in your best hours. Grasscatcher
 tasks carry their project's number, so they stay with their projects when codes
 change between weeks. It uses a
 model served on your own computer through Ollama, LM Studio, or llama.cpp when
@@ -210,6 +212,20 @@ The project lists are chosen by two rows of buttons. The **Weeks** row holds
 in a later week waits there until **Copy to this week's legend** brings it into
 the week, which keeps each week's plan short. The week lists sit before
 `#+PROJECT_PERIOD:` in the file, so a semester roll forward leaves them alone.
+
+#### The Progress tab
+
+The **Progress** tab, beside Schedule, draws one horizontal bar for each
+unfinished project in the `progress` table at the end of the week file. The
+whole bar is the hours the project is expected to need, the green part is the
+hours spent, and the white part is the hours left. **Update hours spent** adds
+up each project's sessions in the `zTimeSpent` table of `mytime.db`, read-only,
+and **Add projects from the current list** makes the table. You type the
+estimate and an importance weight for each project, and the Schedule tab's
+**Coach > Plan next week from progress** uses the weights and your energy
+profile to suggest next week's blocks.
+
+![The Progress tab with sample estimates, hours, and weights.](assets/images/gui-progress.png)
 
 #### Naming the project lists by period
 

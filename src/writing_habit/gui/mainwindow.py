@@ -51,6 +51,9 @@ TABS: List[Tuple[str, str, Tuple[Tuple[str, str], ...], int]] = [
 #: The title of the last tab, which holds the tutorials rather than forms.
 TUTORIALS = "Tutorials"
 
+#: The tab after Schedule that charts the hours spent on each unfinished project.
+PROGRESS = "Progress"
+
 #: Tabs that gain more than generated forms in a later step.
 PENDING = {}
 
@@ -105,6 +108,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs = QtWidgets.QTabWidget(self)
         for title, purpose, commands, step in TABS:
             self.tabs.addTab(self._page(title, purpose, commands, step), title)
+            if title == "Schedule" and getattr(self, "editor", None) is not None:
+                # Progress follows the week file the Schedule tab has open.
+                from .progress_view import ProgressView
+                self.progress = ProgressView(self.editor, self)
+                self.tabs.addTab(self.progress, PROGRESS)
         # The tutorials come last, after the stages of the loop they describe.
         from .tutorial_view import TutorialsPage
         self.tutorials = TutorialsPage(self)
