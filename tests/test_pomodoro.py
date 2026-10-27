@@ -371,6 +371,23 @@ def test_the_time_tracker_table_is_never_touched(tmp_path):
     assert (clock, hours) == ("01:30", 1.5)
 
 
+def test_a_hand_made_table_with_an_id_column_is_used(tmp_path):
+    import sqlite3
+    from writing_habit import pom_count
+    path = tmp_path / "mytime.db"
+    con = sqlite3.connect(str(path))
+    # The table as it is in mytime.db, made in DB Browser for SQLite.
+    con.execute('CREATE TABLE "zzPomCount" ("ID" INTEGER, "date" DATE, '
+                '"pom_count" INTEGER, "recorded_at" INTEGER, PRIMARY KEY("ID"))')
+    con.execute("INSERT INTO zzPomCount (date, pom_count, recorded_at) "
+                "VALUES ('2026-10-21', 1, '2026-10-21T23:59:00')")
+    con.commit()
+    con.close()
+    assert pom_count.record(path, "zzPomCount", dt.date(2026, 10, 22), 7) == "added"
+    assert pom_count.record(path, "zzPomCount", dt.date(2026, 10, 22), 8) == "updated"
+    assert pom_count.rows(path, "zzPomCount") == [("2026-10-21", 1), ("2026-10-22", 8)]
+
+
 def test_a_table_of_another_shape_is_refused_and_left_alone(tmp_path):
     import sqlite3
     from writing_habit import pom_count

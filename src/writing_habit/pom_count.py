@@ -14,6 +14,7 @@ here imports Qt, so the command line and the tests can use it too.
 
 The database is the time tracker's own, so this module never changes another
 table. It writes only to a table that has exactly the three columns above,
+or those three after an ``ID`` integer primary key,
 refuses the time tracker's ``zTimeSpent`` table by name, and never alters,
 renames, or drops a table or a column.
 """
@@ -32,7 +33,9 @@ DEFAULT_TABLE = "zzPomCount"
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 #: The columns of a Pomodoro count table, the only shape this module writes to.
+#: A table made by hand may also lead with an ``ID`` integer primary key.
 COLUMNS = ("date", "pom_count", "recorded_at")
+SHAPES = {COLUMNS, ("id",) + COLUMNS}
 #: Tables of the time tracker that a Pomodoro count must never be written to.
 PROTECTED = {"ztimespent"}
 
@@ -65,7 +68,7 @@ def check_shape(con, table: str) -> None:
     would write to.
     """
     columns = [r[1] for r in con.execute(f'PRAGMA table_xinfo("{table}")')]
-    if columns and tuple(c.lower() for c in columns) != COLUMNS:
+    if columns and tuple(c.lower() for c in columns) not in SHAPES:
         raise ValueError(f"{table} already exists with the columns "
                          f"{', '.join(columns)}, so it is not a Pomodoro count "
                          f"table. Choose another name, such as {DEFAULT_TABLE}.")
