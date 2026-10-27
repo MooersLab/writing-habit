@@ -257,3 +257,74 @@ def test_plan_note_with_a_new_number_falls_back(editor, store, monkeypatch):
     use_model(monkeypatch, store, "Spend 17 hours on AIrxOpt.")
     answer = editor.plan_from_progress()
     assert answer.data["note"].startswith("Next week's 7 h 30 min go by weight")
+
+
+# -- saving, and updating the plan --------------------------------------------------
+def test_save_writes_the_table_to_disk(view, editor):
+    view.seed()
+    view.grid.item(1, 2).setText("120")
+    view.grid.item(1, 4).setText("5")
+    assert view.save_button.isEnabled()
+    assert "not saved yet" in view.status.text()
+    path = view.save()
+    assert not editor.table.dirty
+    assert not view.save_button.isEnabled()
+    assert "not saved yet" not in view.status.text()
+    rows = progress.read(open(path, encoding="utf-8").read().splitlines())
+    assert (rows[1].estimate, rows[1].weight) == (120, 5)
+
+
+def test_unchecking_and_updating_shares_the_week_again(editor):
+    _weights(editor)
+    seen = {}
+
+    def uncheck(dialog):
+        editor.dialogs.append(dialog)
+        dialog.boxes[1].setChecked(False)          # 0201 dusp1
+        dialog.update_button.click()
+        seen["texts"] = [box.text() for box in dialog.boxes]
+        seen["note"] = dialog.intro_widget.text()
+        return True
+
+    editor.run_coach_dialog = uncheck
+    editor.plan_from_progress()
+    assert seen["texts"][0].startswith("1006 AIrxOpt: 7 h 30 min (")
+    assert seen["texts"][1] == "0201 dusp1: not in this plan"
+    assert seen["note"].startswith("All of next week's 7 h 30 min go to 1006 AIrxOpt.")
+    projects = [e.project for e in editor.table.lists.entries("next week")]
+    assert projects == ["0655VirtIssue25", "1006AIrxOpt"]
+    from writing_habit.gui.qt import QtWidgets
+    assert "dusp1" not in QtWidgets.QApplication.clipboard().text()
+
+
+def test_accepting_after_unchecking_updates_the_plan_first(editor):
+    _weights(editor)
+
+    def uncheck(dialog):
+        editor.dialogs.append(dialog)
+        dialog.boxes[0].setChecked(False)          # 1006 AIrxOpt
+        return True
+
+    editor.run_coach_dialog = uncheck
+    editor.plan_from_progress()
+    dialog = editor.dialogs[-1]
+    assert [r.number for r, _m in dialog.plan.shares] == ["0201"]
+    projects = [e.project for e in editor.table.lists.entries("next week")]
+    assert projects == ["0655VirtIssue25", "0201dusp1"]
+
+
+def test_rechecking_brings_a_project_back(editor):
+    _weights(editor)
+
+    def toggle(dialog):
+        editor.dialogs.append(dialog)
+        dialog.boxes[1].setChecked(False)
+        dialog.update_button.click()
+        dialog.boxes[1].setChecked(True)
+        dialog.update_button.click()
+        return False
+
+    editor.run_coach_dialog = toggle
+    editor.plan_from_progress()
+    dialog = editor.dialogs[-1]
+    assert {r.number: m for r, m in dialog.plan.shares} == {"1006": 330, "0201": 120}

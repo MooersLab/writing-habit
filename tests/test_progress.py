@@ -154,7 +154,7 @@ def test_plan_facts_and_plain_name_the_numbers():
     assert "planned 180 minutes" in facts
     assert "Left out: 0655 VirtIssue25, because it has no estimate" in facts
     text = progress.plain(p)
-    assert text.startswith("Next week's 3 h 00 min go by weight to 0201 dusp1")
+    assert text.startswith("All of next week's 3 h 00 min go to 0201 dusp1.")
     assert "1 project without an estimate or a weight was left out" in text
 
 

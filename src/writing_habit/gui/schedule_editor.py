@@ -2562,26 +2562,30 @@ class ScheduleEditor(QtWidgets.QWidget):
             if not plan.shares:
                 self.logged.emit(answer.data["note"])
                 return
-            items = []
-            for row, minutes in plan.shares:
-                when = [b.line().rsplit("  ", 1)[0] for b in plan.blocks if b.row is row]
-                items.append(f"{row.label}: {minutes // 60} h {minutes % 60:02d} min"
-                             + (f" ({'; '.join(when)})" if when else ""))
-            dialog = coach_runner.SuggestionDialog(
-                "Next week from progress", answer, items, intro=answer.data["note"],
-                accept_text="Add the checked to Next week", parent=self)
+            from .. import progress
+            profile = self.energy_panel.profile
+            dialog = coach_runner.ProgressPlanDialog(
+                answer, plan, lambda rows: progress.plan(rows, plan.capacity, profile),
+                parent=self)
+            out["dialog"] = dialog
             accepted = self.run_coach_dialog(dialog)
             if accepted:
-                chosen = [plan.shares[i][0] for i in dialog.chosen()]
+                checked = dialog.checked_rows()
+                planned = [row for row, _m in dialog.plan.shares]
+                if [r.number for r in checked] != [r.number for r in planned]:
+                    dialog.update_plan()        # boxes changed after the last update
+                final = dialog.plan
+                chosen = [row for row, _m in final.shares]
                 self.add_to_next_week(chosen)
                 QtWidgets.QApplication.clipboard().setText(
-                    "\n".join(b.line() for b in plan.blocks if b.row in chosen))
+                    "\n".join(b.line() for b in final.blocks))
                 self.logged.emit("Copied next week's suggested blocks to the clipboard")
             if path and answer.log_id is not None:
                 self._settle(path, answer, accepted)
 
         self._plan_check(lambda model, con: coachmod.progress_plan(
             model, plan, con=con, week_start=week), show)
+        self.last_progress_dialog = out.get("dialog")
         return out.get("answer")
 
     def add_to_next_week(self, rows) -> int:

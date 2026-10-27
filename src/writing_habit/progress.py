@@ -340,6 +340,16 @@ def plan(rows: Sequence[Row], capacity: int, profile) -> Plan:
     return result
 
 
+def item_line(p: Plan, row: Row) -> str:
+    """Name ``row``'s hours and blocks in plan ``p``, for a checkbox."""
+    minutes = dict((r.number, m) for r, m in p.shares).get(row.number, 0)
+    if not minutes:
+        return f"{row.label}: not in this plan"
+    when = [b.line().rsplit("  ", 1)[0] for b in p.blocks if b.row.number == row.number]
+    return (f"{row.label}: {minutes // 60} h {minutes % 60:02d} min"
+            + (f" ({'; '.join(when)})" if when else ""))
+
+
 def _hours(minutes: int) -> str:
     hours, rest = divmod(int(minutes), 60)
     return f"{hours} h {rest:02d} min" if hours else f"{rest} min"
@@ -368,9 +378,13 @@ def plain(p: Plan) -> str:
                 "so there is nothing to share out. Fill in the Est. hours and Weight "
                 "columns on the Progress tab.")
     named = [f"{row.label} ({_hours(minutes)})" for row, minutes in p.shares]
-    text = (f"Next week's {_hours(p.capacity)} go by weight to "
-            + (", ".join(named[:-1]) + (", and " if len(named) > 2 else " and ") + named[-1]
-               if len(named) > 1 else named[0]) + ".")
+    if len(named) == 1:
+        row, minutes = p.shares[0]
+        text = f"All of next week's {_hours(minutes)} go to {row.label}."
+    else:
+        text = (f"Next week's {_hours(p.capacity)} go by weight to "
+                + ", ".join(named[:-1]) + (", and " if len(named) > 2 else " and ")
+                + named[-1] + ".")
     text += (" The heaviest projects take the hours your energy profile rates best "
              "for new writing, in blocks of at most 90 minutes with a break after "
              "every two hours.")

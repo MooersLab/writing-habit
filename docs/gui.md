@@ -925,7 +925,12 @@ placed on Monday to Friday, heaviest project first, in the hours your
 [energy profile](#the-energy-tab) rates best for new writing. Blocks never
 overlap, a day holds at most four, and every run of blocks keeps the two-hour
 break rule. The dialog lists one line per project with its hours and its
-blocks. **Add the checked to Next week** puts the checked projects on the
+blocks. Uncheck a project you do not want to work on next week and press
+**Update the plan**. The week's hours are shared again among the projects still
+checked, the lines show the new hours and blocks, and the note is rewritten
+by the software. An unchecked project says *not in this plan* and can be
+checked again. When you accept with boxes changed since the last update, the
+plan is updated first. **Add the checked to Next week** puts the checked projects on the
 **Next week** list, copying the code-free entry from the current list so the
 deadline and risk tag come along, and copies the suggested blocks to the
 clipboard. Nothing is placed in the grid for you, because next week's table
@@ -1233,8 +1238,17 @@ green bar and the words *no estimate*. Hover over a bar for its numbers.
   progress** uses it, as described in
   [Planning next week from progress](#planning-next-week-from-progress).
 - **Remove row** takes a finished project off the table.
+- **Save to the week file** writes the week file to disk, progress table
+  included. It is the same as Save on the Schedule tab, so the week's other
+  edits are saved too. The button is enabled, and the status line says *not
+  saved yet*, while there are unsaved edits.
 
-Every change marks the week file as edited, and the table is saved with it.
+The estimates and weights live only in the `progress` table of the week file;
+nothing about them is kept in the habit database. Every change on the tab goes
+into the open file at once and marks it as edited, and the file on disk changes
+when you save. The table sits at the end of the file, so a new week's file made
+by copying this one carries the table forward. Update hours spent after you
+open it to bring the hours up to date.
 The table passes through the list readers untouched, in both the one-cell and
 the column layouts.
 

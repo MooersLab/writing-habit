@@ -221,8 +221,10 @@ class ProgressView(QtWidgets.QWidget):
             "the end of the week file. The whole bar is the time the project is "
             "expected to need, green is the time spent, and white is the time "
             "left. Type the expected hours and an importance weight in the "
-            "table; the Schedule tab's Coach menu uses the weights to suggest "
-            "next week's plan.")
+            "table. They are kept in the progress table of the week file, which "
+            "is written to disk when you press Save to the week file or save on "
+            "the Schedule tab. The Schedule tab's Coach menu uses the weights to "
+            "suggest next week's plan.")
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
@@ -246,6 +248,13 @@ class ProgressView(QtWidgets.QWidget):
                                       "for example when it is finished")
         self.remove_button.clicked.connect(lambda: self.remove_selected())
         bar.addWidget(self.remove_button)
+        self.save_button = QtWidgets.QPushButton("Save to the week file")
+        self.save_button.setToolTip(
+            "Write the progress table, with its estimates, hours, and weights, "
+            "into the week file on disk. This is the same as Save on the "
+            "Schedule tab, so the rest of the week's edits are saved too.")
+        self.save_button.clicked.connect(lambda: self.save())
+        bar.addWidget(self.save_button)
         bar.addStretch(1)
         self.status = QtWidgets.QLabel("")
         self.status.setStyleSheet("color: #898781;")
@@ -272,6 +281,7 @@ class ProgressView(QtWidgets.QWidget):
 
         if editor is not None:
             editor.opened.connect(lambda _p: self.reload())
+            editor.saved.connect(lambda _p: self.reload())
             editor.edited.connect(self.reload)
             self.logged.connect(editor.logged)
         self.reload()
@@ -304,6 +314,23 @@ class ProgressView(QtWidgets.QWidget):
         self.seed_button.setEnabled(has_table)
         self.update_button.setEnabled(has_table and rows is not None)
         self.remove_button.setEnabled(bool(self.rows))
+        self.show_saved_state()
+
+    def show_saved_state(self) -> None:
+        """Enable Save, and say so, while the week file has unsaved edits."""
+        table = self.table()
+        dirty = bool(table is not None and getattr(table, "dirty", False))
+        self.save_button.setEnabled(dirty)
+        text = self.status.text().replace(" (not saved yet)", "")
+        self.status.setText(text + (" (not saved yet)" if dirty and text else ""))
+
+    def save(self) -> Optional[str]:
+        """Save the week file, progress table and all.  Return the path, or ``None``."""
+        if self.editor is None or self.table() is None:
+            return None
+        path = self.editor.save()
+        self.reload()
+        return path
 
     def _fill_grid(self) -> None:
         self._filling = True
@@ -360,6 +387,7 @@ class ProgressView(QtWidgets.QWidget):
                 row.weight = value
         self.store()
         self.chart.set_rows(self.rows)
+        self.show_saved_state()
 
     # -- buttons ---------------------------------------------------------
     def seed(self) -> int:

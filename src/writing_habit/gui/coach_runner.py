@@ -161,7 +161,9 @@ class SuggestionDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.answer = answer
+        self.intro_widget = None
         layout = QtWidgets.QVBoxLayout(self)
+        self.layout_ = layout
         if intro and ("\n\n" in intro or len(intro) > 320):
             # A long note of several paragraphs goes in a box that scrolls,
             # because a wrapped label is cut off when the dialog sizes itself.
@@ -169,10 +171,12 @@ class SuggestionDialog(QtWidgets.QDialog):
             note.setReadOnly(True)
             note.setMinimumSize(560, 150)
             layout.addWidget(note)
+            self.intro_widget = note
         elif intro:
             label = QtWidgets.QLabel(intro)
             label.setWordWrap(True)
             layout.addWidget(label)
+            self.intro_widget = label
         self.boxes: List[QtWidgets.QCheckBox] = []
         for item in items:
             box = QtWidgets.QCheckBox(item)
@@ -198,6 +202,7 @@ class SuggestionDialog(QtWidgets.QDialog):
         layout.addWidget(facts)
         layout.addWidget(self.facts_view)
         buttons = QtWidgets.QDialogButtonBox()
+        self.buttons = buttons
         self.accept_button = buttons.addButton(accept_text,
                                                QtWidgets.QDialogButtonBox.AcceptRole)
         buttons.addButton("Discard", QtWidgets.QDialogButtonBox.RejectRole)
@@ -208,6 +213,49 @@ class SuggestionDialog(QtWidgets.QDialog):
     def chosen(self) -> List[int]:
         """Return the positions of the checked items."""
         return [i for i, box in enumerate(self.boxes) if box.isChecked()]
+
+    def set_intro(self, text: str) -> None:
+        """Replace the note above the choices."""
+        if isinstance(self.intro_widget, QtWidgets.QPlainTextEdit):
+            self.intro_widget.setPlainText(text)
+        elif self.intro_widget is not None:
+            self.intro_widget.setText(text)
+
+
+class ProgressPlanDialog(SuggestionDialog):
+    """Next week's plan from the progress table, one checkbox per project.
+
+    Uncheck a project and press **Update the plan** to share the week's hours
+    among the projects still checked. ``replan(rows)`` returns the new
+    :class:`writing_habit.progress.Plan`; the updated note is the software's
+    plain note, because the model worded only the first plan.
+    """
+
+    def __init__(self, answer: coach.Answer, plan, replan, parent=None):
+        from .. import progress
+        self.plan = plan
+        self.replan = replan
+        self.rows = [row for row, _minutes in plan.shares]
+        super().__init__("Next week from progress", answer,
+                         [progress.item_line(plan, row) for row in self.rows],
+                         intro=answer.data["note"],
+                         accept_text="Add the checked to Next week", parent=parent)
+        self.update_button = self.buttons.addButton(
+            "Update the plan", QtWidgets.QDialogButtonBox.ActionRole)
+        self.update_button.setToolTip(
+            "Share the week's hours again among the checked projects only")
+        self.update_button.clicked.connect(self.update_plan)
+
+    def checked_rows(self) -> list:
+        return [self.rows[i] for i in self.chosen()]
+
+    def update_plan(self) -> None:
+        from .. import progress
+        self.plan = self.replan(self.checked_rows())
+        for row, box in zip(self.rows, self.boxes):
+            box.setText(progress.item_line(self.plan, row))
+        self.set_intro(progress.plain(self.plan))
+        self.answer.source = "plain summary of the updated plan, written without a model"
 
 
 class PartnerDialog(QtWidgets.QDialog):
