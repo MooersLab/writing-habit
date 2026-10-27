@@ -22,6 +22,7 @@ Nothing here imports Qt.
 
 from __future__ import annotations
 
+import datetime as _dt
 import re
 import sqlite3
 from dataclasses import dataclass, field
@@ -30,7 +31,16 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 NAME = "progress"
 HEADER = ["Project ID", "Project name", "Est. hours", "Hours spent", "Weight",
-          "Next week"]
+          "Deadline", "Days to deadline", "Next week"]
+#: The fields of :class:`Row` that each column holds, found by the header's
+#: words so a table with its columns in another order, or written before a
+#: column existed, still reads.
+_FIELDS = {"project id": "number", "project name": "name", "est. hours": "estimate",
+           "hours spent": "spent", "weight": "weight", "deadline": "deadline",
+           "days to deadline": "days", "next week": "planned"}
+#: The columns of a table with no header row, as the first tables were written.
+_OLD_ORDER = ["number", "name", "estimate", "spent", "weight", "planned"]
+_DATE = re.compile(r"(\d{4}-\d{2}-\d{2})")
 #: A weight above this marks a project as one of the most important.
 HIGH_WEIGHT = 0.85
 _NO = {"no", "n", "-", "[ ]", "0", "false", "off"}
@@ -51,6 +61,17 @@ class Row:
     #: Whether the project is checked for next week's plan. A table written
     #: before this column existed reads as checked.
     planned: bool = True
+    deadline: Optional[str] = None      # ISO date, YYYY-MM-DD
+
+    def days_left(self, on: Optional[_dt.date] = None) -> Optional[int]:
+        """Days from ``on``, today by default, to the deadline; negative when past."""
+        if not self.deadline:
+            return None
+        try:
+            due = _dt.date.fromisoformat(self.deadline)
+        except ValueError:
+            return None
+        return (due - (on or today())).days
 
     @property
     def eligible(self) -> bool:
@@ -71,6 +92,33 @@ class Row:
     @property
     def label(self) -> str:
         return f"{self.number} {self.name}".strip()
+
+
+def today() -> _dt.date:
+    """The date the days to each deadline are counted from."""
+    return _dt.date.today()
+
+
+def days_text(days: Optional[int]) -> str:
+    """Say how far off a deadline is, for the end of a bar."""
+    if days is None:
+        return ""
+    if days == 0:
+        return "due today"
+    if days < 0:
+        return f"{-days} d late"
+    return f"{days} d"
+
+
+def _date(text: str) -> Optional[str]:
+    m = _DATE.search(text or "")
+    if not m:
+        return None
+    try:
+        _dt.date.fromisoformat(m.group(1))
+    except ValueError:
+        return None
+    return m.group(1)
 
 
 def _number(text: str) -> Optional[float]:
@@ -121,31 +169,40 @@ def read(lines: Sequence[str]) -> Optional[List[Row]]:
         return None
     _name, first, end = found
     rows = []
+    order = _OLD_ORDER
     for line in lines[first:end]:
         if _RULE.match(line):
             continue
-        cells = (_cells(line) + [""] * 6)[:6]
-        if cells[0].lower().startswith("project"):
-            continue                                   # the header row
-        m = _NUMBER.search(cells[0]) or _NUMBER.match(cells[1])
+        cells = _cells(line)
+        if cells and cells[0].lower().startswith("project"):
+            order = [_FIELDS.get(c.strip().lower(), "") for c in cells]   # the header
+            continue
+        value = {f: c for f, c in zip(order, cells) if f}
+        m = _NUMBER.search(value.get("number", "")) or _NUMBER.match(value.get("name", ""))
         if not m:
             continue
-        name = cells[1]
+        name = value.get("name", "")
         if name.startswith(m.group(1)):
             name = name[4:]
-        rows.append(Row(m.group(1), name.strip(), _number(cells[2]),
-                        _number(cells[3]) or 0.0, _number(cells[4]),
-                        cells[5].strip().lower() not in _NO))
+        rows.append(Row(m.group(1), name.strip(), _number(value.get("estimate")),
+                        _number(value.get("spent")) or 0.0, _number(value.get("weight")),
+                        value.get("planned", "").strip().lower() not in _NO,
+                        _date(value.get("deadline", ""))))
     return rows
 
 
 def render(rows: Sequence[Row]) -> List[str]:
     """Write the rows as an aligned org table with its header."""
-    body = [[r.number, r.name, _fmt(r.estimate), _fmt(r.spent), _fmt(r.weight),
-             "yes" if r.planned else "no"] for r in rows]
+    on = today()
+    body = []
+    for r in rows:
+        days = r.days_left(on)
+        body.append([r.number, r.name, _fmt(r.estimate), _fmt(r.spent), _fmt(r.weight),
+                     r.deadline or "", "" if days is None else str(days),
+                     "yes" if r.planned else "no"])
     table = [HEADER] + body
     widths = [max(len(row[i]) for row in table) for i in range(len(HEADER))]
-    right = {2, 3, 4}
+    right = {2, 3, 4, 6}
 
     def line(row):
         return "| " + " | ".join(c.rjust(widths[i]) if i in right and row is not HEADER
@@ -186,9 +243,32 @@ def seed(entries: Iterable, existing: Sequence[Row] = ()) -> List[Row]:
     for entry in entries:
         m = re.match(r"\s*(\d{4})(.*)", entry.project or "")
         if m and m.group(1) not in have:
-            rows.append(Row(m.group(1), m.group(2).strip()))
+            rows.append(Row(m.group(1), m.group(2).strip(),
+                            deadline=_date(getattr(entry, "deadline", None) or "")))
             have.add(m.group(1))
     return sorted(rows, key=lambda r: r.number)
+
+
+def fill_deadlines(rows: Sequence[Row], entries: Iterable) -> int:
+    """Give each row without a deadline the one its project carries in ``entries``.
+
+    ``entries`` are legend or project-list entries whose descriptions may end
+    in a deadline, such as ``1006AIrxOpt 2026-12-15``. A deadline already in
+    the table is kept, because the writer may have typed a different one.
+    Return how many rows gained a deadline.
+    """
+    found: Dict[str, str] = {}
+    for entry in entries:
+        m = re.match(r"\s*(\d{4})", entry.project or "")
+        due = _date(getattr(entry, "deadline", None) or "")
+        if m and due:
+            found.setdefault(m.group(1), due)
+    added = 0
+    for row in rows:
+        if not row.deadline and row.number in found:
+            row.deadline = found[row.number]
+            added += 1
+    return added
 
 
 # -- hours spent, from the time tracker ---------------------------------------

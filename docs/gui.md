@@ -1216,10 +1216,10 @@ the week file that the Schedule tab has open:
 
 ```org
 #+NAME: progress
-| Project ID | Project name                | Est. hours | Hours spent | Weight | Next week |
-|------------+-----------------------------+------------+-------------+--------+-----------|
-| 0142       | RETKinaseCovalentInhibitors |        120 |        47.8 |    0.9 | yes       |
-| 0201       | dusp1                       |        200 |       200.8 |    0.4 | no        |
+| Project ID | Project name                | Est. hours | Hours spent | Weight | Deadline   | Days to deadline | Next week |
+|------------+-----------------------------+------------+-------------+--------+------------+------------------+-----------|
+| 0142       | RETKinaseCovalentInhibitors |        120 |        47.8 |    0.9 | 2026-12-15 |               49 | yes       |
+| 0201       | dusp1                       |        200 |       200.8 |    0.4 | 2026-10-15 |              -12 | no        |
 ```
 
 Each project is one horizontal bar, labelled on the y axis by its number and
@@ -1227,7 +1227,10 @@ name and sorted by number. The whole bar is the **Est. hours** the project is
 expected to need, the green part is the **Hours spent**, and the white part is
 the time left. A project past its estimate shows the overrun in darker green
 beyond a tick at the estimate, and a project with no estimate shows only its
-green bar and the words *no estimate*. Hover over a bar for its numbers.
+green bar and the words *no estimate*. The days to the project's deadline are
+printed at the end of its bar. Hover over a bar for its numbers. The columns
+are read by the words of the header row, so their order does not matter and a
+table written before a column existed still reads.
 
 - **Add projects from the current list** adds a row for each numbered project
   of this semester's list that the table lacks, and makes the table at the end
@@ -1247,6 +1250,14 @@ green bar and the words *no estimate*. Hover over a bar for its numbers.
   yellow, here and in the plan dialog, as one of the projects that matter most.
   The Coach menu's **Plan next week from progress** uses the weight, as
   described in [Planning next week from progress](#planning-next-week-from-progress).
+- Type the **Deadline** as `YYYY-MM-DD`. **Days to deadline** is computed
+  from today's date each time the table is written, and it is negative once
+  the deadline has passed. A project added from the current list brings its
+  deadline with it, and **Update hours spent** fills an empty deadline from
+  the legend or the project lists. A deadline you typed is never replaced.
+  The chart prints the days to the deadline at the end of each bar, such as
+  `12 d`, `due today`, or `3 d late`, in amber within 14 days and in red once
+  it is late.
 - The **Next week** checkbox says whether the project takes part in next
   week's plan. It is written as `yes` or `no` in the table, and a table made
   before the column existed reads as all checked.

@@ -218,7 +218,8 @@ the week, which keeps each week's plan short. The week lists sit before
 The **Progress** tab, beside Schedule, draws one horizontal bar for each
 unfinished project in the `progress` table at the end of the week file. The
 whole bar is the hours the project is expected to need, the green part is the
-hours spent, and the white part is the hours left. **Update hours spent** adds
+hours spent, the white part is the hours left, and the days to the project's
+deadline are printed at the end of the bar. **Update hours spent** adds
 up each project's sessions in the `zTimeSpent` table of `mytime.db`, read-only,
 and **Add projects from the current list** makes the table. You type the
 estimate and an importance weight for each project, and the Schedule tab's

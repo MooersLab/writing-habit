@@ -422,10 +422,61 @@ def test_the_grid_checkbox_and_highlight(view, editor):
     from writing_habit.gui.qt import Qt
     _fractional(editor)
     view.reload()
-    assert view.grid.horizontalHeaderItem(5).text() == "Next week"
+    assert view.grid.horizontalHeaderItem(7).text() == "Next week"
     assert view.highlighted() == ["1006"]
-    view.grid.item(1, 5).setCheckState(Qt.Unchecked)          # 1006
+    view.grid.item(1, 7).setCheckState(Qt.Unchecked)          # 1006
     assert not progress.read(editor.table.lists.lines)[1].planned
     assert view.highlighted() == []
-    view.grid.item(1, 5).setCheckState(Qt.Checked)
+    view.grid.item(1, 7).setCheckState(Qt.Checked)
     assert view.highlighted() == ["1006"]
+
+
+# -- deadlines ------------------------------------------------------------------------
+@pytest.fixture()
+def oct14(monkeypatch):
+    monkeypatch.setattr(progress, "today", lambda: dt.date(2026, 10, 14))
+
+
+def test_seed_brings_the_deadline_and_days(view, editor, oct14):
+    view.seed()
+    rows = {r.number: r.deadline for r in progress.read(editor.table.lists.lines)}
+    assert rows == {"0201": None, "1006": "2026-12-15"}
+    assert view.grid.item(1, 5).text() == "2026-12-15"
+    assert view.grid.item(1, 6).text() == "62"
+    from writing_habit.gui.qt import Qt
+    assert not view.grid.item(1, 6).flags() & Qt.ItemIsEditable
+
+
+def test_typing_a_deadline_updates_the_days(view, editor, oct14):
+    view.seed()
+    view.grid.item(0, 5).setText("2026-10-10")
+    assert progress.read(editor.table.lists.lines)[0].deadline == "2026-10-10"
+    assert view.grid.item(0, 6).text() == "-4"
+    assert view.chart.days_label(view.chart.rows[0]) == "4 d late"
+    view.grid.item(0, 5).setText("Friday")
+    assert progress.read(editor.table.lists.lines)[0].deadline == "2026-10-10"
+    view.grid.item(0, 5).setText("")
+    assert progress.read(editor.table.lists.lines)[0].deadline is None
+
+
+def test_update_fills_a_missing_deadline(view, editor, oct14):
+    progress.write(editor.table.lists.lines, [progress.Row("1006", "AIrxOpt", 100)])
+    view.reload()
+    view.update_hours()
+    assert progress.read(editor.table.lists.lines)[0].deadline == "2026-12-15"
+
+
+def test_chart_draws_the_days_at_the_end_of_the_bar(view, oct14):
+    from writing_habit.gui.progress_view import LATE, MUTED, SOON
+    chart = view.chart
+    chart.set_rows([progress.Row("0001", "a", 10, 2, deadline="2026-12-31"),
+                    progress.Row("0002", "b", 10, 12, deadline="2026-10-20"),
+                    progress.Row("0003", "c", None, 3, deadline="2026-10-01"),
+                    progress.Row("0004", "d", 10, 1)])
+    chart.resize(700, chart.height())
+    assert [chart.days_label(r) for r in chart.rows] == ["78 d", "6 d", "13 d late", ""]
+    assert [chart.days_color(r) for r in chart.rows[:3]] == [MUTED, SOON, LATE]
+    assert chart.x_of(chart.scale_max()) <= chart.width() - chart.RIGHT
+    assert "Deadline: 2026-10-20 (6 d)" in chart.tip(1)
+    image = chart.grab().toImage()
+    assert not image.isNull()

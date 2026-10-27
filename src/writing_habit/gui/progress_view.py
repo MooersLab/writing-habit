@@ -32,8 +32,15 @@ MUTED = QtGui.QColor("#898781")
 NO_ESTIMATE = QtGui.QColor("#f1efe8")
 
 COLUMNS = progressmod.HEADER
-EDITABLE = {1, 2, 4}            # name, estimate, weight; hours spent is computed
-PLANNED = 5                     # the Next week checkbox
+DEADLINE = COLUMNS.index("Deadline")
+DAYS = COLUMNS.index("Days to deadline")
+#: Name, estimate, weight, and deadline. Hours spent and days are computed.
+EDITABLE = {1, 2, 4, DEADLINE}
+PLANNED = COLUMNS.index("Next week")     # the Next week checkbox
+#: The days to a deadline are drawn in this colour when it is this close.
+SOON_DAYS = 14
+LATE = QtGui.QColor("#b3261e")
+SOON = QtGui.QColor("#a15c00")
 #: The background of a checked project whose weight is above HIGH_WEIGHT.
 HIGHLIGHT = QtGui.QColor("#fff1b8")
 
@@ -57,6 +64,7 @@ class ProgressChart(QtWidgets.QWidget):
     BAR = 16
     TOP = 34
     BOTTOM = 34
+    RIGHT = 96              # room for the days to the deadline after the longest bar
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -92,7 +100,7 @@ class ProgressChart(QtWidgets.QWidget):
 
     def plot_rect(self) -> QtCore.QRect:
         left = self.label_width()
-        return QtCore.QRect(left, self.TOP, max(self.width() - left - 24, 40),
+        return QtCore.QRect(left, self.TOP, max(self.width() - left - self.RIGHT, 40),
                             max(len(self.rows), 1) * self.ROW)
 
     def x_of(self, hours: float) -> float:
@@ -157,9 +165,13 @@ class ProgressChart(QtWidgets.QWidget):
             painter.setBrush(SPENT)
             painter.drawRect(spent)
             painter.setPen(MUTED)
+            note = "no estimate"
             painter.drawText(QtCore.QRectF(spent.right() + 6, spent.top() - 2, 200,
                                            spent.height() + 4),
-                             Qt.AlignLeft | Qt.AlignVCenter, "no estimate")
+                             Qt.AlignLeft | Qt.AlignVCenter, note)
+            self._paint_days(painter, row, spent.right() + 6
+                             + self.fontMetrics().horizontalAdvance(note + ", "), spent,
+                             prefix=", ")
             return
         whole = self.bar_rect(index, row.estimate)
         painter.setPen(Qt.NoPen)
@@ -179,6 +191,34 @@ class ProgressChart(QtWidgets.QWidget):
         if row.spent > row.estimate:
             painter.drawLine(QtCore.QPointF(whole.right(), whole.top() - 3),
                              QtCore.QPointF(whole.right(), whole.bottom() + 3))
+        end = max(whole.right(), self.x_of(row.spent))
+        self._paint_days(painter, row, end + 6, whole)
+
+    def days_label(self, row) -> str:
+        """The text drawn at the end of ``row``'s bar."""
+        return progressmod.days_text(row.days_left())
+
+    def days_color(self, row) -> QtGui.QColor:
+        days = row.days_left()
+        if days is not None and days < 0:
+            return LATE
+        if days is not None and days <= SOON_DAYS:
+            return SOON
+        return MUTED
+
+    def _paint_days(self, painter, row, x: float, bar: QtCore.QRectF,
+                    prefix: str = "") -> None:
+        text = self.days_label(row)
+        if not text:
+            return
+        if prefix:
+            painter.setPen(MUTED)
+            painter.drawText(QtCore.QRectF(x - self.fontMetrics().horizontalAdvance(prefix),
+                                           bar.top() - 2, 40, bar.height() + 4),
+                             Qt.AlignLeft | Qt.AlignVCenter, prefix.rstrip())
+        painter.setPen(self.days_color(row))
+        painter.drawText(QtCore.QRectF(x, bar.top() - 2, self.RIGHT + 200, bar.height() + 4),
+                         Qt.AlignLeft | Qt.AlignVCenter, text)
 
     # -- tooltips -------------------------------------------------------
     def tip(self, index: int) -> str:
@@ -192,6 +232,10 @@ class ProgressChart(QtWidgets.QWidget):
                 lines.append(f"Over the estimate by {row.spent - row.estimate:g} hours")
         if row.weight is not None:
             lines.append(f"Weight: {row.weight:g}")
+        if row.deadline:
+            days = row.days_left()
+            lines.append(f"Deadline: {row.deadline}"
+                         + (f" ({progressmod.days_text(days)})" if days is not None else ""))
         return "\n".join(lines)
 
     def event(self, event):
@@ -340,13 +384,15 @@ class ProgressView(QtWidgets.QWidget):
         try:
             self.grid.setRowCount(len(self.rows))
             for r, row in enumerate(self.rows):
+                days = row.days_left()
                 values = [row.number, row.name, progressmod._fmt(row.estimate),
-                          progressmod._fmt(row.spent), progressmod._fmt(row.weight)]
+                          progressmod._fmt(row.spent), progressmod._fmt(row.weight),
+                          row.deadline or "", "" if days is None else str(days)]
                 for c, value in enumerate(values):
                     item = QtWidgets.QTableWidgetItem(value)
                     if c not in EDITABLE:
                         item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                    if c >= 2:
+                    if c >= 2 and c != DEADLINE:
                         item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     self.grid.setItem(r, c, item)
                 box = QtWidgets.QTableWidgetItem("")
@@ -357,8 +403,9 @@ class ProgressView(QtWidgets.QWidget):
                                "next week's file")
                 self.grid.setItem(r, PLANNED, box)
                 self._shade(r)
-            self.grid.resizeColumnToContents(0)
-            self.grid.resizeColumnToContents(PLANNED)
+            for column in range(self.grid.columnCount()):
+                if column != 1:                 # the name column stretches
+                    self.grid.resizeColumnToContents(column)
         finally:
             self._filling = False
 
@@ -398,12 +445,23 @@ class ProgressView(QtWidgets.QWidget):
     def on_item_changed(self, item) -> None:
         if self._filling or item.row() >= len(self.rows):
             return
-        row = self.rows[item.row()]
+        index = item.row()
+        row = self.rows[index]
+        refill = False
         text = item.text().strip()
         if item.column() == 1:
             row.name = text
         elif item.column() == PLANNED:
             row.planned = item.checkState() == Qt.Checked
+        elif item.column() == DEADLINE:
+            due = progressmod._date(text)
+            if text and (due is None or due != text):
+                self.logged.emit(f"{text!r} is not a date; write the deadline as "
+                                 "YYYY-MM-DD")
+                self._fill_grid()
+                return
+            row.deadline = due
+            refill = True               # the days to the deadline follow
         elif item.column() in (2, 4):
             value = progressmod._number(text)
             if text and value is None:
@@ -415,11 +473,14 @@ class ProgressView(QtWidgets.QWidget):
             else:
                 row.weight = value
         self.store()
-        self._filling = True
-        try:
-            self._shade(item.row())
-        finally:
-            self._filling = False
+        if refill:
+            self._fill_grid()
+        else:
+            self._filling = True
+            try:
+                self._shade(index)
+            finally:
+                self._filling = False
         self.chart.set_rows(self.rows)
         self.show_saved_state()
 
@@ -432,6 +493,7 @@ class ProgressView(QtWidgets.QWidget):
         from ..project_lists import CURRENT
         before = len(self.rows)
         self.rows = progressmod.seed(table.lists.entries(CURRENT), self.rows)
+        progressmod.fill_deadlines(self.rows, self.deadline_entries())
         added = len(self.rows) - before
         if added or progressmod.read(self.lines()) is None:
             self.store()
@@ -449,6 +511,18 @@ class ProgressView(QtWidgets.QWidget):
                 del self.rows[r]
         self.store()
         self.reload()
+
+    def deadline_entries(self) -> list:
+        """Return the legend's projects and every list's entries, for their deadlines."""
+        from ..project_lists import LISTS, Entry
+        table = self.table()
+        if table is None:
+            return []
+        entries = [Entry(code, description)
+                   for code, (description, _risk) in table.legend().items()]
+        for name, _title in LISTS:
+            entries += table.lists.entries(name)
+        return entries
 
     def mytime_path(self) -> Path:
         stored = settings.get("mytime_db")
@@ -470,6 +544,10 @@ class ProgressView(QtWidgets.QWidget):
             self.status.setText("Could not read mytime.db")
             return None
         changed = progressmod.update(self.rows, hours)
+        dated = progressmod.fill_deadlines(self.rows, self.deadline_entries())
+        if dated:
+            self.logged.emit(f"Took {dated} deadline{'' if dated == 1 else 's'} "
+                             "from the legend and the project lists")
         self.store()
         self.reload()
         total = sum(hours.values())

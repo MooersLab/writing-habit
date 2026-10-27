@@ -194,3 +194,60 @@ def test_high_weight():
     assert Row("0001", "a", weight=0.86).high
     assert not Row("0001", "a", weight=0.85).high
     assert not Row("0001", "a").high
+
+
+# -- deadlines ------------------------------------------------------------------------
+@pytest.fixture()
+def oct27(monkeypatch):
+    import datetime as dt
+    monkeypatch.setattr(progress, "today", lambda: dt.date(2026, 10, 27))
+
+
+def test_deadline_and_days_are_written(oct27):
+    lines = ["#+NAME: progress",
+             "| Project ID | Project name | Est. hours | Hours spent | Weight | Next week |",
+             "|---|",
+             "| 0201 | dusp1 | 40 | 10 | 0.9 | no |"]
+    rows = progress.read(lines)
+    rows[0].deadline = "2026-11-06"
+    progress.write(lines, rows)
+    cells = [c.strip() for c in lines[3].strip("|").split("|")]
+    assert cells == ["0201", "dusp1", "40", "10", "0.9", "2026-11-06", "10", "no"]
+    again = progress.read(lines)[0]
+    assert (again.deadline, again.planned, again.days_left()) == ("2026-11-06", False, 10)
+
+
+def test_columns_are_found_by_their_header(oct27):
+    lines = ["#+NAME: progress",
+             "| Project ID | Deadline | Weight | Project name | Est. hours | Hours spent |",
+             "| 1006 | 2026-10-20 | 0.5 | AIrxOpt | 100 | 3 |"]
+    row = progress.read(lines)[0]
+    assert (row.name, row.estimate, row.spent, row.weight, row.deadline) == (
+        "AIrxOpt", 100, 3, 0.5, "2026-10-20")
+    assert row.days_left() == -7
+
+
+def test_a_bad_date_reads_as_no_deadline():
+    lines = ["#+NAME: progress",
+             "| Project ID | Project name | Deadline |",
+             "| 1006 | AIrxOpt | soon |",
+             "| 1007 | x | 2026-02-30 |"]
+    assert [r.deadline for r in progress.read(lines)] == [None, None]
+
+
+def test_days_text():
+    assert progress.days_text(None) == ""
+    assert progress.days_text(0) == "due today"
+    assert progress.days_text(12) == "12 d"
+    assert progress.days_text(-3) == "3 d late"
+
+
+def test_seed_and_fill_take_the_deadline_from_the_lists():
+    from writing_habit.project_lists import Entry
+    rows = progress.seed([Entry("B", "0201dusp1 2026-10-15")])
+    assert rows[0].deadline == "2026-10-15"
+    rows = [Row("1006", "AIrxOpt"), Row("0201", "dusp1", deadline="2026-12-01")]
+    added = progress.fill_deadlines(rows, [Entry("A", "1006AIrxOpt 2026-12-15"),
+                                           Entry("B", "0201dusp1 2026-10-15")])
+    assert added == 1
+    assert [r.deadline for r in rows] == ["2026-12-15", "2026-12-01"]   # typed one kept
