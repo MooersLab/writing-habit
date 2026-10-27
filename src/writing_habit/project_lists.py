@@ -41,6 +41,14 @@ LISTS: List[Tuple[str, str]] = [
     ("next-next-next-next-next-semester-projects", "5*Next semester projects"),
     ("next-next-next-next-next-next-semester-projects", "6*Next semester projects"),
     ("grasscatcher", "Grasscatcher"),
+    ("next week", "Next week"),
+    ("two weeks out", "Two weeks out"),
+    ("three weeks out", "Three weeks out"),
+    ("four weeks out", "Four weeks out"),
+    ("five weeks out", "Five weeks out"),
+    ("six weeks out", "Six weeks out"),
+    ("seven weeks out", "Seven weeks out"),
+    ("eight weeks out", "Eight weeks out"),
 ]
 NAMES = [name for name, _title in LISTS]
 CURRENT = NAMES[0]
@@ -50,6 +58,11 @@ CARRIED = "carried-over-projects"
 #: later. A row is a task rather than a project, written ``B: find three
 #: citations`` with the code of its project, or ``- tidy the bib file``.
 GRASSCATCHER = "grasscatcher"
+#: The projects waiting for each of the next eight weeks, nearest first. They sit
+#: before ``#+PROJECT_PERIOD:``, because a week ahead can fall in the next
+#: semester, and a roll forward of the semesters leaves them alone.
+WEEKS = ["next week", "two weeks out", "three weeks out", "four weeks out",
+         "five weeks out", "six weeks out", "seven weeks out", "eight weeks out"]
 #: The lists that move one step nearer at each roll forward, nearest first.
 HORIZONS = [CURRENT, "next-semester-projects", "next-next-semester-projects",
             "next-next-next-semester-projects",
@@ -106,6 +119,15 @@ def default_title_map() -> dict:
     """Return ``{normalized title: list name}`` for the plain tab titles."""
     out = {normalize_title(title): name for name, title in LISTS}
     out.update({normalize_title(name): name for name in NAMES})
+    # Other spellings of the week lists, such as "three week out", "3 weeks
+    # out", "one week out", or "week after next".
+    numbers = ["one", "two", "three", "four", "five", "six", "seven", "eight"]
+    for n, name in enumerate(WEEKS, start=1):
+        for word in (numbers[n - 1], str(n)):
+            for unit in ("week", "weeks"):
+                out.setdefault(f"{word} {unit} out", name)
+                out.setdefault(f"{word} {unit} ahead", name)
+    out.setdefault("week after next", WEEKS[1])
     out[normalize_title("Completed")] = "completed-this-semester"
     out[normalize_title("Current semester")] = "current-semester-projects"
     out[normalize_title("Next semester")] = "next-semester-projects"
@@ -436,6 +458,8 @@ class ProjectLists:
 
     def _create(self, name: str) -> int:
         """Add an empty named list after the lists before it.  Return its row slot."""
+        if name in WEEKS:
+            return self._create_week(name)
         order = NAMES.index(name)
         at = len(self.lines)
         while at > 0 and not self.lines[at - 1].strip():
@@ -449,6 +473,34 @@ class ProjectLists:
             at = min(index for index in later if index is not None)
             while at > 0 and not self.lines[at - 1].strip():
                 at -= 1
+        block = ["", f"#+NAME: {name}"]
+        self.lines[at:at] = block
+        return at + len(block)
+
+    def _create_week(self, name: str) -> int:
+        """Add an empty week list after the week lists before it.
+
+        Without one, the list goes before ``#+PROJECT_PERIOD:`` and the
+        semester lists, because a week ahead can fall in the next semester.
+        """
+        order = WEEKS.index(name)
+        earlier = [s for s in (self._span(n) for n in WEEKS[:order]) if s is not None]
+        later = [i for i in (self._name_line(n) for n in WEEKS[order + 1:]) if i is not None]
+        if earlier:
+            at = earlier[-1][1]
+        else:
+            stops = later + [i for i, line in enumerate(self.lines)
+                             if _PERIOD_LINE.match(line)]
+            stops += [i for i in (self._name_line(n) for n in NAMES if n not in WEEKS)
+                      if i is not None]
+            if stops:
+                at = min(stops)
+                while at > 0 and not self.lines[at - 1].strip():
+                    at -= 1
+            else:
+                at = len(self.lines)
+                while at > 0 and not self.lines[at - 1].strip():
+                    at -= 1
         block = ["", f"#+NAME: {name}"]
         self.lines[at:at] = block
         return at + len(block)
@@ -555,7 +607,9 @@ class ProjectLists:
                     return False
                 self.lines[index] = text
                 return True
-        first = [self._name_line(n) for n in NAMES]
+        # The week lists stay above the period line, so it goes before the
+        # first semester list.
+        first = [self._name_line(n) for n in NAMES if n not in WEEKS]
         first = [i for i in first if i is not None]
         if first:
             at = min(first)

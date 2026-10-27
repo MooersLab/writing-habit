@@ -16,6 +16,7 @@ changed it. Saving offers the canonical file name when the grid has one.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as _dt
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -28,7 +29,7 @@ from .legend_model import (ACTIVITY, ACTIVITY_CHOICES, ActivityDelegate, CODE,
 from .qt import Qt, QtGui, QtWidgets, pyqtSignal
 from .. import periods as periodsmod
 from .. import coach as coachmod, db as dbmod, review as reviewmod
-from ..project_lists import (CARRIED, COMPLETED, GRASSCATCHER, HORIZONS, LISTS,
+from ..project_lists import (CARRIED, COMPLETED, GRASSCATCHER, HORIZONS, LISTS, WEEKS,
                              list_titles)
 from .. import deadlines as deadlinesmod, energy as energymod
 from ..project_lists import CURRENT as CURRENT_LIST
@@ -39,6 +40,7 @@ from . import coach_runner
 from .review_panel import ReviewDialog
 from .hour_view import (HOUR_COLUMN, EdgeDragger, HourCellDelegate, HourGridModel,
                         HourPicker)
+from .project_tabs import SEMESTER_ROW, WEEK_ROW, ProjectTabs
 from .table_model import TIME_COLUMN, CodeDelegate, WeeklyTableModel
 
 import sys as _sys
@@ -374,7 +376,8 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.hour_view.setModel(self.hour_model)
         self.hour_view.setItemDelegate(HourCellDelegate(self.hour_view))
         self.edge_dragger = EdgeDragger(
-            self.hour_view, lambda block, start, end: self.resize_block(block, start, end))
+            self.hour_view,
+            lambda block, start, end, offset: self.drag_block(block, start, end, offset))
         self.hour_view.setAlternatingRowColors(False)
         self.hour_view.setWordWrap(True)
         self.hour_view.verticalHeader().setVisible(False)
@@ -522,8 +525,10 @@ class ScheduleEditor(QtWidgets.QWidget):
         page_layout.setContentsMargins(0, 0, 0, 0)
         page_layout.addLayout(legend_bar)
         page_layout.addWidget(self.legend_view)
-        self.project_tabs = QtWidgets.QTabWidget()
-        self.project_tabs.addTab(legend_page, LEGEND_TAB)
+        # Two rows of buttons choose the page: the weeks, with the grasscatcher
+        # at their end, and below them the semesters.
+        self.project_tabs = ProjectTabs()
+        self.project_tabs.addTab(legend_page, LEGEND_TAB, WEEK_ROW)
         self.list_panels = {}
         for name, title in LISTS:
             panel = ProjectListPanel(name, title, self)
@@ -538,7 +543,12 @@ class ScheduleEditor(QtWidgets.QWidget):
             panel.capture_requested.connect(lambda text: self.capture_task(text))
             panel.triage_requested.connect(lambda: self.triage_carried())
             self.list_panels[name] = panel
-            self.project_tabs.addTab(panel, title)
+            self.project_tabs.addTab(
+                panel, title, WEEK_ROW if name in WEEKS or name == GRASSCATCHER
+                else SEMESTER_ROW)
+        names = [name for name, _t in LISTS]
+        self.project_tabs.order_row(
+            WEEK_ROW, [0] + [1 + names.index(n) for n in WEEKS + [GRASSCATCHER]])
         self.legend_model.modelReset.connect(self._refresh_lists)
         # A banner above the tabs offers to file the lists under a period, or
         # to roll them forward when a new period has begun.
@@ -1536,6 +1546,20 @@ class ScheduleEditor(QtWidgets.QWidget):
                 return named
         return today
 
+    def _week_tips(self) -> dict:
+        """Return a tooltip for each week list naming the week it stands for."""
+        monday = self.week_monday() if self.table is not None else None
+        tips = {}
+        for n, name in enumerate(WEEKS, start=1):
+            when = ""
+            if monday is not None:
+                first = monday + _dt.timedelta(weeks=n)
+                last = first + _dt.timedelta(days=6)
+                when = f"The week of {first:%B} {first.day} to {last:%B} {last.day}. "
+            tips[name] = (f"{when}Projects waiting for that week. Select one and "
+                          "press Copy to this week's legend to work on it this week.")
+        return tips
+
     def current_period(self):
         if self.calendar is None:
             return None
@@ -1544,7 +1568,7 @@ class ScheduleEditor(QtWidgets.QWidget):
     def list_titles(self):
         """Return ``({list: title}, {list: tooltip})`` from the calendar."""
         if self.calendar is None:
-            return dict(LISTS), {}
+            return dict(LISTS), self._week_tips()
         # Until the lists are rolled forward, they still belong to the period
         # they are filed under, so the titles follow that period.
         anchor = self.reference_date()
@@ -1570,6 +1594,7 @@ class ScheduleEditor(QtWidgets.QWidget):
                 titles[CARRIED] = f"Carried over from {earlier[-1].name}"
         tips[CARRIED] = ("Projects left on the current list at the last roll "
                          "forward. Move each to the current list or delete it.")
+        tips.update(self._week_tips())
         return titles, tips
 
     def update_period_banner(self) -> None:
@@ -3065,6 +3090,55 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.logged.emit(text)
         self._update_shift_buttons()
         return moves
+
+    def drag_block(self, block, start: str, end: str, offset: int,
+                   push: Optional[bool] = None):
+        """Carry out a drag in the hour view: a new range, a new day, or both."""
+        if offset == block.offset:
+            return self.resize_block(block, start, end, push=push)
+        if self.table is None:
+            return None
+        if push is None:
+            push = self.push_box.isChecked()
+        try:
+            (row, column), pushed = self.table.move_block_to(
+                block.row, block.column, offset, start, end, push=push)
+        except ValueError as exc:
+            self.logged.emit(f"Cannot move the block: {exc}")
+            return None
+        moved = dataclasses.replace(block, offset=offset)
+        self._rekey(pushed)
+        self._rekey_to(block, moved, start)
+        self._rebuild_views()
+        self.on_grid_edit()
+        grid_column = 1 + [c for c, _o, _l in self.table.columns].index(column)
+        if self.hour_view_shown():
+            self.hour_view.setCurrentIndex(self.hour_model.index(int(start[:2]), grid_column))
+        day = self.table.day_labels[grid_column - 1]
+        text = (f"Moved {block.letter} from {self.table.day_labels[[o for _i, o, _l in self.table.columns].index(block.offset)]} "
+                f"{block.start}-{block.end} to {day} {start}-{end}")
+        if pushed:
+            text += "; pushed down " + ", ".join(
+                f"{b.letter} to {s}-{e}" for b, s, e in pushed)
+        self.logged.emit(text)
+        self._update_shift_buttons()
+        return [(block, start, end)] + list(pushed)
+
+    def _rekey_to(self, old_block, new_block, start: str) -> None:
+        """Carry a block's objectives and review to another day and start."""
+        path = settings.get("db")
+        if not path or self.week_monday() is None:
+            return
+        try:
+            con = dbmod.connect(path)
+            try:
+                reviewmod.ensure(con)
+                reviewmod.rekey(con, self._block_key(old_block),
+                                self._block_key(new_block, start))
+            finally:
+                con.close()
+        except Exception as exc:                         # pragma: no cover
+            self.logged.emit(f"Could not move the review with the block: {exc}")
 
     def resize_block(self, block, start: str, end: str, push: Optional[bool] = None):
         """Give ``block`` the range ``start``-``end``, as dragging an edge asks.

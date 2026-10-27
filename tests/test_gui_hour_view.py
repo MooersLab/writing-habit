@@ -107,7 +107,7 @@ def test_a_cell_lists_the_blocks_that_start_in_its_hour(editor):
 
 
 def test_a_long_block_continues_into_the_next_hour(editor):
-    assert _display(editor, 5, 1) == "↓ gA"
+    assert _display(editor, 5, 1) == "↓"          # only the arrow, no code
     assert _display(editor, 6, 1) == ""
 
 
@@ -389,7 +389,7 @@ def test_dragging_the_bottom_edge_lengthens_the_block(qtbot, tmp_path, monkeypat
     qtbot.mousePress(viewport, Qt.LeftButton, pos=QtCore.QPoint(x, y))
     target, ty = _edge_y(editor_, 6, 1, 0.25)       # 06:15
     _move(viewport, x, ty)
-    assert editor_.hour_model.preview[1:] == ("05:00", "06:15")
+    assert editor_.hour_model.preview[1:] == ("05:00", "06:15", 0)
     qtbot.mouseRelease(viewport, Qt.LeftButton, pos=QtCore.QPoint(x, ty))
     a = next(b for b in editor_.table.blocks() if b.letter == "A" and b.offset == 0)
     assert (a.start, a.end) == ("05:00", "06:15")
@@ -432,3 +432,66 @@ def test_the_middle_of_a_block_is_not_an_edge(qtbot, tmp_path, monkeypatch, stor
     qtbot.waitExposed(editor_)
     rect, y = _edge_y(editor_, 7, 1, 0.5)
     assert editor_.edge_dragger.edge_at(QtCore.QPoint(rect.center().x(), y)) is None
+
+
+def _shown(qtbot, tmp_path, monkeypatch, store, text=DRAG):
+    editor_ = _open(qtbot, tmp_path, monkeypatch, store, text)
+    editor_.push_box.setChecked(False)
+    editor_.set_hour_view(True)
+    editor_.resize(900, 900)
+    editor_.show()
+    qtbot.waitExposed(editor_)
+    return editor_
+
+
+def test_dragging_the_middle_moves_the_block_later(qtbot, tmp_path, monkeypatch, store):
+    from writing_habit.gui.qt import QtCore, Qt
+    editor_ = _shown(qtbot, tmp_path, monkeypatch, store)
+    viewport = editor_.hour_view.viewport()
+    rect, y = _edge_y(editor_, 5, 1, 0.25)          # inside 05:00-05:30, not an edge
+    x = rect.center().x()
+    assert editor_.edge_dragger.grab_at(QtCore.QPoint(x, y))[1] == "move"
+    qtbot.mousePress(viewport, Qt.LeftButton, pos=QtCore.QPoint(x, y))
+    _r, ty = _edge_y(editor_, 6, 1, 0.25)           # one hour lower
+    _move(viewport, x, ty)
+    assert editor_.hour_model.preview[1:] == ("06:00", "06:30", 0)
+    qtbot.mouseRelease(viewport, Qt.LeftButton, pos=QtCore.QPoint(x, ty))
+    a = next(b for b in editor_.table.blocks() if b.letter == "A" and b.offset == 0)
+    assert (a.start, a.end) == ("06:00", "06:30")
+
+
+def test_dragging_the_middle_across_columns_moves_it_to_another_day(qtbot, tmp_path,
+                                                                    monkeypatch, store):
+    from writing_habit.gui.qt import QtCore, Qt
+    editor_ = _shown(qtbot, tmp_path, monkeypatch, store)
+    viewport = editor_.hour_view.viewport()
+    rect, y = _edge_y(editor_, 5, 1, 0.25)
+    tuesday = editor_.hour_view.visualRect(editor_.hour_model.index(5, 2))
+    qtbot.mousePress(viewport, Qt.LeftButton, pos=QtCore.QPoint(rect.center().x(), y))
+    _move(viewport, tuesday.center().x(), y)
+    qtbot.mouseRelease(viewport, Qt.LeftButton, pos=QtCore.QPoint(tuesday.center().x(), y))
+    blocks = [(b.letter, b.offset, b.start, b.end) for b in editor_.table.blocks()]
+    assert ("A", 1, "05:00", "05:30") in blocks
+    assert ("A", 0, "05:00", "05:30") not in blocks
+
+
+def test_a_move_onto_a_held_slot_is_refused(qtbot, tmp_path, monkeypatch, store):
+    editor_ = _shown(qtbot, tmp_path, monkeypatch, store)
+    messages = []
+    editor_.logged.connect(messages.append)
+    b = next(b for b in editor_.table.blocks() if b.letter == "B")
+    assert editor_.drag_block(b, "07:00", "08:00", 1) is None
+    assert any("already holds" in m for m in messages)
+    assert next(x for x in editor_.table.blocks() if x.letter == "B").offset == 0
+
+
+def test_a_click_on_the_middle_only_selects(qtbot, tmp_path, monkeypatch, store):
+    from writing_habit.gui.qt import QtCore, Qt
+    editor_ = _shown(qtbot, tmp_path, monkeypatch, store)
+    viewport = editor_.hour_view.viewport()
+    rect, y = _edge_y(editor_, 7, 2, 0.5)
+    before = editor_.table.to_text()
+    qtbot.mouseClick(viewport, Qt.LeftButton, pos=QtCore.QPoint(rect.center().x(), y))
+    assert editor_.table.to_text() == before
+    assert editor_.hour_view.currentIndex().row() == 7
+    assert editor_.hour_view.currentIndex().column() == 2

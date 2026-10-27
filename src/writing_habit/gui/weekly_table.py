@@ -1708,6 +1708,42 @@ class WeeklyTable:
         cells = self.apply_moves(moves)
         return cells[0], moves
 
+    def move_block_to(self, row_index: int, column_index: int, offset: int,
+                      start: str, end: str,
+                      push: bool = False) -> Tuple[Tuple[int, int], list]:
+        """Move a block to day ``offset`` at ``start``-``end``, keeping its work.
+
+        Dragging the middle of a block in the hour view can carry it to
+        another day. Return the block's new ``(row, column)`` and the later
+        blocks of the new day that were pushed down, as ``(block, start,
+        end)``. Raise :class:`ValueError`, and change nothing, when the cell is
+        empty, the range is empty or leaves the day, or the slot on the new
+        day already holds a block that would not be pushed.
+        """
+        block = self.block_at(row_index, column_index)
+        if block is None:
+            raise ValueError("select a block to move")
+        if offset == block.offset:
+            return self.resize_block(row_index, column_index, start, end, push=push)
+        first, last = _to_minutes(start), _to_minutes(end)
+        if first < 0 or last > 24 * 60 or last <= first:
+            raise ValueError("the block must stay within the day")
+        column = self.column_for(offset)
+        pushes = (self.plan_push(offset, start, end) if push else [])
+        self._check_targets(pushes)
+        row = self.find_block_row(start, end)
+        pushed = {(b.row, b.column) for b, _s, _e in pushes}
+        if row is not None and self.cell(row, column) and (row, column) not in pushed:
+            raise ValueError(f"{start}-{end} on that day already holds "
+                             f"{self.cell(row, column)}")
+        value = self._cell_value(block)
+        self.set_cell(block.row, block.column, "")
+        if pushes:
+            self.apply_moves(pushes)
+        row, _inserted = self.ensure_block_row(start, end)
+        self.set_cell(row, column, value)
+        return (self.find_block_row(start, end), column), pushes
+
     def hour_blocks(self) -> Dict[Tuple[int, int], List[Block]]:
         """Return ``{(offset, hour): blocks starting in that hour}``, by start."""
         out: Dict[Tuple[int, int], List[Block]] = {}

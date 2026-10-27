@@ -217,8 +217,10 @@ def to_one_cell(lines: List[str]):
     to ``(number, name)`` from the grasscatcher, and ``found`` says whether any
     table was in columns.
     """
-    from .project_lists import _NAME_LINE, normalize_title
+    from .project_lists import NAMES, _NAME_LINE, default_title_map, normalize_title
 
+    # Any spelling the lists understand, such as "three week out", counts.
+    known = set(NAMES) | set(default_title_map())
     out: List[str] = []
     legend: Optional[List[str]] = None
     tasks: Dict[str, Tuple[str, str]] = {}
@@ -244,8 +246,15 @@ def to_one_cell(lines: List[str]):
             out.extend(lines[index:end])
             index = end
             continue
+        name = normalize_title(m.group(1))
+        if name != normalize_title(LEGEND_NAME) and name not in known:
+            # A table this program does not keep is left exactly as written,
+            # because it could not be written back in its own columns.
+            out.extend(lines[index:end])
+            index = end
+            continue
         found = True
-        if normalize_title(m.group(1)) == normalize_title(LEGEND_NAME) and legend is None:
+        if name == normalize_title(LEGEND_NAME) and legend is None:
             legend = rows
             out.append(LEGEND_SLOT)
         else:

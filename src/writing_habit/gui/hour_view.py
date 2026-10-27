@@ -128,8 +128,8 @@ class HourGridModel(QtCore.QAbstractTableModel):
         self._breaks: set = set()
         #: The project codes the search box matches; their cells are tinted.
         self.highlight: set = set()
-        #: A block being resized by dragging an edge, drawn at its new range:
-        #: ``(block, start, end)``, or ``None``.
+        #: A block being dragged, drawn where it will land:
+        #: ``(block, start, end, day offset)``, or ``None``.
         self.preview = None
         self._hours = sheet_hours()
         self.set_table(table)
@@ -159,7 +159,7 @@ class HourGridModel(QtCore.QAbstractTableModel):
                                              self.columnCount() - 1))
 
     def set_preview(self, preview) -> None:
-        """Draw ``(block, start, end)`` at its new range while it is dragged."""
+        """Draw ``(block, start, end, day offset)`` where it will land while dragged."""
         self.preview = preview
         if self.rowCount() and self.columnCount():
             self.dataChanged.emit(self.index(0, 1),
@@ -234,8 +234,8 @@ class HourGridModel(QtCore.QAbstractTableModel):
         if role == Qt.DisplayRole:
             lines = [block_label(b) for b in starts]
             if not starts:
-                lines = [CONTINUES + CATEGORY_LETTER.get(b.category, "") + b.letter
-                         for b in spans]
+                # Only the arrow, so a long block's later hours stay uncluttered.
+                lines = [CONTINUES.strip()] if spans else []
             return "\n".join(lines)
         found = bool(self.highlight) and any(
             b.letter in self.highlight for b in starts + spans)
@@ -260,11 +260,12 @@ class HourGridModel(QtCore.QAbstractTableModel):
         if role == SEGMENTS_ROLE:
             blocks = spans + starts
             if self.preview is not None:
-                moving, start, end = self.preview
+                moving, start, end, day = self.preview
                 key = (moving.row, moving.column)
                 blocks = [b for b in blocks if (b.row, b.column) != key]
-                if moving.offset == self.offset(column):
-                    blocks.append(dataclasses.replace(moving, start=start, end=end))
+                if day == self.offset(column):
+                    blocks.append(dataclasses.replace(moving, start=start, end=end,
+                                                      offset=day))
             return hour_segments(row, blocks, lambda b: self.block_color(b, found))
         if role == Qt.TextAlignmentRole:
             return int(Qt.AlignCenter)
@@ -348,24 +349,33 @@ class HourCellDelegate(QtWidgets.QStyledItemDelegate):
 
 
 class EdgeDragger(QtCore.QObject):
-    """Resize a block in the hour view by dragging its top or bottom edge.
+    """Drag a block in the hour view: its edges resize it, its middle moves it.
 
-    Over an edge the cursor becomes a vertical double arrow. Pressing there
-    and dragging moves that edge in steps of 15 minutes, and the block is
-    drawn at its new range while the mouse moves. Releasing calls
-    ``apply(block, start, end)``, which changes the table. Escape, or a
-    release where the range has not changed, leaves the block as it was.
+    Over the top or bottom edge of a block the pointer becomes a vertical
+    double arrow, and dragging moves that edge, so the block starts earlier or
+    ends later. Over the rest of the block the pointer becomes an open hand,
+    and dragging moves the whole block, keeping its length, to another time
+    and, across the columns, to another day. Every move is in steps of 15
+    minutes, and the block is drawn where it will land while the mouse moves.
+    Releasing calls ``apply(block, start, end, offset)``, which changes the
+    table. Escape, or a release where nothing changed, leaves the block as it
+    was. A click on the middle of a block without moving still selects it, and
+    a double-click still opens the range picker.
     """
 
     #: How near an edge, in pixels, the mouse must be to grab it.
     GRAB = 4
+    #: How far, in pixels, the mouse must move before a press on the middle
+    #: of a block becomes a drag rather than a click.
+    START = 4
 
     def __init__(self, view, apply, parent=None):
         super().__init__(parent or view)
         self.view = view
         self.apply = apply
-        self.drag = None          # (block, "top" or "bottom")
-        self.range = None         # (start, end) under the mouse
+        self.drag = None          # (block, "top", "bottom", or "move")
+        self.pending = None       # (block, press position, press minute) before a move starts
+        self.range = None         # (start, end, offset) under the mouse
         view.viewport().setMouseTracking(True)
         view.viewport().installEventFilter(self)
         view.installEventFilter(self)
@@ -374,8 +384,8 @@ class EdgeDragger(QtCore.QObject):
     def model(self):
         return self.view.model()
 
-    def edge_at(self, pos):
-        """Return ``(block, "top" or "bottom")`` for the edge under ``pos``, or ``None``."""
+    def grab_at(self, pos):
+        """Return ``(block, part)`` under ``pos``, ``part`` being top, bottom, or move."""
         index = self.view.indexAt(pos)
         if not index.isValid() or index.column() == HOUR_COLUMN:
             return None
@@ -390,70 +400,123 @@ class EdgeDragger(QtCore.QObject):
                 return segment.block, "bottom"
             if segment.starts and abs(pos.y() - top) <= self.GRAB:
                 return segment.block, "top"
+            if top <= pos.y() <= bottom:
+                return segment.block, "move"
         return None
 
-    def minute_at(self, y: int) -> Optional[int]:
+    def edge_at(self, pos):
+        """Return ``(block, "top" or "bottom")`` for the edge under ``pos``, or ``None``."""
+        found = self.grab_at(pos)
+        return found if found and found[1] != "move" else None
+
+    def minute_at(self, y: int, snap: bool = True) -> int:
         """Return the minute of the day at height ``y``, to the nearest 15 minutes."""
         row = self.view.rowAt(y)
         if row < 0:
-            row = 0 if y < 0 else self.model.rowCount() - 1
-            return row * 60 if y < 0 else 24 * 60
+            return 0 if y < self.view.rowViewportPosition(0) else 24 * 60
         top = self.view.rowViewportPosition(row)
         height = max(self.view.rowHeight(row), 1)
         minute = row * 60 + (y - top) * 60 / height
-        return int(round(minute / PICK_STEP) * PICK_STEP)
+        return int(round(minute / PICK_STEP) * PICK_STEP) if snap else int(minute)
 
-    def new_range(self, y: int):
-        block, edge = self.drag
+    def offset_at(self, x: int, block) -> int:
+        """Return the day offset of the column at ``x``, or the block's own day."""
+        column = self.view.columnAt(x)
+        if column <= HOUR_COLUMN:
+            return block.offset
+        return self.model.offset(column)
+
+    @staticmethod
+    def _clock(minute: int) -> str:
+        return f"{minute // 60:02d}:{minute % 60:02d}"
+
+    def new_range(self, pos):
+        block, part = self.drag
         first, last = _minutes(block.start), _minutes(block.end)
-        minute = self.minute_at(y)
-        if edge == "top":
-            first = max(0, min(minute, last - PICK_STEP))
+        if part == "move":
+            _block, _press, pressed = self.pending
+            delta = self.minute_at(pos.y(), snap=False) - pressed
+            delta = int(round(delta / PICK_STEP) * PICK_STEP)
+            length = last - first
+            first = max(0, min(first + delta, 24 * 60 - length))
+            last = first + length
+            offset = self.offset_at(pos.x(), block)
         else:
-            last = min(24 * 60, max(minute, first + PICK_STEP))
-        return (f"{first // 60:02d}:{first % 60:02d}", f"{last // 60:02d}:{last % 60:02d}")
+            minute = self.minute_at(pos.y())
+            if part == "top":
+                first = max(0, min(minute, last - PICK_STEP))
+            else:
+                last = min(24 * 60, max(minute, first + PICK_STEP))
+            offset = block.offset
+        return self._clock(first), self._clock(last), offset
 
     def cancel(self) -> None:
-        self.drag, self.range = None, None
+        self.drag, self.pending, self.range = None, None, None
         self.model.set_preview(None)
         self.view.viewport().unsetCursor()
+
+    def _show(self, pos, global_pos) -> None:
+        self.range = self.new_range(pos)
+        start, end, offset = self.range
+        self.model.set_preview((self.drag[0], start, end, offset))
+        day = self.model.table.day_labels[[o for _i, o, _l in self.model.table.columns]
+                                          .index(offset)] if self.model.table else ""
+        QtWidgets.QToolTip.showText(global_pos, f"{day} {start}-{end}".strip(),
+                                    self.view.viewport())
 
     def eventFilter(self, obj, event):
         kind = event.type()
         if obj is self.view:
-            if kind == QtCore.QEvent.KeyPress and self.drag and event.key() == Qt.Key_Escape:
+            if (kind == QtCore.QEvent.KeyPress and event.key() == Qt.Key_Escape
+                    and (self.drag or self.pending)):
                 self.cancel()
                 return True
             return False
         if kind == QtCore.QEvent.MouseMove:
             if self.drag is not None:
-                self.range = self.new_range(event.pos().y())
-                block = self.drag[0]
-                self.model.set_preview((block, *self.range))
-                self.view.setToolTip("")
-                QtWidgets.QToolTip.showText(event.globalPos(), "-".join(self.range),
-                                            self.view.viewport())
+                self._show(event.pos(), event.globalPos())
                 return True
-            if self.edge_at(event.pos()):
-                self.view.viewport().setCursor(Qt.SizeVerCursor)
-            else:
+            if self.pending is not None:
+                block, press, _minute = self.pending
+                if (event.pos() - press).manhattanLength() >= self.START:
+                    self.drag = (block, "move")
+                    self.view.viewport().setCursor(Qt.ClosedHandCursor)
+                    self._show(event.pos(), event.globalPos())
+                return True
+            found = self.grab_at(event.pos())
+            if found is None:
                 self.view.viewport().unsetCursor()
+            elif found[1] == "move":
+                self.view.viewport().setCursor(Qt.OpenHandCursor)
+            else:
+                self.view.viewport().setCursor(Qt.SizeVerCursor)
             return False
         if kind == QtCore.QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-            edge = self.edge_at(event.pos())
-            if edge is None:
+            found = self.grab_at(event.pos())
+            if found is None:
                 return False
-            self.drag = edge
-            self.range = (edge[0].start, edge[0].end)
+            block, part = found
+            if part == "move":
+                # Let the press select the cell, as a click does, and start
+                # moving only once the mouse has gone a few pixels.
+                self.pending = (block, event.pos(), self.minute_at(event.pos().y(), snap=False))
+                return False
+            self.drag = found
+            self.range = (block.start, block.end, block.offset)
             self.view.setCurrentIndex(self.view.indexAt(event.pos()))
             return True
-        if kind == QtCore.QEvent.MouseButtonRelease and self.drag is not None:
-            block, _edge = self.drag
-            start, end = self.range
+        if kind == QtCore.QEvent.MouseButtonRelease:
+            if self.drag is None:
+                self.pending = None
+                return False
+            block = self.drag[0]
+            start, end, offset = self.range or (block.start, block.end, block.offset)
             self.cancel()
-            if (start, end) != (block.start, block.end):
-                self.apply(block, start, end)
+            if (start, end, offset) != (block.start, block.end, block.offset):
+                self.apply(block, start, end, offset)
             return True
+        if kind == QtCore.QEvent.MouseButtonDblClick:
+            self.pending = None
         return False
 
 

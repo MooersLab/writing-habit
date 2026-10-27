@@ -325,19 +325,23 @@ deeper colour where they cross, and a break inside an hour, such as 06:30 to
 06:45, stays white.
 
 Drag the top or bottom edge of a block to change its start or its end. Over an
-edge the pointer becomes a double arrow. While you drag, the block is drawn at
-its new range in steps of 15 minutes, and a tip shows the times. Release to
-keep the change, or press Esc to cancel. A block is at least 15 minutes and at
+edge the pointer becomes a double arrow. Drag the middle of a block to move the
+whole block, keeping its length, to another time or, across the columns, to
+another day. Over the middle the pointer becomes an open hand, and a click
+without moving still selects the block, so a double-click still opens the
+picker. While you drag, the block is drawn where it will land in steps of 15
+minutes, and a tip shows the day and times. Release to keep the change, or
+press Esc to cancel. A move onto a slot another block holds is refused. A block is at least 15 minutes and at
 most two hours long, unless it was longer already, and it stays within the day.
 With **Push later blocks down** checked, a block that grows into the next one
 pushes it down, as a shift does. The objectives and review of the block follow
-its new start, and the file is written when you save.
+its new day and start, and the file is written when you save.
 
 ![The hour view of a week, with a Saturday run of five hours tinted amber and listed in the Breaks panel.](imgs/gui-hour-view.png)
 
 A cell lists the blocks that start in that hour, such as `gB 04:00-06:00`. The
-hours a longer block runs into show `↓ gB` in the same colour, so a block reads
-as one bar down the column. The activity colours, the red clash tint, and the
+hours a longer block runs into show only `↓` in the same colour, so a block
+reads as one bar down the column without repeating its code. The activity colours, the red clash tint, and the
 tooltips are the same as in the row view. Hours before and after the hours the
 printed sheet draws are grey.
 
@@ -1165,9 +1169,11 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src python scripts/make_tutorial_images.py
 
 ## Semester project lists
 
-The box under the grid, titled **Projects**, holds ten tabs, and an eleventh
-after a roll forward, each showing its
-number of projects in parentheses. **This week** is the week's legend, which
+The box under the grid, titled **Projects**, chooses its list with buttons in
+two rows, each showing its number of projects in parentheses. The **Weeks** row
+holds **This week**, the eight week lists, and the **Grasscatcher**. The
+**Semesters** row holds the semester lists, and **Carried over** after a roll
+forward. Each row wraps onto more lines when its buttons do not fit in the width the window shows, and grows to the height they need, so every button stays in view in a narrow window. The buttons use text a third larger than the rest of the window. **This week** is the week's legend, which
 should name only the projects of the week. **Current
 semester projects**, **Completed this semester**, **Next semester projects**, **Next next semester
 projects**, **3*Next semester projects**, **4*Next semester projects**,
@@ -1188,6 +1194,23 @@ an org line, with rows in the legend's form and a dash for a missing code:
 | B: 1006AIrxOpt 2026-12-15 :safe: |
 | - 1002RNAeditingR01 2027-02-05 :safe: |
 ```
+
+### The weeks ahead
+
+Eight lists hold the projects waiting for each of the next eight weeks:
+**Next week**, then **Two weeks out** through **Eight weeks out**. Their tooltips name the dates of each week from
+the open file's week. Putting a project in a later week, rather than in this
+week's legend, keeps the week small and still says when it will get its turn.
+When the week comes, select the project and press **Copy to this week's legend**,
+as on the semester lists. The project stays on the week list until you delete
+it.
+
+In the file the week lists are named tables, as `#+NAME: next week` through
+`#+NAME: eight weeks out`, and they sit before `#+PROJECT_PERIOD:`, because a
+week ahead can fall in the next semester. A roll forward of the semesters
+leaves them alone. Spellings such as `three week out` or `3 weeks out` are read
+as the matching list and renamed when you save. A named table the program does
+not keep is left exactly as written.
 
 The scheduler reads only the first table of the file, so the lists never reach
 plan import, the calendar, or the sheets. `track sync` reads the current list,

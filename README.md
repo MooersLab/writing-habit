@@ -195,12 +195,21 @@ week** list, where missed blocks are grey rather than red.
 
 #### Finding a project, and syncing to-dos with project logs
 
-The **Find** box above the project tabs filters every tab and tints the
+The **Find** box above the project lists filters every list and tints the
 matching projects' blocks in the grid. On the **Grasscatcher** tab, **Sort by
 priority** orders tasks by org-mode cookies such as `[#A]`, `[#A1]`, and `[#B2]`,
 and **Sync to-dos** brings the grasscatcher and the `* Project TODOS` section of
 each project's log, such as `~/0142RETKinaseCovalentInhibitors/log0142.org`, up
 to date after showing the changes.
+
+#### Weeks ahead
+
+The project lists are chosen by two rows of buttons. The **Weeks** row holds
+**This week**, eight lists from **Next week** to **Eight weeks out**, and the
+**Grasscatcher**. The **Semesters** row holds the semester lists. A project put
+in a later week waits there until **Copy to this week's legend** brings it into
+the week, which keeps each week's plan short. The week lists sit before
+`#+PROJECT_PERIOD:` in the file, so a semester roll forward leaves them alone.
 
 #### Naming the project lists by period
 
