@@ -162,3 +162,35 @@ def test_plain_with_nothing_to_share():
     p = progress.plan([Row("0655", "x")], 600, energy.default_profile())
     assert p.shares == []
     assert "nothing to share out" in progress.plain(p)
+
+
+def test_next_week_column_reads_and_writes():
+    lines = ["#+NAME: progress",
+             "| 0201 | dusp1 | 40 | 10 | 0.9 | no  |",
+             "| 1006 | AIrxOpt | 100 | 2 | 0.5 | yes |",
+             "| 0655 | VirtIssue25 | 20 | 1 | 0.3 |"]
+    rows = progress.read(lines)
+    assert [r.planned for r in rows] == [False, True, True]   # no column reads as checked
+    progress.write(lines, rows)
+    assert lines[1].split("|")[-2].strip() == "Next week"
+    assert [line.split("|")[-2].strip() for line in lines[3:]] == ["no", "yes", "yes"]
+
+
+def test_unchecked_projects_get_no_time_but_stay_eligible():
+    rows = [Row("0001", "a", 100, 0, 0.9, planned=False), Row("0002", "b", 100, 0, 0.5)]
+    p = progress.plan(rows, 300, energy.default_profile())
+    assert [r.number for r, _m in p.shares] == ["0002"]
+    assert [r.number for r in p.eligible] == ["0001", "0002"]
+    assert progress.item_line(p, rows[0]) == "0001 a: not in this plan"
+
+
+def test_nothing_checked_says_so():
+    rows = [Row("0001", "a", 100, 0, 0.9, planned=False)]
+    p = progress.plan(rows, 300, energy.default_profile())
+    assert "No project is checked for next week" in progress.plain(p)
+
+
+def test_high_weight():
+    assert Row("0001", "a", weight=0.86).high
+    assert not Row("0001", "a", weight=0.85).high
+    assert not Row("0001", "a").high

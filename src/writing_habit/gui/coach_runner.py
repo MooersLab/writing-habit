@@ -225,33 +225,60 @@ class SuggestionDialog(QtWidgets.QDialog):
 class ProgressPlanDialog(SuggestionDialog):
     """Next week's plan from the progress table, one checkbox per project.
 
-    Uncheck a project and press **Update the plan** to share the week's hours
-    among the projects still checked. ``replan(rows)`` returns the new
-    :class:`writing_habit.progress.Plan`; the updated note is the software's
-    plain note, because the model worded only the first plan.
+    Every project with a weight and time left is listed, checked as it was
+    the last time a plan was accepted, so the choice carries over from week
+    to week. Uncheck a project and press **Update the plan** to share the
+    week's hours among the projects still checked. ``replan(rows)`` returns
+    the new :class:`writing_habit.progress.Plan` for the table's rows; the
+    updated note is the software's plain note, because the model worded only
+    the first plan. A checked project whose weight is above
+    :data:`writing_habit.progress.HIGH_WEIGHT` is highlighted.
     """
+
+    HIGHLIGHT = "QCheckBox { background: #fff1b8; border-radius: 3px; padding: 2px 4px; }"
 
     def __init__(self, answer: coach.Answer, plan, replan, parent=None):
         from .. import progress
         self.plan = plan
         self.replan = replan
-        self.rows = [row for row, _minutes in plan.shares]
+        self.all_rows = plan.rows
+        self.rows = plan.eligible
         super().__init__("Next week from progress", answer,
                          [progress.item_line(plan, row) for row in self.rows],
                          intro=answer.data["note"],
                          accept_text="Add the checked to Next week", parent=parent)
+        for row, box in zip(self.rows, self.boxes):
+            box.setChecked(row.planned)
+            box.toggled.connect(lambda _on, r=row, b=box: self._mark(r, b))
+            self._mark(row, box)
         self.update_button = self.buttons.addButton(
             "Update the plan", QtWidgets.QDialogButtonBox.ActionRole)
         self.update_button.setToolTip(
             "Share the week's hours again among the checked projects only")
         self.update_button.clicked.connect(self.update_plan)
 
+    def _mark(self, row, box) -> None:
+        """Highlight a checked project of high weight."""
+        on = box.isChecked() and row.high
+        box.setStyleSheet(self.HIGHLIGHT if on else "")
+        box.setProperty("highlighted", on)
+
+    def highlighted(self) -> list:
+        """Return the rows shown highlighted."""
+        return [r for r, b in zip(self.rows, self.boxes) if b.property("highlighted")]
+
     def checked_rows(self) -> list:
         return [self.rows[i] for i in self.chosen()]
 
+    def stale(self) -> bool:
+        """Whether the boxes changed after the plan was last made."""
+        return any(row.planned != box.isChecked() for row, box in zip(self.rows, self.boxes))
+
     def update_plan(self) -> None:
         from .. import progress
-        self.plan = self.replan(self.checked_rows())
+        for row, box in zip(self.rows, self.boxes):
+            row.planned = box.isChecked()
+        self.plan = self.replan(self.all_rows)
         for row, box in zip(self.rows, self.boxes):
             box.setText(progress.item_line(self.plan, row))
         self.set_intro(progress.plain(self.plan))

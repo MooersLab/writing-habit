@@ -2559,7 +2559,7 @@ class ScheduleEditor(QtWidgets.QWidget):
 
         def show(answer, path):
             out["answer"] = answer
-            if not plan.shares:
+            if not plan.eligible:
                 self.logged.emit(answer.data["note"])
                 return
             from .. import progress
@@ -2570,11 +2570,10 @@ class ScheduleEditor(QtWidgets.QWidget):
             out["dialog"] = dialog
             accepted = self.run_coach_dialog(dialog)
             if accepted:
-                checked = dialog.checked_rows()
-                planned = [row for row, _m in dialog.plan.shares]
-                if [r.number for r in checked] != [r.number for r in planned]:
+                if dialog.stale():
                     dialog.update_plan()        # boxes changed after the last update
                 final = dialog.plan
+                self.keep_progress_choices(dialog.rows)
                 chosen = [row for row, _m in final.shares]
                 self.add_to_next_week(chosen)
                 QtWidgets.QApplication.clipboard().setText(
@@ -2587,6 +2586,26 @@ class ScheduleEditor(QtWidgets.QWidget):
             model, plan, con=con, week_start=week), show)
         self.last_progress_dialog = out.get("dialog")
         return out.get("answer")
+
+    def keep_progress_choices(self, rows) -> bool:
+        """Write each row's checked state into the Next week column of the table.
+
+        The table travels with the week file, so the projects checked this
+        week are checked again when next week's plan is made. Return whether
+        the table changed.
+        """
+        from .. import progress
+        lines = self.table.lists.lines
+        stored = progress.read(lines) or []
+        checked = {r.number: r.planned for r in rows}
+        for row in stored:
+            if row.number in checked:
+                row.planned = checked[row.number]
+        if not progress.write(lines, stored):
+            return False
+        self.table.dirty = True
+        self.on_edit()
+        return True
 
     def add_to_next_week(self, rows) -> int:
         """Put each progress row's project on the Next week list.  Return how many."""

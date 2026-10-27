@@ -328,3 +328,104 @@ def test_rechecking_brings_a_project_back(editor):
     editor.plan_from_progress()
     dialog = editor.dialogs[-1]
     assert {r.number: m for r, m in dialog.plan.shares} == {"1006": 330, "0201": 120}
+
+
+# -- the checked projects carry over, and heavy ones are highlighted ------------------
+def _fractional(editor, dusp1_planned=True):
+    progress.write(editor.table.lists.lines,
+                   [progress.Row("0201", "dusp1", 40, 10, 0.4, dusp1_planned),
+                    progress.Row("1006", "AIrxOpt", 100, 3, 0.9),
+                    progress.Row("0655", "VirtIssue25")])
+
+
+def test_accepted_choices_are_written_to_the_table(editor):
+    _fractional(editor)
+
+    def uncheck(dialog):
+        editor.dialogs.append(dialog)
+        dialog.boxes[1].setChecked(False)          # 0201 dusp1
+        return True
+
+    editor.run_coach_dialog = uncheck
+    editor.plan_from_progress()
+    rows = {r.number: r.planned for r in progress.read(editor.table.lists.lines)}
+    assert rows == {"0201": False, "1006": True, "0655": True}
+    assert editor.table.dirty
+
+
+def test_the_choice_carries_over_to_the_next_plan(editor, tmp_path):
+    _fractional(editor, dusp1_planned=False)
+    path = editor.table.save()
+    # Next week's file starts as a copy of this one.
+    copy = tmp_path / "Nov02.org"
+    copy.write_text(open(path, encoding="utf-8").read(), encoding="utf-8")
+    editor.open(str(copy))
+    editor.accept_dialogs = False
+    editor.plan_from_progress()
+    dialog = editor.dialogs[-1]
+    assert [r.number for r in dialog.rows] == ["1006", "0201"]
+    assert [b.isChecked() for b in dialog.boxes] == [True, False]
+    assert [r.number for r, _m in dialog.plan.shares] == ["1006"]
+    assert dialog.boxes[1].text() == "0201 dusp1: not in this plan"
+
+
+def test_rechecking_a_project_brings_it_back_next_week(editor):
+    _fractional(editor, dusp1_planned=False)
+
+    def recheck(dialog):
+        editor.dialogs.append(dialog)
+        dialog.boxes[1].setChecked(True)
+        return True
+
+    editor.run_coach_dialog = recheck
+    editor.plan_from_progress()
+    assert [r.number for r, _m in editor.dialogs[-1].plan.shares] == ["1006", "0201"]
+    assert all(r.planned for r in progress.read(editor.table.lists.lines))
+
+
+def test_discarding_keeps_the_old_choices(editor):
+    _fractional(editor)
+
+    def uncheck(dialog):
+        editor.dialogs.append(dialog)
+        dialog.boxes[1].setChecked(False)
+        dialog.update_button.click()
+        return False
+
+    editor.run_coach_dialog = uncheck
+    editor.plan_from_progress()
+    assert all(r.planned for r in progress.read(editor.table.lists.lines))
+
+
+def test_nothing_checked_still_opens_the_dialog(editor):
+    progress.write(editor.table.lists.lines,
+                   [progress.Row("1006", "AIrxOpt", 100, 3, 0.9, planned=False)])
+    editor.accept_dialogs = False
+    answer = editor.plan_from_progress()
+    assert "No project is checked" in answer.data["note"]
+    assert [b.isChecked() for b in editor.dialogs[-1].boxes] == [False]
+
+
+def test_checked_heavy_projects_are_highlighted_in_the_dialog(editor):
+    _fractional(editor)
+    editor.accept_dialogs = False
+    editor.plan_from_progress()
+    dialog = editor.dialogs[-1]
+    assert [r.number for r in dialog.highlighted()] == ["1006"]
+    assert "#fff1b8" in dialog.boxes[0].styleSheet()
+    dialog.boxes[0].setChecked(False)
+    assert dialog.highlighted() == []
+    assert dialog.boxes[0].styleSheet() == ""
+
+
+def test_the_grid_checkbox_and_highlight(view, editor):
+    from writing_habit.gui.qt import Qt
+    _fractional(editor)
+    view.reload()
+    assert view.grid.horizontalHeaderItem(5).text() == "Next week"
+    assert view.highlighted() == ["1006"]
+    view.grid.item(1, 5).setCheckState(Qt.Unchecked)          # 1006
+    assert not progress.read(editor.table.lists.lines)[1].planned
+    assert view.highlighted() == []
+    view.grid.item(1, 5).setCheckState(Qt.Checked)
+    assert view.highlighted() == ["1006"]

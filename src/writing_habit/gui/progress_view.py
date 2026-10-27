@@ -33,6 +33,9 @@ NO_ESTIMATE = QtGui.QColor("#f1efe8")
 
 COLUMNS = progressmod.HEADER
 EDITABLE = {1, 2, 4}            # name, estimate, weight; hours spent is computed
+PLANNED = 5                     # the Next week checkbox
+#: The background of a checked project whose weight is above HIGH_WEIGHT.
+HIGHLIGHT = QtGui.QColor("#fff1b8")
 
 
 def nice_step(span: float, ticks: int = 6) -> float:
@@ -346,9 +349,33 @@ class ProgressView(QtWidgets.QWidget):
                     if c >= 2:
                         item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     self.grid.setItem(r, c, item)
+                box = QtWidgets.QTableWidgetItem("")
+                box.setFlags((box.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsEditable)
+                box.setCheckState(Qt.Checked if row.planned else Qt.Unchecked)
+                box.setToolTip("Checked projects take part in Coach > Plan next week "
+                               "from progress, and the choice carries over to "
+                               "next week's file")
+                self.grid.setItem(r, PLANNED, box)
+                self._shade(r)
             self.grid.resizeColumnToContents(0)
+            self.grid.resizeColumnToContents(PLANNED)
         finally:
             self._filling = False
+
+    def _shade(self, r: int) -> None:
+        """Highlight row ``r`` when it is checked and its weight is high."""
+        row = self.rows[r]
+        on = row.planned and row.high
+        for c in range(self.grid.columnCount()):
+            item = self.grid.item(r, c)
+            if item is not None:
+                item.setBackground(QtGui.QBrush(HIGHLIGHT) if on else QtGui.QBrush())
+
+    def highlighted(self) -> List[str]:
+        """Return the numbers of the highlighted rows."""
+        return [row.number for r, row in enumerate(self.rows)
+                if self.grid.item(r, 0).background().color() == HIGHLIGHT
+                and self.grid.item(r, 0).background().style() != Qt.NoBrush]
 
     def store(self) -> bool:
         """Write ``self.rows`` into the week file's lines.  Return whether they changed."""
@@ -375,6 +402,8 @@ class ProgressView(QtWidgets.QWidget):
         text = item.text().strip()
         if item.column() == 1:
             row.name = text
+        elif item.column() == PLANNED:
+            row.planned = item.checkState() == Qt.Checked
         elif item.column() in (2, 4):
             value = progressmod._number(text)
             if text and value is None:
@@ -386,6 +415,11 @@ class ProgressView(QtWidgets.QWidget):
             else:
                 row.weight = value
         self.store()
+        self._filling = True
+        try:
+            self._shade(item.row())
+        finally:
+            self._filling = False
         self.chart.set_rows(self.rows)
         self.show_saved_state()
 

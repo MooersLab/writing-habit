@@ -930,7 +930,15 @@ blocks. Uncheck a project you do not want to work on next week and press
 checked, the lines show the new hours and blocks, and the note is rewritten
 by the software. An unchecked project says *not in this plan* and can be
 checked again. When you accept with boxes changed since the last update, the
-plan is updated first. **Add the checked to Next week** puts the checked projects on the
+plan is updated first.
+
+The dialog lists every project with a weight and time left, checked or not,
+and each box starts as it was left the last time a plan was accepted. Accepting
+writes the boxes into the **Next week** column of the progress table, and the
+table travels with the week file, so the projects you checked this week are
+checked again when you plan from next week's file. **Discard** leaves the
+column as it was. A checked project whose weight is above 0.85 is highlighted
+in pale yellow, and the highlight follows the box as you check and uncheck it. **Add the checked to Next week** puts the checked projects on the
 **Next week** list, copying the code-free entry from the current list so the
 deadline and risk tag come along, and copies the suggested blocks to the
 clipboard. Nothing is placed in the grid for you, because next week's table
@@ -1208,10 +1216,10 @@ the week file that the Schedule tab has open:
 
 ```org
 #+NAME: progress
-| Project ID | Project name                | Est. hours | Hours spent | Weight |
-|------------+-----------------------------+------------+-------------+--------|
-| 0142       | RETKinaseCovalentInhibitors |        120 |        47.8 |      4 |
-| 0201       | dusp1                       |        200 |       200.8 |      4 |
+| Project ID | Project name                | Est. hours | Hours spent | Weight | Next week |
+|------------+-----------------------------+------------+-------------+--------+-----------|
+| 0142       | RETKinaseCovalentInhibitors |        120 |        47.8 |    0.9 | yes       |
+| 0201       | dusp1                       |        200 |       200.8 |    0.4 | no        |
 ```
 
 Each project is one horizontal bar, labelled on the y axis by its number and
@@ -1234,9 +1242,14 @@ green bar and the words *no estimate*. Hover over a bar for its numbers.
 - Type the **Est. hours** and the **Weight** in the table below the chart.
   **Hours spent** is computed and cannot be typed over. The weight is yours to
   assign. A larger number means the project matters more, and only its size
-  relative to the other weights counts. The Coach menu's **Plan next week from
-  progress** uses it, as described in
-  [Planning next week from progress](#planning-next-week-from-progress).
+  relative to the other weights counts. A scale from 0 to 1 works well,
+  because a checked project whose weight is above 0.85 is highlighted in pale
+  yellow, here and in the plan dialog, as one of the projects that matter most.
+  The Coach menu's **Plan next week from progress** uses the weight, as
+  described in [Planning next week from progress](#planning-next-week-from-progress).
+- The **Next week** checkbox says whether the project takes part in next
+  week's plan. It is written as `yes` or `no` in the table, and a table made
+  before the column existed reads as all checked.
 - **Remove row** takes a finished project off the table.
 - **Save to the week file** writes the week file to disk, progress table
   included. It is the same as Save on the Schedule tab, so the week's other

@@ -29,7 +29,11 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 NAME = "progress"
-HEADER = ["Project ID", "Project name", "Est. hours", "Hours spent", "Weight"]
+HEADER = ["Project ID", "Project name", "Est. hours", "Hours spent", "Weight",
+          "Next week"]
+#: A weight above this marks a project as one of the most important.
+HIGH_WEIGHT = 0.85
+_NO = {"no", "n", "-", "[ ]", "0", "false", "off"}
 _NAME_LINE = re.compile(r"^\s*#\+NAME:\s*(.*?)\s*$", re.IGNORECASE)
 _RULE = re.compile(r"^\s*\|[-+]")
 _NUMBER = re.compile(r"(\d{4})")
@@ -44,6 +48,19 @@ class Row:
     estimate: Optional[float] = None    # hours the project is expected to need
     spent: float = 0.0                  # hours tracked so far
     weight: Optional[float] = None      # importance, set by the writer
+    #: Whether the project is checked for next week's plan. A table written
+    #: before this column existed reads as checked.
+    planned: bool = True
+
+    @property
+    def eligible(self) -> bool:
+        """Whether the project can take part in a plan: a weight and time left."""
+        return bool(self.weight and self.weight > 0 and self.remaining)
+
+    @property
+    def high(self) -> bool:
+        """Whether the weight marks the project as one of the most important."""
+        return bool(self.weight is not None and self.weight > HIGH_WEIGHT)
 
     @property
     def remaining(self) -> Optional[float]:
@@ -107,7 +124,7 @@ def read(lines: Sequence[str]) -> Optional[List[Row]]:
     for line in lines[first:end]:
         if _RULE.match(line):
             continue
-        cells = (_cells(line) + [""] * 5)[:5]
+        cells = (_cells(line) + [""] * 6)[:6]
         if cells[0].lower().startswith("project"):
             continue                                   # the header row
         m = _NUMBER.search(cells[0]) or _NUMBER.match(cells[1])
@@ -117,16 +134,17 @@ def read(lines: Sequence[str]) -> Optional[List[Row]]:
         if name.startswith(m.group(1)):
             name = name[4:]
         rows.append(Row(m.group(1), name.strip(), _number(cells[2]),
-                        _number(cells[3]) or 0.0, _number(cells[4])))
+                        _number(cells[3]) or 0.0, _number(cells[4]),
+                        cells[5].strip().lower() not in _NO))
     return rows
 
 
 def render(rows: Sequence[Row]) -> List[str]:
     """Write the rows as an aligned org table with its header."""
-    body = [[r.number, r.name, _fmt(r.estimate), _fmt(r.spent), _fmt(r.weight)]
-            for r in rows]
+    body = [[r.number, r.name, _fmt(r.estimate), _fmt(r.spent), _fmt(r.weight),
+             "yes" if r.planned else "no"] for r in rows]
     table = [HEADER] + body
-    widths = [max(len(row[i]) for row in table) for i in range(5)]
+    widths = [max(len(row[i]) for row in table) for i in range(len(HEADER))]
     right = {2, 3, 4}
 
     def line(row):
@@ -249,17 +267,25 @@ class Plan:
     blocks: List[Placed] = field(default_factory=list)
     unplaced: List[Tuple[Row, int]] = field(default_factory=list)
     left_out: List[Row] = field(default_factory=list)       # no estimate or no weight
+    rows: List[Row] = field(default_factory=list)           # every row of the table
+
+    @property
+    def eligible(self) -> List[Row]:
+        """The rows that could take part, checked or not, by weight then number."""
+        return sorted((r for r in self.rows if r.eligible),
+                      key=lambda r: (-r.weight, r.number))
 
 
 def share(rows: Sequence[Row], capacity: int, unit: int = 30) -> List[Tuple[Row, int]]:
     """Share ``capacity`` minutes among the rows by weight, in ``unit``-minute steps.
 
-    Only rows with a weight above zero and time remaining take part. A row
+    Only rows checked for next week, with a weight above zero and time
+    remaining, take part. A row
     never gets more than it has left, and minutes it cannot use go to the
     others in proportion to their weights. The order is by weight, highest
     first, then by project number.
     """
-    pool = [r for r in rows if r.weight and r.weight > 0 and r.remaining]
+    pool = [r for r in rows if r.eligible and r.planned]
     left = {r.number: int(r.remaining * 60) for r in pool}
     got = {r.number: 0 for r in pool}
     units = capacity // unit
@@ -333,7 +359,7 @@ def place(shares: Sequence[Tuple[Row, int]], profile, days: Sequence[int] = rang
 
 def plan(rows: Sequence[Row], capacity: int, profile) -> Plan:
     """Suggest next week's plan from the progress rows and the energy profile."""
-    result = Plan(capacity)
+    result = Plan(capacity, rows=list(rows))
     result.left_out = [r for r in rows if r.estimate is None or not r.weight]
     result.shares = share(rows, capacity)
     result.blocks, result.unplaced = place(result.shares, profile)
@@ -373,6 +399,9 @@ def facts(p: Plan) -> str:
 
 
 def plain(p: Plan) -> str:
+    if not p.shares and p.eligible:
+        return ("No project is checked for next week, so there is nothing to share "
+                "out. Check the projects to work on and press Update the plan.")
     if not p.shares:
         return ("No project in the progress table has both a weight and time left, "
                 "so there is nothing to share out. Fill in the Est. hours and Weight "
