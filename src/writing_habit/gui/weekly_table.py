@@ -1665,6 +1665,49 @@ class WeeklyTable:
         cells = self.apply_moves(moves)
         return cells[0], moves
 
+    def plan_resize(self, row_index: int, column_index: int, start: str, end: str,
+                    push: bool = False) -> List[Tuple[Block, str, str]]:
+        """Return the moves that give a block the new range ``start``-``end``.
+
+        Dragging an edge of a block in the hour view changes its start or its
+        end. The first move is the block itself. With ``push``, the later
+        blocks the new range would overlap move down after it. Raise
+        :class:`ValueError` when the cell is empty, the range is empty or runs
+        past midnight, the block would grow past the longest block the picker
+        allows, or a move lands on a slot that another block holds.
+        """
+        block = self.block_at(row_index, column_index)
+        if block is None:
+            raise ValueError("select a block to resize")
+        if _to_minutes(block.end) <= _to_minutes(block.start):
+            raise ValueError("a block that runs past midnight cannot be resized")
+        first, last = _to_minutes(start), _to_minutes(end)
+        if first < 0 or last > 24 * 60:
+            raise ValueError("the block must stay within the day")
+        if last - first < PICK_STEP:
+            raise ValueError(f"a block is at least {PICK_STEP} minutes long")
+        old_first, old_last = _interval(block.start, block.end)
+        if last - first > max(PICK_MAX, old_last - old_first):
+            raise ValueError(f"a block is at most {PICK_MAX} minutes long")
+        start, end = _from_minutes(first), _from_minutes(last)
+        moves = [(block, start, end)]
+        if push:
+            moves += self.plan_push(block.offset, start, end,
+                                    exclude={(row_index, column_index)})
+        self._check_targets(moves)
+        return moves
+
+    def resize_block(self, row_index: int, column_index: int, start: str, end: str,
+                     push: bool = False) -> Tuple[Tuple[int, int], list]:
+        """Give one block the range ``start``-``end``, as :meth:`plan_resize` checks.
+
+        Return the block's new ``(row, column)`` and the moves made. Nothing
+        changes when the resize is refused with :class:`ValueError`.
+        """
+        moves = self.plan_resize(row_index, column_index, start, end, push=push)
+        cells = self.apply_moves(moves)
+        return cells[0], moves
+
     def hour_blocks(self) -> Dict[Tuple[int, int], List[Block]]:
         """Return ``{(offset, hour): blocks starting in that hour}``, by start."""
         out: Dict[Tuple[int, int], List[Block]] = {}

@@ -324,6 +324,15 @@ line between them, two that overlap show both outlines, offset a little, and a
 deeper colour where they cross, and a break inside an hour, such as 06:30 to
 06:45, stays white.
 
+Drag the top or bottom edge of a block to change its start or its end. Over an
+edge the pointer becomes a double arrow. While you drag, the block is drawn at
+its new range in steps of 15 minutes, and a tip shows the times. Release to
+keep the change, or press Esc to cancel. A block is at least 15 minutes and at
+most two hours long, unless it was longer already, and it stays within the day.
+With **Push later blocks down** checked, a block that grows into the next one
+pushes it down, as a shift does. The objectives and review of the block follow
+its new start, and the file is written when you save.
+
 ![The hour view of a week, with a Saturday run of five hours tinted amber and listed in the Breaks panel.](imgs/gui-hour-view.png)
 
 A cell lists the blocks that start in that hour, such as `gB 04:00-06:00`. The

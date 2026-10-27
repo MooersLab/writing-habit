@@ -37,7 +37,8 @@ from .periods_dialog import PeriodsDialog
 from .project_list_view import ProjectListPanel
 from . import coach_runner
 from .review_panel import ReviewDialog
-from .hour_view import HOUR_COLUMN, HourCellDelegate, HourGridModel, HourPicker
+from .hour_view import (HOUR_COLUMN, EdgeDragger, HourCellDelegate, HourGridModel,
+                        HourPicker)
 from .table_model import TIME_COLUMN, CodeDelegate, WeeklyTableModel
 
 import sys as _sys
@@ -372,6 +373,8 @@ class ScheduleEditor(QtWidgets.QWidget):
         self.hour_view = QtWidgets.QTableView()
         self.hour_view.setModel(self.hour_model)
         self.hour_view.setItemDelegate(HourCellDelegate(self.hour_view))
+        self.edge_dragger = EdgeDragger(
+            self.hour_view, lambda block, start, end: self.resize_block(block, start, end))
         self.hour_view.setAlternatingRowColors(False)
         self.hour_view.setWordWrap(True)
         self.hour_view.verticalHeader().setVisible(False)
@@ -3059,6 +3062,41 @@ class ScheduleEditor(QtWidgets.QWidget):
         if rest:
             text += "; pushed down " + ", ".join(
                 f"{b.letter} to {s}-{e}" for b, s, e in rest)
+        self.logged.emit(text)
+        self._update_shift_buttons()
+        return moves
+
+    def resize_block(self, block, start: str, end: str, push: Optional[bool] = None):
+        """Give ``block`` the range ``start``-``end``, as dragging an edge asks.
+
+        Later blocks the longer range would overlap move down when **Push
+        later blocks down** is checked, and the objectives and review of the
+        block follow its new start. Return the moves made, or ``None`` when
+        the resize is refused.
+        """
+        if self.table is None:
+            return None
+        if push is None:
+            push = self.push_box.isChecked()
+        try:
+            (row, column), moves = self.table.resize_block(
+                block.row, block.column, start, end, push=push)
+        except ValueError as exc:
+            self.logged.emit(f"Cannot resize the block: {exc}")
+            return None
+        self._rekey(moves)
+        self._rebuild_views()
+        self.on_grid_edit()
+        new_start = self.table.rows[row].parsed[0]
+        grid_column = 1 + [c for c, _o, _l in self.table.columns].index(column)
+        if self.hour_view_shown():
+            self.hour_view.setCurrentIndex(
+                self.hour_model.index(int(new_start[:2]), grid_column))
+        text = (f"Resized {block.letter} from {block.start}-{block.end} "
+                f"to {moves[0][1]}-{moves[0][2]}")
+        if moves[1:]:
+            text += "; pushed down " + ", ".join(
+                f"{b.letter} to {s}-{e}" for b, s, e in moves[1:])
         self.logged.emit(text)
         self._update_shift_buttons()
         return moves

@@ -328,3 +328,107 @@ def _open(qtbot, tmp_path, monkeypatch, store, text):
     path.write_text(text, encoding="utf-8")
     widget.open(str(path))
     return widget
+
+
+# -- resizing a block by dragging an edge -------------------------------------------
+DRAG = (
+    "#+TITLE: drag\n"
+    "|        Time | M  | Tu |\n"
+    "|-------------+----+----|\n"
+    "| 05:00-05:30 | gA |    |\n"
+    "| 07:00-08:00 | eB | gA |\n"
+    "|-------------+----+----|\n"
+    "| A: one :safe: |  |  |\n"
+    "| B: two :safe: |  |  |\n"
+)
+
+
+def test_plan_resize_checks_the_new_range(tmp_path):
+    path = tmp_path / "drag.org"
+    path.write_text(DRAG, encoding="utf-8")
+    table = WeeklyTable.from_file(str(path))
+    a = next(b for b in table.blocks() if b.letter == "A" and b.offset == 0)
+    (row, column), moves = table.resize_block(a.row, a.column, "05:00", "06:15")
+    assert table.rows[row].parsed == ("05:00", "06:15") and table.cell(row, column) == "gA"
+    for start, end, why in [("05:00", "05:10", "at least 15"),
+                            ("05:00", "07:15", "at most 120"),
+                            ("06:15", "06:00", "at least 15")]:
+        with pytest.raises(ValueError, match=why):
+            table.plan_resize(row, column, start, end)
+    # Growing into the next block pushes it down when asked.
+    (row, column), moves = table.resize_block(row, column, "05:30", "07:30", push=True)
+    assert [(m[0].letter, m[1], m[2]) for m in moves] == [("A", "05:30", "07:30"),
+                                                          ("B", "07:30", "08:30")]
+
+
+def _move(viewport, x, y):
+    """Send a mouse move with the left button down, as a drag does."""
+    from writing_habit.gui.qt import QtCore, QtGui, QtWidgets, Qt
+    event = QtGui.QMouseEvent(QtCore.QEvent.MouseMove, QtCore.QPointF(x, y),
+                              Qt.NoButton, Qt.LeftButton, Qt.NoModifier)
+    QtWidgets.QApplication.sendEvent(viewport, event)
+
+
+def _edge_y(editor_, hour, column, fraction):
+    rect = editor_.hour_view.visualRect(editor_.hour_model.index(hour, column))
+    return rect, rect.top() + round(fraction * rect.height())
+
+
+def test_dragging_the_bottom_edge_lengthens_the_block(qtbot, tmp_path, monkeypatch, store):
+    from writing_habit.gui.qt import QtCore, Qt
+    editor_ = _open(qtbot, tmp_path, monkeypatch, store, DRAG)
+    editor_.push_box.setChecked(False)
+    editor_.set_hour_view(True)
+    editor_.resize(900, 900)
+    editor_.show()
+    qtbot.waitExposed(editor_)
+    viewport = editor_.hour_view.viewport()
+    rect, y = _edge_y(editor_, 5, 1, 0.5)          # the 05:30 end of gA
+    x = rect.center().x()
+    assert editor_.edge_dragger.edge_at(QtCore.QPoint(x, y))[1] == "bottom"
+    qtbot.mousePress(viewport, Qt.LeftButton, pos=QtCore.QPoint(x, y))
+    target, ty = _edge_y(editor_, 6, 1, 0.25)       # 06:15
+    _move(viewport, x, ty)
+    assert editor_.hour_model.preview[1:] == ("05:00", "06:15")
+    qtbot.mouseRelease(viewport, Qt.LeftButton, pos=QtCore.QPoint(x, ty))
+    a = next(b for b in editor_.table.blocks() if b.letter == "A" and b.offset == 0)
+    assert (a.start, a.end) == ("05:00", "06:15")
+    assert editor_.hour_model.preview is None
+    assert editor_.table.dirty
+
+
+def test_dragging_the_top_edge_moves_the_start_and_escape_cancels(qtbot, tmp_path,
+                                                                  monkeypatch, store):
+    from writing_habit.gui.qt import QtCore, Qt
+    editor_ = _open(qtbot, tmp_path, monkeypatch, store, DRAG)
+    editor_.set_hour_view(True)
+    editor_.resize(900, 900)
+    editor_.show()
+    qtbot.waitExposed(editor_)
+    viewport = editor_.hour_view.viewport()
+    rect, y = _edge_y(editor_, 7, 2, 0.0)          # the 07:00 start of Tuesday's gA
+    x = rect.center().x()
+    qtbot.mousePress(viewport, Qt.LeftButton, pos=QtCore.QPoint(x, y + 1))
+    _r, ty = _edge_y(editor_, 6, 2, 0.5)            # 06:30
+    _move(viewport, x, ty)
+    qtbot.keyClick(editor_.hour_view, Qt.Key_Escape)
+    assert editor_.hour_model.preview is None
+    qtbot.mouseRelease(viewport, Qt.LeftButton, pos=QtCore.QPoint(x, ty))
+    tue = next(b for b in editor_.table.blocks() if b.offset == 1)
+    assert (tue.start, tue.end) == ("07:00", "08:00")
+    qtbot.mousePress(viewport, Qt.LeftButton, pos=QtCore.QPoint(x, y + 1))
+    _move(viewport, x, ty)
+    qtbot.mouseRelease(viewport, Qt.LeftButton, pos=QtCore.QPoint(x, ty))
+    tue = next(b for b in editor_.table.blocks() if b.offset == 1)
+    assert (tue.start, tue.end) == ("06:30", "08:00")
+
+
+def test_the_middle_of_a_block_is_not_an_edge(qtbot, tmp_path, monkeypatch, store):
+    from writing_habit.gui.qt import QtCore
+    editor_ = _open(qtbot, tmp_path, monkeypatch, store, DRAG)
+    editor_.set_hour_view(True)
+    editor_.resize(900, 900)
+    editor_.show()
+    qtbot.waitExposed(editor_)
+    rect, y = _edge_y(editor_, 7, 1, 0.5)
+    assert editor_.edge_dragger.edge_at(QtCore.QPoint(rect.center().x(), y)) is None

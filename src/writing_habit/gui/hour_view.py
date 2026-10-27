@@ -14,6 +14,7 @@ keeps the row, so the candidate rows the writer keeps stay in the file.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from typing import Dict, List, Optional, Tuple
 
@@ -43,22 +44,28 @@ LANE_STEP = 4
 
 
 class Segment(tuple):
-    """``(top, bottom, color, lane)``: a block's share of one hour cell.
+    """``(top, bottom, color, lane, block, starts, ends)``: a block's share of one hour.
 
     ``top`` and ``bottom`` are fractions of the hour, 0 at its start and 1 at
     its end, ``color`` is the block's fill as a hex string, and ``lane`` counts
-    the earlier blocks in the cell that it overlaps.
+    the earlier blocks in the cell that it overlaps. ``starts`` and ``ends``
+    say whether the block's own start and end fall in this hour, which is
+    where its edges can be dragged.
     """
 
     __slots__ = ()
 
-    def __new__(cls, top: float, bottom: float, color: str, lane: int = 0):
-        return super().__new__(cls, (top, bottom, color, lane))
+    def __new__(cls, top: float, bottom: float, color: str, lane: int = 0,
+                block=None, starts: bool = False, ends: bool = False):
+        return super().__new__(cls, (top, bottom, color, lane, block, starts, ends))
 
     top = property(lambda self: self[0])
     bottom = property(lambda self: self[1])
     color = property(lambda self: self[2])
     lane = property(lambda self: self[3])
+    block = property(lambda self: self[4])
+    starts = property(lambda self: self[5])
+    ends = property(lambda self: self[6])
 
 
 def _minutes(clock: str) -> int:
@@ -87,7 +94,9 @@ def hour_segments(hour: int, blocks, color_of) -> List[Segment]:
             lane += 1
         spans.append((top, bottom, lane))
         out.append(Segment((top - first_minute) / 60, (bottom - first_minute) / 60,
-                           color_of(block), lane))
+                           color_of(block), lane, block,
+                           first_minute <= start < last_minute,
+                           first_minute < end <= last_minute))
     return out
 
 
@@ -119,6 +128,9 @@ class HourGridModel(QtCore.QAbstractTableModel):
         self._breaks: set = set()
         #: The project codes the search box matches; their cells are tinted.
         self.highlight: set = set()
+        #: A block being resized by dragging an edge, drawn at its new range:
+        #: ``(block, start, end)``, or ``None``.
+        self.preview = None
         self._hours = sheet_hours()
         self.set_table(table)
 
@@ -145,6 +157,14 @@ class HourGridModel(QtCore.QAbstractTableModel):
             self.dataChanged.emit(self.index(0, 0),
                                   self.index(self.rowCount() - 1,
                                              self.columnCount() - 1))
+
+    def set_preview(self, preview) -> None:
+        """Draw ``(block, start, end)`` at its new range while it is dragged."""
+        self.preview = preview
+        if self.rowCount() and self.columnCount():
+            self.dataChanged.emit(self.index(0, 1),
+                                  self.index(self.rowCount() - 1, self.columnCount() - 1),
+                                  [SEGMENTS_ROLE])
 
     def set_highlight(self, codes) -> None:
         """Tint the cells of the projects in ``codes``; an empty set clears it."""
@@ -238,7 +258,14 @@ class HourGridModel(QtCore.QAbstractTableModel):
                 return QtGui.QBrush(QtGui.QColor(OFF_HOURS_COLOR))
             return None
         if role == SEGMENTS_ROLE:
-            return hour_segments(row, spans + starts, lambda b: self.block_color(b, found))
+            blocks = spans + starts
+            if self.preview is not None:
+                moving, start, end = self.preview
+                key = (moving.row, moving.column)
+                blocks = [b for b in blocks if (b.row, b.column) != key]
+                if moving.offset == self.offset(column):
+                    blocks.append(dataclasses.replace(moving, start=start, end=end))
+            return hour_segments(row, blocks, lambda b: self.block_color(b, found))
         if role == Qt.TextAlignmentRole:
             return int(Qt.AlignCenter)
         if role == Qt.ToolTipRole:
@@ -318,6 +345,116 @@ class HourCellDelegate(QtWidgets.QStyledItemDelegate):
         opt.backgroundBrush = QtGui.QBrush(Qt.NoBrush)
         style = opt.widget.style() if opt.widget is not None else QtWidgets.QApplication.style()
         style.drawControl(QtWidgets.QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+
+
+class EdgeDragger(QtCore.QObject):
+    """Resize a block in the hour view by dragging its top or bottom edge.
+
+    Over an edge the cursor becomes a vertical double arrow. Pressing there
+    and dragging moves that edge in steps of 15 minutes, and the block is
+    drawn at its new range while the mouse moves. Releasing calls
+    ``apply(block, start, end)``, which changes the table. Escape, or a
+    release where the range has not changed, leaves the block as it was.
+    """
+
+    #: How near an edge, in pixels, the mouse must be to grab it.
+    GRAB = 4
+
+    def __init__(self, view, apply, parent=None):
+        super().__init__(parent or view)
+        self.view = view
+        self.apply = apply
+        self.drag = None          # (block, "top" or "bottom")
+        self.range = None         # (start, end) under the mouse
+        view.viewport().setMouseTracking(True)
+        view.viewport().installEventFilter(self)
+        view.installEventFilter(self)
+
+    @property
+    def model(self):
+        return self.view.model()
+
+    def edge_at(self, pos):
+        """Return ``(block, "top" or "bottom")`` for the edge under ``pos``, or ``None``."""
+        index = self.view.indexAt(pos)
+        if not index.isValid() or index.column() == HOUR_COLUMN:
+            return None
+        rect = self.view.visualRect(index)
+        for segment in reversed(index.data(SEGMENTS_ROLE) or []):
+            inset = 1 + LANE_STEP * segment.lane
+            if not rect.left() + inset <= pos.x() <= rect.right() - inset:
+                continue
+            top = rect.top() + round(segment.top * rect.height())
+            bottom = rect.top() + round(segment.bottom * rect.height())
+            if segment.ends and abs(pos.y() - bottom) <= self.GRAB:
+                return segment.block, "bottom"
+            if segment.starts and abs(pos.y() - top) <= self.GRAB:
+                return segment.block, "top"
+        return None
+
+    def minute_at(self, y: int) -> Optional[int]:
+        """Return the minute of the day at height ``y``, to the nearest 15 minutes."""
+        row = self.view.rowAt(y)
+        if row < 0:
+            row = 0 if y < 0 else self.model.rowCount() - 1
+            return row * 60 if y < 0 else 24 * 60
+        top = self.view.rowViewportPosition(row)
+        height = max(self.view.rowHeight(row), 1)
+        minute = row * 60 + (y - top) * 60 / height
+        return int(round(minute / PICK_STEP) * PICK_STEP)
+
+    def new_range(self, y: int):
+        block, edge = self.drag
+        first, last = _minutes(block.start), _minutes(block.end)
+        minute = self.minute_at(y)
+        if edge == "top":
+            first = max(0, min(minute, last - PICK_STEP))
+        else:
+            last = min(24 * 60, max(minute, first + PICK_STEP))
+        return (f"{first // 60:02d}:{first % 60:02d}", f"{last // 60:02d}:{last % 60:02d}")
+
+    def cancel(self) -> None:
+        self.drag, self.range = None, None
+        self.model.set_preview(None)
+        self.view.viewport().unsetCursor()
+
+    def eventFilter(self, obj, event):
+        kind = event.type()
+        if obj is self.view:
+            if kind == QtCore.QEvent.KeyPress and self.drag and event.key() == Qt.Key_Escape:
+                self.cancel()
+                return True
+            return False
+        if kind == QtCore.QEvent.MouseMove:
+            if self.drag is not None:
+                self.range = self.new_range(event.pos().y())
+                block = self.drag[0]
+                self.model.set_preview((block, *self.range))
+                self.view.setToolTip("")
+                QtWidgets.QToolTip.showText(event.globalPos(), "-".join(self.range),
+                                            self.view.viewport())
+                return True
+            if self.edge_at(event.pos()):
+                self.view.viewport().setCursor(Qt.SizeVerCursor)
+            else:
+                self.view.viewport().unsetCursor()
+            return False
+        if kind == QtCore.QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            edge = self.edge_at(event.pos())
+            if edge is None:
+                return False
+            self.drag = edge
+            self.range = (edge[0].start, edge[0].end)
+            self.view.setCurrentIndex(self.view.indexAt(event.pos()))
+            return True
+        if kind == QtCore.QEvent.MouseButtonRelease and self.drag is not None:
+            block, _edge = self.drag
+            start, end = self.range
+            self.cancel()
+            if (start, end) != (block.start, block.end):
+                self.apply(block, start, end)
+            return True
+        return False
 
 
 # -- remembered ranges -----------------------------------------------------
