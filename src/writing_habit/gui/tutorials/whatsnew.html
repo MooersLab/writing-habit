@@ -1,0 +1,51 @@
+<h1>What is new</h1>
+<p>A short tour of the recent additions, with the tutorial that covers each one.</p>
+
+<h2>The hour view</h2>
+<ul>
+<li>The blocks are drawn half transparent with outlines, so two blocks that
+share an hour, and the break between them, can both be seen.</li>
+<li>Drag the top or bottom edge of a block to change its length, or drag its
+middle to move it to another time or day. Esc cancels. See
+<a href="tutorial:schedule">Edit the schedule</a>.</li>
+<li>A block's further hours show only a down arrow, which keeps the grid quiet.</li>
+</ul>
+
+<h2>The weeks ahead</h2>
+<ul>
+<li>The <b>Weeks</b> row of buttons holds This week, eight lists from Next week to
+Eight weeks out, and the Grasscatcher. The <b>Semesters</b> row below holds the
+semester lists. Both rows wrap when the window is narrow.</li>
+<li>Put a project in a later week to take it off this week's mind, and copy it
+into this week's legend when its week comes.</li>
+</ul>
+
+<h2>Progress and next week's plan</h2>
+<ul>
+<li>The <a href="tab:Progress">Progress</a> tab charts the hours spent on each
+unfinished project against its estimate, with the days to its deadline. See
+<a href="tutorial:progress">Track project progress</a>.</li>
+<li><b>Coach &gt; Plan next week from progress</b> shares next week's hours by
+your weights and places them in your best hours. Unchecked projects stay
+unchecked next week, and heavy checked ones are highlighted.</li>
+</ul>
+
+<h2>More from the coach</h2>
+<p>The Coach menu of the <a href="tab:Schedule">Schedule</a> tab gained
+<b>Rescue missed blocks</b>, <b>Ask about missed blocks</b>, <b>Number a new
+project</b>, <b>Triage carried projects</b>, <b>Monday message for my partner</b>,
+and <b>Semester review</b>. The software makes every decision and computes every
+number, and a local model, when you turn it on, only words the note.</p>
+
+<h2>Safer with the time tracker</h2>
+<p>The Pomodoro count is written only to a table with the count's own columns,
+and never to <code>zTimeSpent</code>, so the tracker's table and its formulas stay
+as you made them. Every reading of <code>mytime.db</code> is read-only.</p>
+
+<h2>In Emacs</h2>
+<p>writing-habit-el now has the planning checks and helpers of the Coach menu,
+a progress dashboard, and an hour-by-day view of the week:</p>
+<pre>C-c C-; h   hour view
+C-c C-; g   progress dashboard
+C-c C-; U   update hours spent
+C-c C-; A   add the current list's projects to the progress table</pre>

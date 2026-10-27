@@ -63,7 +63,7 @@ class ProgressChart(QtWidgets.QWidget):
     ROW = 26
     BAR = 16
     TOP = 34
-    BOTTOM = 34
+    BOTTOM = 42
     RIGHT = 96              # room for the days to the deadline after the longest bar
 
     def __init__(self, parent=None):

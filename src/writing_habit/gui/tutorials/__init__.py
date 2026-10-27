@@ -20,9 +20,11 @@ IMAGES = HERE / "images"
 #: (subtab title, page file), in the order of the weekly loop.
 PAGES: List[Tuple[str, str]] = [
     ("Start here", "start.html"),
+    ("What is new", "whatsnew.html"),
     ("Edit the schedule", "schedule.html"),
     ("Import the plan", "plan.html"),
     ("Import writing effort", "track.html"),
+    ("Track project progress", "progress.html"),
     ("Compare plan and effort", "compare.html"),
     ("Dashboard", "dashboard.html"),
     ("Longer view", "history.html"),

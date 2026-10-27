@@ -143,7 +143,8 @@ def _cells(line: str) -> List[str]:
 def _fmt(value: Optional[float]) -> str:
     if value is None:
         return ""
-    return f"{value:g}" if value == int(value) else f"{value:.1f}".rstrip("0").rstrip(".")
+    # Two decimals keep a weight such as 0.95 as typed.
+    return f"{value:g}" if value == int(value) else f"{value:.2f}".rstrip("0").rstrip(".")
 
 
 def span(lines: Sequence[str]) -> Optional[Tuple[int, int, int]]:

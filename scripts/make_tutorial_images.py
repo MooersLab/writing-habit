@@ -320,6 +320,40 @@ def plan_check_images(app, window, store):
     app.processEvents()
 
 
+def progress_images(app, window, mytime):
+    """Photograph the Progress tab and the plan it suggests for next week."""
+    view = window.progress
+    view.seed()
+    for row, (estimate, weight) in zip(view.rows, [(120, 0.9), (40, 0.6), (30, 0.3),
+                                                   (60, 0.95), (200, 0.4)]):
+        row.estimate, row.weight = estimate, weight
+    view.store()
+    view.update_hours(mytime)
+    window.show_tab("Progress")
+    app.processEvents()
+    save(window, "progress.png")
+
+    editor = window.editor
+    shots = []
+
+    def photograph(dialog):
+        dialog.show()
+        app.processEvents()
+        save(dialog, "progress-plan.png")
+        shots.append(dialog)
+        dialog.close()
+        return False
+
+    keep = editor.run_coach_dialog
+    editor.run_coach_dialog = photograph
+    window.show_tab("Schedule")
+    editor.coach_runner.background = False
+    editor.plan_from_progress()
+    editor.run_coach_dialog = keep
+    if not shots:
+        print("The plan from progress opened no dialog, so progress-plan.png was not drawn")
+
+
 def main() -> int:
     from writing_habit import db
     from writing_habit.gui import settings
@@ -392,6 +426,8 @@ def main() -> int:
     panel = show_form(window, "Track", "track sync")
     run(app, panel, source=str(mytime))
     save(window, "track-sync.png")
+
+    progress_images(app, window, str(mytime))
 
     panel = show_form(window, "Compare", "compare")
     run(app, panel, week=WEEK)

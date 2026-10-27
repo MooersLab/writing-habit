@@ -1,0 +1,73 @@
+<h1>Track project progress</h1>
+<p>The weekly comparison says how one week went. The <b>Progress</b> tab takes
+the long view. It draws one bar for each unfinished project, so you can see
+which projects are nearly done, which have barely started, and which deadlines
+are close. It also lets you say how much each project matters, and the coach
+uses those weights to suggest next week's plan.</p>
+
+<p><img src="images/progress.png" width="680"></p>
+<p class="caption">The Progress tab with the practice week. The whole bar is the estimate,
+green is the time spent, and white is the time left. The days to each deadline
+follow the bar.</p>
+
+<h2>Make the progress table</h2>
+<h3>In the window</h3>
+<ol>
+<li>Open the week's file on the <a href="tab:Schedule">Schedule</a> tab.</li>
+<li>Open the <a href="tab:Progress">Progress</a> tab and press <b>Add projects from
+the current list</b>. A table named <code>progress</code> is added at the end of the
+file, with a row for each numbered project of this semester's list. A project
+brings its deadline with it.</li>
+<li>Type the <b>Est. hours</b> each project is expected to need and its
+<b>Weight</b>. A scale from 0 to 1 works well. Type or correct the <b>Deadline</b>
+as <code>YYYY-MM-DD</code>.</li>
+<li>Press <b>Update hours spent</b>. The hours come from the <code>zTimeSpent</code>
+table of <code>mytime.db</code>, matched by the project's four-digit number. The
+tracker is only read, never written.</li>
+<li>Press <b>Save to the week file</b>. The table lives in the week file, so a new
+week's file made by copying this one carries it forward.</li>
+</ol>
+
+<table border="1" cellspacing="0">
+<tr><th>Column</th><th>Filled by</th></tr>
+<tr><td>Project ID, Project name</td><td>the current list</td></tr>
+<tr><td>Est. hours, Weight</td><td>you</td></tr>
+<tr><td>Hours spent</td><td>Update hours spent, from mytime.db</td></tr>
+<tr><td>Deadline</td><td>the list or the legend, or you</td></tr>
+<tr><td>Days to deadline</td><td>counted from today each time the table is written</td></tr>
+<tr><td>Next week</td><td>the checkbox, or the plan dialog</td></tr>
+</table>
+
+<h2>Read the chart</h2>
+<p>The projects are listed by number and name. A dark green piece past a tick
+mark is time spent beyond the estimate, which is a sign to raise the estimate or
+to ask why. The days to the deadline are amber within two weeks and red once the
+deadline has passed. A checked project whose weight is above 0.85 is highlighted
+in pale yellow. Hover over a bar for its numbers.</p>
+
+<h2>Plan next week from your progress</h2>
+<ol>
+<li>On the <a href="tab:Schedule">Schedule</a> tab choose <b>Coach &gt; Plan next week
+from progress</b>.</li>
+<li>The week's planned hours are shared among the checked projects by weight,
+never more than a project has left, and each project's blocks are placed in the
+hours your energy profile rates best for new writing.</li>
+<li>Uncheck a project you will not work on next week and press <b>Update the
+plan</b>. The hours are shared again among the rest.</li>
+<li>Press <b>Add the checked to Next week</b>. The projects go on the Next week
+list, the suggested blocks are copied to the clipboard, and the boxes are
+remembered, so they start the same way next week.</li>
+</ol>
+
+<p><img src="images/progress-plan.png" width="560"></p>
+<p class="caption">The plan for next week, one line per project with its hours and blocks.</p>
+
+<h2>In Emacs</h2>
+<p>writing-habit-el reads and writes the same table. From the week's buffer:</p>
+<pre>M-x writing-habit-progress          the progress dashboard
+M-x writing-habit-progress-update   fill Hours spent from mytime.db
+M-x writing-habit-hours             the week as hours by day</pre>
+<p>In the dashboard, <b>u</b> updates the hours, <b>a</b> adds the current list's
+projects, <b>e</b> jumps to the table, and <b>g</b> redraws.</p>
+
+<p>Next, <a href="tutorial:compare">compare plan and effort</a>.</p>

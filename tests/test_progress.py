@@ -251,3 +251,11 @@ def test_seed_and_fill_take_the_deadline_from_the_lists():
                                            Entry("B", "0201dusp1 2026-10-15")])
     assert added == 1
     assert [r.deadline for r in rows] == ["2026-12-15", "2026-12-01"]   # typed one kept
+
+
+def test_a_weight_keeps_two_decimals():
+    lines = ["#+NAME: progress", "| Project ID | Project name | Weight |", "| 1006 | x | 0.95 |"]
+    rows = progress.read(lines)
+    progress.write(lines, rows)
+    assert progress.read(lines)[0].weight == 0.95
+    assert " 0.95 |" in lines[3]

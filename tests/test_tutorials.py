@@ -38,7 +38,8 @@ def test_every_page_shows_both_routes(name):
 def test_the_tab_links_name_real_tabs():
     pytest.importorskip("PyQt5", reason="the graphical extra is not installed")
     from writing_habit.gui import mainwindow
-    titles = {entry[0] for entry in mainwindow.TABS} | {mainwindow.TUTORIALS}
+    titles = ({entry[0] for entry in mainwindow.TABS}
+              | {mainwindow.TUTORIALS, mainwindow.PROGRESS})
     for text in PAGE_TEXT.values():
         for tab in re.findall(r'href="tab:([^"]+)"', text):
             assert tab in titles, tab

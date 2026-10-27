@@ -1192,8 +1192,8 @@ next March. Risk tags and default activities are kept.
 ## The Tutorials tab
 
 The last tab holds one tutorial per task of the weekly loop, each in its own
-subtab: Start here, Edit the schedule, Import the plan, Import writing effort,
-Compare plan and effort, Dashboard, Longer view, Calendar and sheets, and
+subtab: Start here, What is new, Edit the schedule, Import the plan, Import
+writing effort, Track project progress, Compare plan and effort, Dashboard, Longer view, Calendar and sheets, and
 Troubleshooting. Each page gives the point-and-click route and the matching
 commands, with screenshots of the practice week in `examples/tutorial`. A link
 such as **Track** on a page raises that tab, and **Help > Tutorials** opens the
