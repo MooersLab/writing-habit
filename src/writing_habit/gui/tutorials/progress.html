@@ -66,8 +66,11 @@ remembered, so they start the same way next week.</li>
 <p>writing-habit-el reads and writes the same table. From the week's buffer:</p>
 <pre>M-x writing-habit-progress          the progress dashboard
 M-x writing-habit-progress-update   fill Hours spent from mytime.db
-M-x writing-habit-hours             the week as hours by day</pre>
+M-x writing-habit-hours             the week as hours by day
+M-x writing-habit-progress-plan-next-week   next week's plan from the weights</pre>
 <p>In the dashboard, <b>u</b> updates the hours, <b>a</b> adds the current list's
-projects, <b>e</b> jumps to the table, and <b>g</b> redraws.</p>
+projects, <b>e</b> jumps to the table, <b>n</b> plans next week, and <b>g</b> redraws. In the plan
+buffer, <b>SPC</b> checks or unchecks a project, <b>u</b> updates the plan, and
+<b>C-c C-c</b> adds the checked projects to Next week.</p>
 
 <p>Next, <a href="tutorial:compare">compare plan and effort</a>.</p>
