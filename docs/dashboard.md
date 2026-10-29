@@ -107,8 +107,11 @@ of prospecting as a day of writing. The text report from `writing-habit compare`
 carries the same section.
 
 The section and the barbell row appear only when the week has prospecting, so
-the shared fixture renders the same bytes as before. The Emacs Lisp twin does
-not draw them yet.
+the shared fixture renders the same bytes as before. The Emacs Lisp twin draws
+them too. A second frozen render, `tests/fixtures/prospect.html`, made from
+`tests/fixtures/prospect.db` by `scripts/make_prospect_fixture.py`, holds both
+ports to the same bytes for this section. Copy both files into the twin's
+`test/fixtures` whenever you rebuild them.
 
 ## The seasons dashboard
 

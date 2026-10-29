@@ -7,8 +7,8 @@ dashboard and text report give it a section of its own.
 
 from __future__ import annotations
 
+import re
 import sqlite3
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -199,15 +199,21 @@ def test_stale_prospecting_is_marked(env):
     assert '<tr class="stale"><td>1424AIseededPhasing' in dashboard_html(con, "2026-10-19")
 
 
+def _old_schema() -> str:
+    """The schema as it stood before the prospecting label, rebuilt from today's."""
+    sql = db.SCHEMA_PATH.read_text(encoding="utf-8")
+    sql = re.sub(r"\n\s*-- 1 when the session's project.*?\n.*?\n\s*prospecting INTEGER[^\n]*",
+                 "", sql)
+    sql = re.sub(r"CREATE VIEW IF NOT EXISTS v_week_prospecting AS.*?;\n", "", sql, flags=re.S)
+    sql = sql.replace(" AND prospecting = 0", "").replace(" WHERE prospecting = 0", "")
+    assert "prospecting" not in re.sub(r"--[^\n]*", "", sql)
+    return sql
+
+
 def test_old_database_is_migrated(tmp_path):
-    old_schema = subprocess.run(
-        ["git", "show", "HEAD~0:src/writing_habit/schema.sql"], cwd=ROOT,
-        capture_output=True, text=True)
-    if old_schema.returncode or "prospecting" in old_schema.stdout:
-        pytest.skip("the committed schema already carries the prospecting column")
     path = tmp_path / "old.db"
     con = sqlite3.connect(path)
-    con.executescript(old_schema.stdout)
+    con.executescript(_old_schema())
     pid = con.execute("INSERT INTO project(code) VALUES ('A')").lastrowid
     con.execute("INSERT INTO session(day, actual_min, project_id, source)"
                 " VALUES ('2026-10-05', 30, ?, 'manual')", (pid,))
@@ -220,6 +226,8 @@ def test_old_database_is_migrated(tmp_path):
     assert db.has_prospecting(con)
     assert con.execute("SELECT prospecting FROM session").fetchone()[0] == 0
     assert queries.overall_series(con)[0]["actual_min"] == 30
+    view = con.execute("SELECT sql FROM sqlite_master WHERE name = 'v_week_overall'").fetchone()[0]
+    assert "prospecting = 0" in view                   # the view was rebuilt
     assert queries.week_prospecting(con, WEEK) == []
     assert db.migrate(con) is False
     con.close()
@@ -232,3 +240,18 @@ def test_cross_port_fixture_is_not_touched():
         assert queries.week_prospecting(con, "2026-01-19") == []
     finally:
         con.close()
+
+
+def test_matches_cross_port_prospect_fixture():
+    """The prospecting dashboard is byte-identical to the render the Emacs Lisp twin checks.
+
+    Rebuild both files with ``scripts/make_prospect_fixture.py`` after a change
+    to the section, and copy them into the twin's ``test/fixtures``.
+    """
+    fixtures = ROOT / "tests" / "fixtures"
+    con = db.connect(str(fixtures / "prospect.db"))
+    try:
+        html = dashboard_html(con, "2026-10-19", today="2026-10-26")
+    finally:
+        con.close()
+    assert html == (fixtures / "prospect.html").read_text(encoding="utf-8")
