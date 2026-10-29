@@ -73,12 +73,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_track_sync.add_argument("--until", help="last day to copy (default: no limit)")
     p_track_sync.add_argument(
         "--scope", choices=["semester", "legend", "all"], default="semester",
-        help="semester keeps the week's legend and the current semester list; "
-        "legend keeps only the week's legend; all keeps every project",
+        help="semester keeps the week's legend and the current semester list, and "
+        "labels other writing projects risky prospecting; legend keeps only the "
+        "week's legend; all keeps every project",
     )
     p_track_sync.add_argument(
         "--table", help="weekly org table whose legend maps project numbers to "
         "letters in weeks with no imported plan")
+    p_track_sync.add_argument(
+        "--prospect-range", dest="prospect_range",
+        help="project numbers whose work on no list is kept and labeled risky "
+        "prospecting, such as 0000-1999,2100-5999 (the default); give 'none' to "
+        "turn the label off")
     p_track_sync.add_argument(
         "--dry-run", action="store_true", help="report what would change, write nothing")
     _add_db(p_track_sync)
@@ -183,6 +189,13 @@ def _run_name(args) -> int:
     return 0
 
 
+def _prospect_ranges(text, mytime_sync):
+    """The --prospect-range text, the default when absent, or '' for none."""
+    if text is None:
+        return mytime_sync.DEFAULT_PROSPECT_RANGES
+    return "" if text.strip().lower() in ("", "none", "off") else text
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -215,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         result = mytime_sync.sync_mytime(
             con, args.source, since=args.since, until=args.until,
             scope=args.scope, table=args.table, dry_run=args.dry_run,
+            prospect_ranges=_prospect_ranges(args.prospect_range, mytime_sync),
         )
         since = args.since or mytime_sync.default_since(con)
         print(result.render(args.source, since, args.until, args.dry_run))

@@ -16,8 +16,48 @@ def connect(db_path: str) -> sqlite3.Connection:
     return con
 
 
+#: The views that leave risky prospecting out of the plan comparisons. A
+#: database made before the ``session.prospecting`` column holds older
+#: definitions of them, which are dropped and rebuilt when the column is added.
+PROSPECTING_VIEWS = ("v_week_project", "v_week_category", "v_week_overall",
+                     "v_week_project_category")
+
+
+def _columns(con: sqlite3.Connection, table: str) -> set:
+    return {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+
+
+def has_prospecting(con: sqlite3.Connection) -> bool:
+    """Say whether the session table carries the risky-prospecting flag."""
+    return "prospecting" in _columns(con, "session")
+
+
+def migrate(con: sqlite3.Connection) -> bool:
+    """Bring an older database up to the current schema.  Say whether it changed.
+
+    A session table made before risky prospecting was labeled gains the
+    ``prospecting`` column, with every existing row marked as not prospecting,
+    and the comparison views that read the column are rebuilt. A database with
+    no session table yet is left for :func:`init_db` to create.
+    """
+    cols = _columns(con, "session")
+    if not cols or "prospecting" in cols:
+        return False
+    con.execute("ALTER TABLE session ADD COLUMN prospecting INTEGER NOT NULL"
+                " DEFAULT 0 CHECK (prospecting IN (0,1))")
+    for view in PROSPECTING_VIEWS:
+        con.execute(f"DROP VIEW IF EXISTS {view}")
+    con.commit()
+    return True
+
+
 def init_db(con: sqlite3.Connection, schema_path: Path | None = None) -> None:
-    """Create the schema and seed the three activities. Safe to run twice."""
+    """Create the schema and seed the three activities. Safe to run twice.
+
+    An older database is migrated first, so the views the schema creates find
+    the columns they read.
+    """
+    migrate(con)
     sql = (schema_path or SCHEMA_PATH).read_text(encoding="utf-8")
     con.executescript(sql)
     # executescript() ends the implicit transaction, so restore the pragma.

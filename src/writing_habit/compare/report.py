@@ -49,6 +49,8 @@ def render_week(con, week: str) -> str:
             )
 
     bar = queries.week_barbell(con, week)
+    prospect = queries.week_prospecting(con, week)
+    prospect_min = sum(r["actual_min"] for r in prospect)
     if bar:
         lines.append("")
         lines.append("By barbell class (Rule 6 drift)")
@@ -65,6 +67,27 @@ def render_week(con, week: str) -> str:
         lines.append(
             f"  speculative share  planned {_pct(spec_plan, p_plan)}  "
             f"actual {_pct(spec_act, p_act)}"
+        )
+        if prospect_min:
+            lines.append(f"  {'prospecting':<12} {0:>4} -> {prospect_min:>4}")
+            lines.append(
+                "  risky share with prospecting  actual "
+                f"{_pct(spec_act + prospect_min, p_act + prospect_min)}"
+            )
+
+    if prospect:
+        total = sum(r["actual_min"] for r in prospect)
+        lines.append("")
+        lines.append("Risky prospecting (tracked, on no list)")
+        lines.append("-" * 52)
+        for r in prospect:
+            lines.append(
+                f"  {str(r['description'] or r['code']):<30.30} "
+                f"{r['actual_min']:>5} min  {r['weeks_so_far']:>2} week(s) so far"
+            )
+        lines.append(
+            f"  {total} min, {_pct(total, actual_total + total)} of tracked writing; "
+            "left out of the adherence above"
         )
 
     streak = queries.current_streak(con)

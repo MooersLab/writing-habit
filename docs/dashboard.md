@@ -83,6 +83,33 @@ a single week, such as the shared fixture, renders the same bytes as before, so
 the guard against the Emacs Lisp twin below still holds. The twin does not draw
 these two sections yet.
 
+### Risky prospecting
+
+A third section follows the barbell split when the week has risky prospecting.
+This is tracked work on a writing project that is on neither the week's legend
+nor the semester lists, which track sync labels when it copies the session from
+`mytime.db`. These are usually prospecting efforts, and they carry a high risk
+of being abandoned for lack of time, so the dashboard counts them on their own.
+
+The section opens with the total minutes and their share of all the week's
+tracked writing. A table lists each project with its sessions, its minutes, its
+share, and the number of weeks it has been prospected so far. A project
+prospected for three weeks or more is drawn in orange, because it has gone
+unplanned long enough to call for a decision. Add it to a semester list and
+give it a block, or let it go.
+
+Prospecting is left out of the planned-versus-actual table, the activity
+balance, the overall adherence, and the trend, because there is no plan to
+measure it against. The barbell split gains a "risky prospecting" row with zero
+planned minutes, and a line gives the risky share of actual time when the
+prospecting is counted with the speculative work. The streak still counts a day
+of prospecting as a day of writing. The text report from `writing-habit compare`
+carries the same section.
+
+The section and the barbell row appear only when the week has prospecting, so
+the shared fixture renders the same bytes as before. The Emacs Lisp twin does
+not draw them yet.
+
 ## The seasons dashboard
 
 A second dashboard groups adherence across many weeks rather than within one.
