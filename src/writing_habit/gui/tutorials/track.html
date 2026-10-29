@@ -44,12 +44,15 @@ whsync --since 2026-10-05 --until 2026-10-11</pre>
 <h2>Reading the report</h2>
 <ul>
 <li><b>skipped without start and end times</b> counts rows still running. They are copied once you stop the clock.</li>
-<li><b>left out ... not in the week's legend</b> counts rows for projects that neither the legend nor the current semester list names, such as commuting. The list below it gives their minutes.
-If one of them is writing, add it to the current semester list and sync again.</li>
+<li><b>left out ... not in the week's legend</b> counts rows for projects that neither the legend nor the current semester list names and that are not writing projects, such as commuting. The list below it gives their minutes.</li>
 <li><b>kept ... on the current semester list</b> counts rows for semester projects that were not scheduled this week. They count as unplanned writing.</li>
+<li><b>kept ... on no list as risky prospecting</b> counts rows for writing projects that are on neither the week's legend nor the semester lists. The list below it gives their minutes. This exploratory work has a high risk of being abandoned for lack of time. The dashboard shows it in a section of its own, and the plan comparisons leave it out.</li>
 <li><b>left out ... in weeks with no legend to read</b> means the plan of that week was never imported. Import it and sync again.</li>
 </ul>
-<p class="note">The <b>scope</b> field decides which projects count. <b>semester</b>, the default, keeps the week's legend and the current semester list. <b>legend</b> keeps only the week's legend. <b>all</b> keeps every project, which gives the full picture of a week.</p>
+<p class="note">The <b>scope</b> field decides which projects count. <b>semester</b>, the default, keeps the week's legend and the current semester list, and labels other writing projects risky prospecting. <b>legend</b> keeps only the week's legend. <b>all</b> keeps every project, which gives the full picture of a week.</p>
+<p class="note">The <b>prospect-range</b> field names the project numbers that count as writing projects. The default, <code>0000-1999,2100-5999</code>, leaves out the yearly journals and the numbers from 6000 up. Send <code>none</code> to turn the label off.</p>
+<pre>writing-habit track sync ~/6003TimeTracking/cb/mytime.db \
+    --db ~/org/writing-habit.db --prospect-range none</pre>
 
 <h2>Other ways to record effort</h2>
 <h3>A CSV or a calendar file</h3>

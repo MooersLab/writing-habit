@@ -118,6 +118,31 @@ and a button in the top corner switches between them.
 
 ![The HTML dashboard for the week, light theme.](imgs/dashboard-light.png)
 
+## Step 6, spot risky prospecting
+
+If you keep a time tracker, `track sync` copies its sessions in place of the
+CSV. It also catches the work you never planned. A session on a writing project
+that is on neither the week's legend nor the semester lists is labeled risky
+prospecting.
+
+```
+writing-habit track sync ~/6003TimeTracking/cb/mytime.db --db habit.db --dry-run
+writing-habit track sync ~/6003TimeTracking/cb/mytime.db --db habit.db
+```
+
+The report gains a line such as `kept 2 on no list as risky prospecting`,
+followed by each project and its minutes. Run `compare` and `dashboard` again.
+The prospecting stays out of the planned-versus-actual numbers, and a new
+section lists each unplanned project with its sessions, its minutes, its share
+of the week's tracked writing, and the weeks it has gone unplanned so far. A
+project prospected for three weeks or more is drawn in orange. That is the cue
+to decide. Put the project on a semester list and give it a block, or let it go.
+
+The project number decides what counts as a writing project. The default
+ranges, `0000-1999,2100-5999`, leave out the yearly journals and the numbers
+from 6000 up, such as commuting. Set your own with `--prospect-range`, or turn
+the label off with `--prospect-range none`.
+
 ## What each output is for
 
 The text report is the quickest read, and it lives in your terminal or a log.

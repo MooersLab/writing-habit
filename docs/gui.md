@@ -1323,7 +1323,9 @@ not keep is left exactly as written.
 
 The scheduler reads only the first table of the file, so the lists never reach
 plan import, the calendar, or the sheets. `track sync` reads the current list,
-and **New from template** carries the lists into the new week.
+and **New from template** carries the lists into the new week. Time the tracker
+logs on a writing project that is on none of the lists is labeled risky
+prospecting, so the lists also decide what counts as planned work.
 
 
 ### Project tables in columns

@@ -409,14 +409,28 @@ To drive the barbell view, add a risk tag to the end of a legend description in 
 
 Inside a table cell `:safe:` is literal text, because org only reads `:tag:` syntax on headlines, so it does not affect the table or its export. The plan importer strips the tag before storing the description.
 
+## Risky prospecting
+
+A `:risky:` tag marks a speculative bet that you planned. Some risky work is never planned at all. You open a folder for a new idea, log an hour on it in the time tracker, and it never reaches the week's legend or a semester list. Such prospecting has a high risk of being abandoned for lack of time, so `track sync` labels it.
+
+A session counts as risky prospecting when its project is in the time tracker but on neither the week's legend nor the semester lists (current, carried over, or completed), and its project number falls in a writing-project range. The default ranges are `0000-1999,2100-5999`, which leave out the yearly journals (2000-2099) and the administration, service, mentoring, meeting, and personal numbers (6000 and up). Change them with `--prospect-range`, or turn the label off with `--prospect-range none`.
+
+```
+writing-habit track sync ~/6003TimeTracking/cb/mytime.db --db habit.db --dry-run
+writing-habit track sync ~/6003TimeTracking/cb/mytime.db --db habit.db --prospect-range 0000-1999,3000-4999
+```
+
+The sync report lists the prospecting projects with their minutes. The plan comparisons leave the prospecting out, because there is no plan to measure it against, and the dashboard and the text report show it in a section of its own. Add a project worth keeping to a semester list and give it a block. The next sync then counts it as planned work and clears the label.
+
 ## What compare reports
 
 - adherence per project, planned against actual
 - the split across the three activities (generative, editing, support)
 - the barbell split across safe and speculative work, which is the Rule 6 drift
+- the risky prospecting, tracked work on writing projects that are on no list, with how many weeks each has gone unplanned
 - the current streak of consecutive writing days
 
-These come three ways: a plain-text report from `compare`, an optional matplotlib bar chart from `compare --plot week.png`, and a self-contained HTML dashboard from `dashboard --out week.html`. The dashboard has two panels, the week's planned schedule as a time-by-day grid colored by activity, and the planned-versus-actual comparison as tiles, per-project meters, the activity balance, and the barbell split. It carries a light and a dark theme and needs no server.
+These come three ways: a plain-text report from `compare`, an optional matplotlib bar chart from `compare --plot week.png`, and a self-contained HTML dashboard from `dashboard --out week.html`. The dashboard has two panels, the week's planned schedule as a time-by-day grid colored by activity, and the planned-versus-actual comparison as tiles, per-project meters, the activity balance, and the barbell split. A week with risky prospecting gains a section that lists each unplanned project and marks in orange the ones prospected for three weeks or more. It carries a light and a dark theme and needs no server.
 
 ## Tracking adherence over time
 

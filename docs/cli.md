@@ -10,6 +10,7 @@ writing-habit initdb    --db DB
 writing-habit plan import TABLE --week DATE --db DB
 writing-habit track import FILE --format csv|ics --db DB
 writing-habit track add   --day DATE --project CODE [--minutes N] [--category C] [--start HH:MM] [--end HH:MM] [--note TEXT] --db DB
+writing-habit track sync  MYTIME.DB [--since DATE] [--until DATE] [--scope semester|legend|all] [--table TABLE] [--prospect-range RANGES|none] [--dry-run] --db DB
 writing-habit compare   --week DATE [--plot FILE] --db DB
 writing-habit history   [--from DATE] [--to DATE] [--plot FILE] --db DB
 writing-habit dashboard --week DATE --out FILE --db DB
@@ -71,6 +72,29 @@ Add one session by hand.
 ```
 writing-habit track add --day 2026-01-19 --project A --minutes 75 --category generative --db habit.db
 ```
+
+## track sync
+
+Copy timed sessions from the `zTimeSpent` table of a `mytime.db` time tracker.
+A rerun updates rows it copied before and never copies one twice.
+
+| Option | Meaning |
+|--------|---------|
+| `MYTIME.DB` | The time-tracking database. Read only. Required. |
+| `--since DATE`, `--until DATE` | The days to copy. The default start is the first planned week. |
+| `--scope semester` | The default. Keep the week's legend and the semester lists, and label other writing projects risky prospecting. |
+| `--scope legend` | Keep only the week's legend. Nothing is labeled risky prospecting. |
+| `--scope all` | Keep every project. Unlisted writing projects are still labeled risky prospecting. |
+| `--table TABLE` | The table whose legend is read for weeks with no imported plan. |
+| `--prospect-range RANGES` | The project numbers that count as writing projects, `0000-1999,2100-5999` by default. `none` turns the label off. |
+| `--dry-run` | Report what would change and write nothing. |
+
+```
+writing-habit track sync ~/6003TimeTracking/cb/mytime.db --db habit.db --dry-run
+writing-habit track sync ~/6003TimeTracking/cb/mytime.db --db habit.db
+```
+
+The full rules are under [Tracking formats](tracking-formats.md).
 
 ## compare
 

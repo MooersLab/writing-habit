@@ -58,9 +58,11 @@ for r in queries.week_project(con, "2026-01-19"):
 print("streak:", queries.current_streak(con))
 ```
 
-The four wrappers, namely `week_project`, `week_category`, `week_barbell`, and
-`day_actual`, read the four views defined in the schema, so the library never
-writes its own aggregation SQL. `current_streak` counts the run of consecutive
+The five wrappers, namely `week_project`, `week_category`, `week_barbell`,
+`week_prospecting`, and `day_actual`, read the views defined in the schema, so
+the library never writes its own aggregation SQL. `week_prospecting` returns the
+week's risky prospecting, one row per unlisted project, and an empty list for a
+database made before the prospecting label. `current_streak` counts the run of consecutive
 worked days ending at the latest one.
 
 ## Render the report and the dashboard

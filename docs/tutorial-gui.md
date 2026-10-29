@@ -81,6 +81,13 @@ session with a start and an end needs no minutes, and the database works them
 out. The three formats and their conventions are covered in full under
 [Tracking formats](tracking-formats.md).
 
+If you keep a time tracker, the first form of the tab, `writing-habit track
+sync`, copies its sessions instead. Its report says how many sessions it kept
+as risky prospecting. These are sessions on writing projects that are on
+neither the week's legend nor the semester lists. The **prospect-range** field
+sets which project numbers count as writing projects, and `none` turns the label
+off.
+
 ## Step 4, read the gap as text
 
 Open the **Compare** tab, choose `writing-habit compare`, set the week, and
@@ -105,6 +112,12 @@ browser. The file embeds its own style and script, so it needs no server and no
 network, and it carries a light theme and a dark theme.
 
 ![The HTML dashboard for the week, light theme.](imgs/dashboard-light.png)
+
+A week with risky prospecting gains a **Risky prospecting** section below the
+barbell split. It lists each unplanned project with its minutes and the weeks it
+has gone unplanned, and it draws in orange the projects prospected for three
+weeks or more. Add a project worth keeping to a semester list on the Schedule
+tab, give it a block, and sync again.
 
 ## Step 6, the week in its longer context
 
