@@ -102,9 +102,10 @@ writing-habit track sync ~/6003TimeTracking/cb/mytime.db --db ~/org/writing-habi
 | Option | Meaning |
 |---|---|
 | `--since`, `--until` | Days to copy. The default start is the first planned week. |
-| `--scope semester` | Default. Keep the week's legend and the table's current semester project list. A semester project not in the week's legend counts as unplanned work. |
-| `--scope legend` | Keep only projects named in the week's table legend. |
-| `--scope all` | Also keep other projects, under their directory name, as unplanned work. |
+| `--scope semester` | Default. Keep the week's legend and the table's current semester project list. A semester project not in the week's legend counts as unplanned work. A writing project on no list is kept and labeled risky prospecting. |
+| `--scope legend` | Keep only projects named in the week's table legend. Nothing is labeled risky prospecting. |
+| `--scope all` | Also keep other projects, under their directory name, as unplanned work. A writing project on no list is still labeled risky prospecting. |
+| `--prospect-range RANGES` | The project numbers that count as writing projects for the risky-prospecting label. The default is `0000-1999,2100-5999`. Give `none` to turn the label off. |
 | `--table TABLE` | The table whose legend is read for weeks with no imported plan. The Track tab fills it with the table open in the Schedule tab. |
 | `--dry-run` | Report what would change and write nothing. |
 
@@ -120,6 +121,16 @@ How a row is read:
   Otherwise the session takes the activity of an overlapping planned block.
 - A row without both a start and an end time is skipped until it has them.
   An end before the start wraps past midnight.
+- A writing project that appears in the tracker but on neither the week's
+  legend nor the semester lists (current, carried over, or completed) is kept
+  under its directory name and flagged `prospecting`. This is risky work.
+  Prospecting on a project that has not earned a place in the plan has a high
+  risk of being abandoned for lack of time. The plan comparisons leave it out,
+  and the dashboard and the text report show it in a section of its own. The
+  project number decides what counts as a writing project. The 6000s and above
+  (commuting, administration, committees, mentoring, meetings, personal time)
+  and the yearly journals in 2000-2099 are never prospecting. A rerun clears the
+  flag once the project is added to a list.
 - Each session stores `mytime.db:zTimeSpent:<id>` in `source_ref`. A rerun
   updates edited rows and never inserts a row twice.
 

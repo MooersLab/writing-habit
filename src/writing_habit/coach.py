@@ -505,9 +505,12 @@ def weekday_rows(con, end_week: Optional[str] = None) -> List[dict]:
         "SELECT (CAST(strftime('%w', day) AS INTEGER) + 6) % 7, SUM(planned_min),"
         " COUNT(DISTINCT week_start) FROM plan_block WHERE 1" + clause +
         " GROUP BY 1", params)}
+    # Risky prospecting has no plan to adhere to, so it is left out, as in the views.
+    from .db import has_prospecting
+    unplanned = " AND prospecting = 0" if has_prospecting(con) else ""
     actual = {r[0]: r[1] for r in con.execute(
         "SELECT (CAST(strftime('%w', day) AS INTEGER) + 6) % 7, SUM(actual_min)"
-        " FROM session WHERE 1" + clause + " GROUP BY 1", params)}
+        " FROM session WHERE 1" + unplanned + clause + " GROUP BY 1", params)}
     rows = []
     for day, (minutes, weeks) in sorted(planned.items()):
         if minutes:

@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS session (
     source      TEXT    NOT NULL CHECK (source IN ('ics','csv','manual','sqlite')),
     source_ref  TEXT,                             -- ICS UID, filename:row, etc.
     note        TEXT,
+    -- 1 when the session's project was on neither the week's legend nor the
+    -- semester lists: risky prospecting, kept out of the plan comparisons.
+    prospecting INTEGER NOT NULL DEFAULT 0 CHECK (prospecting IN (0,1)),
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     week_start  TEXT GENERATED ALWAYS AS (
         date(day, '-' || ((CAST(strftime('%w', day) AS INTEGER) + 6) % 7) || ' days')
@@ -108,16 +111,19 @@ INSERT OR IGNORE INTO category (category_id, name, sort_order) VALUES
 -- ---------------------------------------------------------------------------
 
 -- Planned versus actual minutes per week and project, with adherence ratio. Feeds Rule 10.
+-- Risky prospecting is left out of this view and the other plan comparisons,
+-- because work on a project that is on no list cannot be measured against a plan.
+-- v_week_prospecting reports it on its own.
 CREATE VIEW IF NOT EXISTS v_week_project AS
 WITH keys AS (
         SELECT week_start, project_id FROM plan_block
         UNION
-        SELECT week_start, project_id FROM session
+        SELECT week_start, project_id FROM session WHERE prospecting = 0
 ),
 p AS (SELECT week_start, project_id, SUM(planned_min) AS planned_min
         FROM plan_block GROUP BY week_start, project_id),
 a AS (SELECT week_start, project_id, SUM(actual_min)  AS actual_min
-        FROM session   GROUP BY week_start, project_id)
+        FROM session WHERE prospecting = 0 GROUP BY week_start, project_id)
 SELECT  k.week_start,
         pr.code,
         pr.description,
@@ -138,12 +144,14 @@ CREATE VIEW IF NOT EXISTS v_week_category AS
 WITH keys AS (
         SELECT week_start, category_id FROM plan_block
         UNION
-        SELECT week_start, category_id FROM session WHERE category_id IS NOT NULL
+        SELECT week_start, category_id FROM session
+         WHERE category_id IS NOT NULL AND prospecting = 0
 ),
 p AS (SELECT week_start, category_id, SUM(planned_min) AS planned_min
         FROM plan_block GROUP BY week_start, category_id),
 a AS (SELECT week_start, category_id, SUM(actual_min)  AS actual_min
-        FROM session WHERE category_id IS NOT NULL GROUP BY week_start, category_id)
+        FROM session WHERE category_id IS NOT NULL AND prospecting = 0
+        GROUP BY week_start, category_id)
 SELECT  k.week_start,
         c.name AS category,
         COALESCE(p.planned_min,0) AS planned_min,
@@ -192,6 +200,29 @@ FROM session
 GROUP BY day, week_start
 ORDER BY day;
 
+-- Risky prospecting per week and project. A session is prospecting when track
+-- sync found its project in the time tracker but on neither the week's legend
+-- nor the semester lists. Such exploratory work has a high risk of being
+-- abandoned for lack of time, so the dashboard reports it on its own.
+-- weeks_so_far counts the weeks with prospecting on the project up to and
+-- including this one, a sign of how long it has gone unplanned.
+CREATE VIEW IF NOT EXISTS v_week_prospecting AS
+WITH w AS (
+        SELECT s.week_start, s.project_id,
+               COUNT(*) AS sessions, SUM(s.actual_min) AS actual_min
+        FROM session s WHERE s.prospecting = 1
+        GROUP BY s.week_start, s.project_id)
+SELECT  w.week_start,
+        pr.code,
+        pr.description,
+        w.sessions,
+        w.actual_min,
+        (SELECT COUNT(*) FROM w AS e
+          WHERE e.project_id = w.project_id AND e.week_start <= w.week_start) AS weeks_so_far
+FROM w
+JOIN project pr ON pr.project_id = w.project_id
+ORDER BY w.week_start, w.actual_min DESC, pr.code;
+
 -- ---------------------------------------------------------------------------
 -- Cross-week views for the adherence tracker (build step 1).
 -- These carry every week in the database, so the history reader and the weekly
@@ -205,7 +236,7 @@ CREATE VIEW IF NOT EXISTS v_week_overall AS
 WITH p AS (SELECT week_start, SUM(planned_min) AS planned_min
              FROM plan_block GROUP BY week_start),
      a AS (SELECT week_start, SUM(actual_min)  AS actual_min
-             FROM session    GROUP BY week_start),
+             FROM session WHERE prospecting = 0 GROUP BY week_start),
      keys AS (SELECT week_start FROM p UNION SELECT week_start FROM a)
 SELECT  k.week_start,
         COALESCE(p.planned_min,0) AS planned_min,
@@ -235,12 +266,13 @@ CREATE VIEW IF NOT EXISTS v_week_project_category AS
 WITH keys AS (
         SELECT week_start, project_id, category_id FROM plan_block
         UNION
-        SELECT week_start, project_id, category_id FROM session WHERE category_id IS NOT NULL
+        SELECT week_start, project_id, category_id FROM session
+         WHERE category_id IS NOT NULL AND prospecting = 0
 ),
 p AS (SELECT week_start, project_id, category_id, SUM(planned_min) AS planned_min
         FROM plan_block GROUP BY week_start, project_id, category_id),
 a AS (SELECT week_start, project_id, category_id, SUM(actual_min)  AS actual_min
-        FROM session WHERE category_id IS NOT NULL
+        FROM session WHERE category_id IS NOT NULL AND prospecting = 0
         GROUP BY week_start, project_id, category_id)
 SELECT  k.week_start,
         pr.code,

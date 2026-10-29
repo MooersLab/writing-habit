@@ -38,6 +38,24 @@ def week_barbell(con, week: str):
     ).fetchall()
 
 
+def week_prospecting(con, week: str):
+    """Risky prospecting per project for the week: work on a project on no list.
+
+    A database made before the prospecting label has no such view, and then
+    there is nothing to report.
+    """
+    have = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'view' AND name = 'v_week_prospecting'"
+    ).fetchone()
+    if not have:
+        return []
+    return con.execute(
+        "SELECT * FROM v_week_prospecting WHERE week_start = ?"
+        " ORDER BY actual_min DESC, code",
+        (_monday(week),),
+    ).fetchall()
+
+
 def day_actual(con, week: str):
     """Actual minutes and worked flag per day for the week."""
     return con.execute(

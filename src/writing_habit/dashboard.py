@@ -4,7 +4,8 @@ This is the twin of the Emacs Lisp ``writing-habit-dashboard.el``.  It has two
 panels.  The first redraws the week's planned schedule as a time-by-day grid,
 colored by activity.  The second compares planned against actual effort:
 per-project meters with adherence, the activity balance, and the barbell split,
-plus the summary tiles and the streak.  The output is one HTML file with inline
+plus the summary tiles and the streak.  A week with risky prospecting, tracked
+work on a project that is on no list, also gets a section of its own.  The output is one HTML file with inline
 CSS and no external requests.
 
 The markup is built deterministically from the shared database, and the static
@@ -356,7 +357,7 @@ def _sum_for(rows, risk_class: str, field: str) -> int:
     return sum(r[field] for r in rows if r["risk_class"] == risk_class)
 
 
-def _barbell(bar) -> list:
+def _barbell(bar, prospect_min: int = 0) -> list:
     if not bar:
         return []
     p_plan = _sum_for(bar, "safe", "planned_min") + _sum_for(bar, "speculative", "planned_min")
@@ -374,12 +375,84 @@ def _barbell(bar) -> list:
             f'</td><td class="num">{r["actual_min"]}'
             "</td></tr>"
         )
+    if prospect_min:
+        out.append(
+            '      <tr><td>risky prospecting'
+            '</td><td class="num">0'
+            f'</td><td class="num">{prospect_min}'
+            "</td></tr>"
+        )
     out.append("    </tbody>")
     out.append("  </table>")
     out.append(
         f'  <p class="sub">Speculative share: planned {_pct(spec_plan, p_plan)}%,'
         f' actual {_pct(spec_act, p_act)}%.</p>'
     )
+    if prospect_min:
+        out.append(
+            '  <p class="sub">Counting risky prospecting with the speculative work,'
+            f' the risky share of actual time is'
+            f' {_pct(spec_act + prospect_min, p_act + prospect_min)}%.</p>'
+        )
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Risky prospecting. Work the time tracker logged on a project that is on
+# neither the week's legend nor the semester lists. It is emitted only when the
+# week has some, so a database without it renders the same bytes as the Emacs
+# Lisp twin.
+# ---------------------------------------------------------------------------
+
+PROSPECT_STYLE = """  <style>
+    .risky { color: var(--actual); font-weight: 650; }
+    tr.stale td { color: var(--actual); }
+  </style>"""
+
+#: A project prospected in this many weeks or more has gone unplanned long
+#: enough to call for a decision: put it on a list, or let it go.
+STALE_WEEKS = 3
+
+
+def _prospecting(rows, planned_actual: int) -> list:
+    """Return the risky-prospecting section for the week's ROWS, or nothing.
+
+    PLANNED_ACTUAL is the week's actual minutes on listed projects, so the share
+    reads against all the writing the tracker saw.
+    """
+    if not rows:
+        return []
+    total = sum(r["actual_min"] for r in rows)
+    whole = planned_actual + total
+    out = [PROSPECT_STYLE,
+           '  <h2>Risky prospecting</h2>',
+           f'  <p class="sub"><span class="risky">{total} minutes</span>, '
+           f'{_pct(total, whole)}% of the week\'s tracked writing, went to '
+           f'{len(rows)} project{"s" if len(rows) != 1 else ""} on no list. '
+           "Prospecting like this has a high risk of being abandoned for lack of "
+           "time, and it is left out of planned versus actual above.</p>",
+           "  <table>",
+           "    <caption>Projects in the time tracker but on neither the week's "
+           "legend nor the semester lists. A row in orange has gone unplanned for "
+           f"{STALE_WEEKS} weeks or more.</caption>",
+           '    <thead><tr><th>Project</th><th class="num">Sessions</th>'
+           '<th class="num">Minutes</th><th class="num">Share</th>'
+           '<th class="num">Weeks so far</th></tr></thead>',
+           "    <tbody>"]
+    for r in rows:
+        cls = ' class="stale"' if r["weeks_so_far"] >= STALE_WEEKS else ""
+        out.append(
+            f'      <tr{cls}><td>{_esc(r["description"] or r["code"])}'
+            f'</td><td class="num">{r["sessions"]}'
+            f'</td><td class="num">{r["actual_min"]}'
+            f'</td><td class="num">{_pct(r["actual_min"], whole)}%'
+            f'</td><td class="num">{r["weeks_so_far"]}'
+            "</td></tr>"
+        )
+    out += ["    </tbody>", "  </table>",
+            '  <p class="sub">Add a project worth keeping to a semester list and '
+            "give it a block, so the next sync counts it as planned work. Let the "
+            "rest go.</p>"]
     return out
 
 
@@ -500,6 +573,8 @@ def dashboard_html(con, week: str, today=None) -> str:
     proj = queries.week_project(con, week)
     cat = queries.week_category(con, week)
     bar = queries.week_barbell(con, week)
+    prospect = queries.week_prospecting(con, week)
+    prospect_min = sum(r["actual_min"] for r in prospect)
     streak = queries.current_streak(con)
     planned_total = sum(r["planned_min"] for r in proj)
     actual_total = sum(r["actual_min"] for r in proj)
@@ -525,7 +600,8 @@ def dashboard_html(con, week: str, today=None) -> str:
     lines += _schedule(_schedule_rows(con, week_start))
     lines += _projects(proj)
     lines += _activities(cat)
-    lines += _barbell(bar)
+    lines += _barbell(bar, prospect_min)
+    lines += _prospecting(prospect, actual_total)
     lines += _intensity(con, week_start, today)
     lines += [
         '  <p class="foot">Generated by writing-habit from the shared SQLite'
