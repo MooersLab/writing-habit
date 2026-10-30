@@ -71,7 +71,6 @@ class PomodoroSettings:
     tick_volume: int = 30         # percent
     buzzer: bool = True           # sound a buzzer when a phase ends
     buzzer_volume: int = 80       # percent
-    alert: bool = True            # bounce the Dock icon when a phase ends
     tick_file: str = ""           # a sound file for the tick; empty is the built-in tick
     buzzer_file: str = ""         # a sound file for the alarm; empty is the built-in buzzer
     start_key: str = "Meta+Ctrl+P"  # Control Command P on a Mac
@@ -618,8 +617,8 @@ class PomodoroTimer(QtWidgets.QWidget):
             add_to_today(self.today())
         if self.options.buzzer:
             self.play("buzzer", self.options.buzzer_volume)
-        if self.options.alert and self.window() is not None:
-            QtWidgets.QApplication.alert(self.window())
+        # No QApplication.alert() here: on macOS it asks for the user's attention,
+        # which bounces the Dock icon and posts a disruptive system message.
         following = self.clock.phase
         if self.clock.state == "done":
             line = f"Pomodoro cycle done: {self.clock.completed} Pomodoros"
@@ -786,13 +785,10 @@ class PomodoroSettingsDialog(QtWidgets.QDialog):
         self.buzzer_box = QtWidgets.QCheckBox("Sound a buzzer when a Pomodoro or break ends")
         self.buzzer_box.setChecked(options.buzzer)
         self.buzzer_volume = self._slider(options.buzzer_volume)
-        self.alert_box = QtWidgets.QCheckBox("Bounce the Dock icon when a phase ends")
-        self.alert_box.setChecked(options.alert)
         form.addRow(self.buzzer_box)
         form.addRow("Buzzer volume:", self._with_test(self.buzzer_volume, "buzzer"))
         self.buzzer_file_edit = self._file_row(form, "Alarm sound:", options.buzzer_file,
                                                "buzzer")
-        form.addRow(self.alert_box)
         self.tabs.addTab(notes, "Notifications")
 
         # Hotkeys.
@@ -953,7 +949,6 @@ class PomodoroSettingsDialog(QtWidgets.QDialog):
         self.auto_next_box.setChecked(options.auto_next)
         self.buzzer_box.setChecked(options.buzzer)
         self.buzzer_volume.setValue(options.buzzer_volume)
-        self.alert_box.setChecked(options.alert)
         self.tick_file_edit.setText(options.tick_file)
         self.buzzer_file_edit.setText(options.buzzer_file)
         self.start_key_edit.setKeySequence(QtGui.QKeySequence(options.start_key))
@@ -980,7 +975,6 @@ class PomodoroSettingsDialog(QtWidgets.QDialog):
             buzzer_volume=self.buzzer_volume.value(),
             tick_file=self.tick_file_edit.text().strip(),
             buzzer_file=self.buzzer_file_edit.text().strip(),
-            alert=self.alert_box.isChecked(),
             start_key=self.start_key_edit.keySequence().toString(),
             stop_key=self.stop_key_edit.keySequence().toString(),
             record_db=self.record_box.isChecked(),
